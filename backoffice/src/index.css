@@ -6,10 +6,20 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --color-idfm-blue: #64b5f6;
+  --color-idfm-interaction: #1972d2;
+  --color-idfm-focus: #0050aa;
+  --color-idfm-anthracite: #253038;
+  --color-idfm-background: #f5f9ff;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+}
+
+:focus-visible {
+  outline: 3px solid #0050aa;
+  outline-offset: 3px;
 }

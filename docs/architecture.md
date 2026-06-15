@@ -3,18 +3,47 @@
 Le depot est un monorepo npm compose de trois applications :
 
 - `frontend` : parcours client React, Vite, TypeScript, MUI et React Router.
-- `backoffice` : administration React, Vite, TypeScript, MUI et React Router.
-- `backend` : API REST Express et TypeScript.
+- `backoffice` : pilotage React, Vite, TypeScript, MUI et React Router.
+- `backend` : API REST Express, TypeScript, Drizzle ORM et PostgreSQL Supabase.
 
-Le backend utilise Supabase pour les services geres et Drizzle ORM pour acceder a
-PostgreSQL avec une URL de connexion directe stockee dans `DATABASE_URL`.
+## Frontend
 
-Les interfaces suivent une structure simple :
+Le frontend separe les responsabilites :
 
-- `components` : composants reutilisables et layouts.
-- `pages` : composants associes aux routes.
-- `hooks` : logique React reutilisable.
-- `styles` : theme MUI et styles globaux.
+- `components` : layouts, protection des routes et composants reutilisables.
+- `pages` : landing page, authentification et etapes de l'onboarding.
+- `hooks` : contexte d'authentification et acces a l'utilisateur connecte.
+- `services` : appels API, stockage du JWT et brouillon d'onboarding.
+- `types` : contrats TypeScript partages dans l'application.
+- `theme` : palette Comutitres / Ile-de-France Mobilites et theme MUI.
 
-L'API separe les responsabilites entre `routes`, `controllers`, `middleware`,
-`config` et `db`.
+Le JWT est stocke dans `localStorage` uniquement pour le prototype. Une version
+de production devra privilegier un cookie `HttpOnly`, `Secure` et `SameSite`.
+
+## Backend
+
+L'API suit une architecture simple :
+
+- `routes` : declaration des endpoints et middleware associes.
+- `controllers` : traduction HTTP vers les services.
+- `services` : logique auth, onboarding et recommandation.
+- `validation` : schemas Zod des payloads.
+- `middleware` : validation, authentification JWT et gestion des erreurs.
+- `db` : schema Drizzle, connexion et preparation des offres.
+- `utils` et `types` : erreurs, JWT et types transverses.
+
+Les mots de passe sont hashes avec bcryptjs. Le backend ne retourne jamais
+`passwordHash`.
+
+## Donnees
+
+Le modele distingue :
+
+- le compte `users`, qui se connecte et pilote la demande ;
+- les `profiles`, qui representent un porteur ou un payeur ;
+- la session `onboarding_sessions`, qui conserve les reponses d'orientation ;
+- la `subscription`, qui relie compte, porteur, payeur, offre et session ;
+- les `documents`, prepares pour une future collecte de justificatifs.
+
+Cette separation couvre notamment un parent payant pour son enfant et une
+association payant pour un beneficiaire TST.
