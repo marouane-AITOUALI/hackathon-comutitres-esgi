@@ -1,0 +1,16 @@
+{
+  "name": "hackathon-comutitres-esgi",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend",
+    "backoffice"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "dev:frontend": "npm run dev --workspace frontend",
+    "dev:backend": "npm run dev --workspace backend",
+    "dev:backoffice": "npm run dev --workspace backoffice"
+  }
+}
