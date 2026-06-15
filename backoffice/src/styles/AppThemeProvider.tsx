@@ -1,23 +1,10 @@
-import { CssBaseline, ThemeProvider, createTheme } from '@mui/material'
+import { CssBaseline, ThemeProvider } from '@mui/material'
 import type { PropsWithChildren } from 'react'
-
-const theme = createTheme({
-  palette: {
-    primary: {
-      main: '#0057b8',
-    },
-    background: {
-      default: '#f5f7fa',
-    },
-  },
-  shape: {
-    borderRadius: 12,
-  },
-})
+import { muiTheme } from '../theme/muiTheme'
 
 export function AppThemeProvider({ children }: PropsWithChildren) {
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={muiTheme}>
       <CssBaseline />
       {children}
     </ThemeProvider>

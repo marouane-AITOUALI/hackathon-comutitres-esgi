@@ -2,49 +2,22 @@
 
 ```mermaid
 erDiagram
+    USERS ||--o{ PROFILES : manages
+    USERS ||--o{ ONBOARDING_SESSIONS : starts
     USERS ||--o{ SUBSCRIPTIONS : creates
+    PROFILES ||--o{ ONBOARDING_SESSIONS : identifies
+    PROFILES ||--o{ SUBSCRIPTIONS : participates
+    ONBOARDING_SESSIONS ||--o{ SUBSCRIPTIONS : prepares
     OFFERS ||--o{ SUBSCRIPTIONS : concerns
     SUBSCRIPTIONS ||--o{ DOCUMENTS : contains
-
-    USERS {
-        uuid id PK
-        uuid supabase_auth_id UK
-        text first_name
-        text last_name
-        text email UK
-        date birth_date
-        text phone
-    }
-
-    OFFERS {
-        uuid id PK
-        text slug UK
-        text name
-        text description
-        numeric monthly_price
-        enum audience
-        boolean is_active
-    }
-
-    SUBSCRIPTIONS {
-        uuid id PK
-        uuid user_id FK
-        uuid offer_id FK
-        enum status
-        timestamp submitted_at
-        timestamp reviewed_at
-    }
-
-    DOCUMENTS {
-        uuid id PK
-        uuid subscription_id FK
-        enum type
-        enum status
-        text storage_path
-        text original_name
-        text mime_type
-    }
 ```
 
-Les fichiers eux-memes sont destines a Supabase Storage. La table `documents`
-ne conserve que leurs metadonnees et leur chemin de stockage.
+- `users` : compte authentifie et consentement RGPD.
+- `profiles` : personne porteuse ou payeuse.
+- `onboarding_sessions` : choix et reponses du parcours guide.
+- `offers` : catalogue des offres et justificatifs potentiels.
+- `subscriptions` : demande reliant toutes les entites metier.
+- `documents` : metadonnees des justificatifs futurs.
+
+Les fichiers eux-memes sont destines a un stockage protege. La table
+`documents` ne conserve que l'URL, le type, le statut et le motif de refus.

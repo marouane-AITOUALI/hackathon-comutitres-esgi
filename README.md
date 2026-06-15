@@ -21,7 +21,8 @@ npm install
 
 Copier ensuite les fichiers `.env.example` en `.env` dans chaque application.
 Pour Drizzle, recuperer l'URL PostgreSQL Supabase et renseigner
-`backend/.env` avec `DATABASE_URL`.
+`backend/.env` avec `DATABASE_URL`. Generer egalement une valeur longue et
+aleatoire pour `JWT_SECRET`.
 
 ## Developpement
 
@@ -75,6 +76,23 @@ docker compose up --build
 cd backend
 npm run db:generate
 npm run db:migrate
+npm run db:seed
 ```
 
 Le modele conceptuel est documente dans `docs/database-model.md`.
+
+`db:migrate` et `db:seed` ecrivent dans la base configuree. Ne lancer ces
+commandes sur Supabase qu'apres validation de la migration locale.
+
+## Parcours utilisateur
+
+Le frontend propose :
+
+- inscription et connexion email/mot de passe ;
+- session prototype par JWT ;
+- distinction porteur/payeur ;
+- questions guidees sur le profil et les trajets ;
+- recommandation explicable avec justificatifs potentiels.
+
+Le bouton Ile-de-France Mobilites Connect est visible mais volontairement non
+implemente dans cette version.
