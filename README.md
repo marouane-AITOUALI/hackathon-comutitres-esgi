@@ -31,6 +31,44 @@ npm run dev:backend
 npm run dev:backoffice
 ```
 
+## Docker
+
+Renseigner d'abord `backend/.env`, puis lancer tout l'environnement de
+developpement avec hot reload :
+
+```bash
+docker compose up --build
+```
+
+Les services sont disponibles sur :
+
+- frontend : http://localhost:5173
+- backend : http://localhost:3001/api/health
+- backoffice : http://localhost:5174
+
+Pour arreter et supprimer les conteneurs :
+
+```bash
+docker compose down
+```
+
+Pour tester les images de production :
+
+```bash
+docker compose -f compose.prod.yml up --build
+```
+
+Le frontend est alors disponible sur http://localhost:8080 et le backoffice
+sur http://localhost:8081. L'API Docker utilise le port hote `3001` pour
+eviter les conflits avec un backend lance localement sur `3000`.
+
+Les ports peuvent etre modifies avant le lancement :
+
+```powershell
+$env:API_PORT=4000
+docker compose up --build
+```
+
 ## Base de donnees
 
 ```bash
