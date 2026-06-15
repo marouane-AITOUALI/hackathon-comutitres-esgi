@@ -11,6 +11,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "dev:frontend": "npm run dev --workspace frontend",
     "dev:backend": "npm run dev --workspace backend",
-    "dev:backoffice": "npm run dev --workspace backoffice"
+    "dev:backoffice": "npm run dev --workspace backoffice",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "docker:prod": "docker compose -f compose.prod.yml up --build"
   }
 }

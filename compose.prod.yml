@@ -1,0 +1,46 @@
+name: comutitres-production
+
+services:
+  backend:
+    build:
+      context: ./backend
+      target: production
+    env_file:
+      - ./backend/.env
+    ports:
+      - "${API_PORT:-3001}:3000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000/api/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api}
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backoffice:
+    build:
+      context: ./backoffice
+      target: production
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3001/api}
+    ports:
+      - "8081:80"
+    depends_on:
+      backend:
+        condition: service_healthy
