@@ -8,8 +8,9 @@ import { AppError } from '../utils/app-error.js'
 import { createAuthToken } from '../utils/jwt.js'
 
 const selection = { id: users.id, firstName: users.firstName, lastName: users.lastName, email: users.email, role: users.role }
+type DatabaseExecutor = Pick<ReturnType<typeof requireDb>, 'select' | 'insert'>
 
-async function getLatestSubscription(database: ReturnType<typeof requireDb>, userId: string): Promise<SubscriptionSummary | null> {
+async function getLatestSubscription(database: DatabaseExecutor, userId: string): Promise<SubscriptionSummary | null> {
   const [subscription] = await database
     .select({ id: subscriptions.id, status: subscriptions.status, offerId: subscriptions.offerId, onboardingSessionId: subscriptions.onboardingSessionId })
     .from(subscriptions)
@@ -19,13 +20,13 @@ async function getLatestSubscription(database: ReturnType<typeof requireDb>, use
   return subscription ?? null
 }
 
-const session = async (database: ReturnType<typeof requireDb>, user: PublicUser): Promise<AuthSession> => ({
+const session = async (database: DatabaseExecutor, user: PublicUser): Promise<AuthSession> => ({
   user,
   token: createAuthToken({ sub: user.id, email: user.email, role: user.role }),
   subscription: await getLatestSubscription(database, user.id),
 })
 
-async function createUser(database: ReturnType<typeof requireDb>, input: RegisterInput) {
+async function createUser(database: DatabaseExecutor, input: RegisterInput) {
   const [existing] = await database.select({ id: users.id }).from(users).where(eq(users.email, input.email)).limit(1)
   if (existing) throw new AppError(409, 'Un compte existe deja avec cette adresse email.')
   const [user] = await database.insert(users).values({
@@ -41,7 +42,7 @@ async function createUser(database: ReturnType<typeof requireDb>, input: Registe
 }
 
 async function createOnboardingBundle(
-  database: ReturnType<typeof requireDb>,
+  database: DatabaseExecutor,
   userId: string,
   input: RegisterWithOnboardingInput['onboarding'],
 ) {
