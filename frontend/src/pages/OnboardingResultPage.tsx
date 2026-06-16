@@ -28,7 +28,8 @@ export function OnboardingResultPage() {
         {recommendation && (
           <>
             <Stack spacing={1} sx={{ alignItems: 'flex-start', bgcolor: 'background.default', borderRadius: 3, p: 3 }}>
-              <Chip color="success" label={`${Math.round(recommendation.confidence * 100)} % de confiance`} />
+              <Chip color="success" label={`${recommendation.confidencePercent} % de confiance`} />
+              <Typography color="text.secondary" sx={{ fontSize: '0.9rem' }}>{recommendation.offerCode}</Typography>
               <Typography color="primary.dark" component="h2" variant="h4">{recommendation.offerName}</Typography>
               <Typography>{recommendation.reasons.join(' ')}</Typography>
             </Stack>

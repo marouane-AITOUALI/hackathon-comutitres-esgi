@@ -58,12 +58,18 @@ export interface OnboardingAnswer {
 export type OnboardingDraft = Partial<OnboardingAnswer>
 
 export interface OfferRecommendation {
+  offerId: string | null
   offerCode: string
   offerName: string
-  confidence: number
+  confidencePercent: number
   reasons: string[]
   requiredDocuments: string[]
   warnings: string[]
+}
+
+export interface RecommendationResponse {
+  success: boolean
+  recommendation: OfferRecommendation
 }
 
 export interface OnboardingResponse {
