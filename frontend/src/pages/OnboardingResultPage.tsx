@@ -39,7 +39,7 @@ export function OnboardingResultPage() {
             <Divider />
             <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing={1} sx={{ justifyContent: 'space-between' }}>
               <Button onClick={() => navigate('/onboarding/needs')}>Modifier mes reponses</Button>
-              <Button onClick={() => setNotice(true)} variant="contained">Continuer vers la souscription</Button>
+              <Button onClick={() => navigate('/dashboard')} variant="contained">Acceder a mon espace client</Button>
             </Stack>
           </>
         )}

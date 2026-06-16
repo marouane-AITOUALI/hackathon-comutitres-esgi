@@ -1,23 +1,36 @@
-import { Box, useMediaQuery, useTheme } from '@mui/material'
-import { useState } from 'react'
-import { Sidebar } from './Sidebar'
-import { Header } from './Header'
-import { colors } from '../theme/colors'
+import { Box, Button, Card, CardContent, Stack, Typography } from '@mui/material'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../hooks/useAuth'
 
 export function HomePage() {
-  const theme = useTheme()
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const { user } = useAuth()
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: colors.appBackground }}>
-      <Sidebar mobileOpen={mobileOpen} onMobileClose={() => setMobileOpen(false)} />
-
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-        <Header greeting="Bonjour Alice" onMenuToggle={isMobile ? () => setMobileOpen(true) : undefined} />
-
-        <Box component="main" sx={{ flex: 1, overflow: 'auto' }} />
+    <Stack spacing={4}>
+      <Box sx={{ bgcolor: 'background.paper', borderRadius: 4, p: { xs: 3, sm: 6 } }}>
+        <Stack spacing={2.5} sx={{ alignItems: 'flex-start', maxWidth: 720 }}>
+          <Typography color="primary.dark" sx={{ fontWeight: 800 }}>ILE-DE-FRANCE MOBILITES</Typography>
+          <Typography component="h1" variant="h3">Le bon forfait, avec un parcours qui vous guide vraiment.</Typography>
+          <Typography color="text.secondary" sx={{ fontSize: '1.1rem' }}>
+            Repondez a quelques questions. Nous identifions le porteur, le payeur, le forfait adapte et les justificatifs a preparer.
+          </Typography>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+            <Button component={Link} to={user ? '/dashboard' : '/auth/register'} variant="contained">Commencer ma souscription</Button>
+            {!user && <Button component={Link} to="/auth/login" variant="outlined">Se connecter</Button>}
+          </Stack>
+        </Stack>
       </Box>
-    </Box>
+      <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+        {[
+          ['Simple', 'Une question a la fois pour ne jamais perdre le fil.'],
+          ['Personnalise', 'Une recommandation selon votre age, statut et rythme de transport.'],
+          ['Prepare', 'La liste des justificatifs est annoncee avant la souscription.'],
+        ].map(([title, text]) => (
+          <Card key={title} sx={{ flex: 1 }}>
+            <CardContent><Typography sx={{ fontWeight: 800 }} variant="h6">{title}</Typography><Typography color="text.secondary">{text}</Typography></CardContent>
+          </Card>
+        ))}
+      </Stack>
+    </Stack>
   )
 }

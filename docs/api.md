@@ -163,7 +163,7 @@ onboarding, porteur ou payeur.
 ### `POST /subscriptions/:id/submit`
 
 Soumet le brouillon. Le statut devient `pending_documents` si l'offre attend des
-justificatifs, sinon `pending_validation`.
+justificatifs, sinon `pending_payment` afin de passer par le paiement prototype.
 
 ### `POST /subscriptions/:id/cancel`
 
@@ -285,8 +285,114 @@ Met a jour le statut d'une souscription.
 }
 ```
 
-Statuts acceptes : `draft`, `pending_documents`, `pending_validation`,
+Statuts acceptes : `draft`, `pending_documents`, `pending_payment`, `pending_validation`,
 `accepted`, `rejected`, `cancelled`, `suspended`.
+
+## Paiements prototype
+
+Toutes les routes `/payments/*` sont protegees par JWT. Elles simulent un
+paiement gratuit pour le hackathon : aucun vrai PSP n'est appele, aucune carte
+bancaire ni IBAN complet ne doit etre stocke.
+
+### `POST /payments/simulate`
+
+Calcule un montant estime et, si une souscription est fournie, enregistre une
+trace de simulation.
+
+```json
+{
+  "subscriptionId": "uuid",
+  "paymentMode": "monthly"
+}
+```
+
+### `POST /payments/direct`
+
+Simule un paiement carte direct. `simulateFailure` permet de montrer un cas de
+paiement refuse sans vrai prestataire.
+
+```json
+{
+  "subscriptionId": "uuid",
+  "cardToken": "demo-token",
+  "simulateFailure": false
+}
+```
+
+Un paiement accepte passe la souscription en `pending_validation`. Un paiement
+refuse la passe en `pending_payment`.
+
+### `POST /payments/mandate`
+
+Simule un mandat SEPA. Pour le prototype, seul `ibanLast4` est conserve.
+
+```json
+{
+  "subscriptionId": "uuid",
+  "holderName": "Test User",
+  "ibanLast4": "1234",
+  "mandateAccepted": true
+}
+```
+
+### `GET /payments/:id`
+
+Retourne un paiement appartenant a l'utilisateur connecte. Un admin peut lire
+tous les paiements.
+
+### `POST /payments/:id/cancel`
+
+Annule un paiement encore en attente ou une simulation.
+
+### `POST /payments/:id/regularize`
+
+Regularise un paiement refuse, annule ou en attente.
+
+```json
+{
+  "note": "Regularisation manuelle prototype"
+}
+```
+
+## Renouvellement et lifecycle
+
+Toutes les routes sont protegees par JWT.
+
+### `GET /subscriptions/:id/renewal`
+
+Retourne la prochaine date estimee de renouvellement, les paiements rattaches,
+les evenements de renouvellement et les alertes eventuelles.
+
+### `POST /subscriptions/:id/renewal/accept`
+
+Accepte le renouvellement et passe la souscription en `pending_payment`.
+
+### `POST /subscriptions/:id/renewal/refuse`
+
+Refuse le renouvellement et passe la souscription en `cancelled`.
+
+### `POST /subscriptions/:id/renewal/suspend`
+
+Suspend le renouvellement et passe la souscription en `suspended`.
+
+Les trois routes acceptent un corps optionnel :
+
+```json
+{
+  "reason": "Decision utilisateur ou backoffice"
+}
+```
+
+### `GET /users/:id/timeline`
+
+Retourne une timeline explicable : compte, profils, onboarding, souscriptions,
+documents, paiements et renouvellements. L'utilisateur ne peut lire que sa
+timeline, sauf role `admin`.
+
+### `GET /profiles/:id/lifecycle-events`
+
+Retourne les evenements lies a un profil porteur ou payeur : souscriptions,
+documents, paiements et renouvellements.
 
 ### `GET /admin/documents/pending`
 

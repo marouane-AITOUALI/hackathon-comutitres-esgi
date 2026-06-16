@@ -1,5 +1,6 @@
 import { Box, Button, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Typography, useMediaQuery, useTheme } from '@mui/material'
 import { LayoutDashboard, BookOpen, CreditCard, FolderOpen, User, HelpCircle } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import logoUrl from '../assets/comutitres_v_blanc.svg'
 import { colors } from '../theme/colors'
 
@@ -13,6 +14,16 @@ const NAV_ITEMS = [
 ]
 
 const SIDEBAR_WIDTH = 303
+const SIDEBAR_DESKTOP_MARGIN = 25
+
+const routeByKey: Record<string, string> = {
+  dashboard: '/dashboard',
+  abonnements: '/subscriptions',
+  paiements: '/paiements',
+  documents: '/documents',
+  profil: '/profil',
+  support: '/support',
+}
 
 interface SidebarProps {
   activeKey?: string
@@ -22,6 +33,8 @@ interface SidebarProps {
 }
 
 function SidebarContent({ activeKey = 'dashboard', onNavigate }: Pick<SidebarProps, 'activeKey' | 'onNavigate'>) {
+  const navigate = useNavigate()
+
   const handleDownload = () => {
     window.open('https://play.google.com/store', '_blank')
   }
@@ -58,7 +71,10 @@ function SidebarContent({ activeKey = 'dashboard', onNavigate }: Pick<SidebarPro
           return (
             <ListItemButton
               key={item.key}
-              onClick={() => onNavigate?.(item.key)}
+              onClick={() => {
+                onNavigate?.(item.key)
+                if (!onNavigate) navigate(routeByKey[item.key] ?? '/dashboard')
+              }}
               sx={{
                 borderRadius: '16px',
                 mb: 1,
@@ -162,13 +178,12 @@ export function Sidebar({ activeKey, onNavigate, mobileOpen = false, onMobileClo
       component="nav"
       sx={{
         width: SIDEBAR_WIDTH,
-        mr: { md: 29 / 8 },
         flexShrink: 0,
-        height: 'calc(100vh - 50px)',
+        height: `calc(100vh - ${SIDEBAR_DESKTOP_MARGIN * 2}px)`,
         position: 'sticky',
-        top: 25,
-        ml: { md: 25 / 8 },
-        my: { md: 25 / 8 },
+        top: `${SIDEBAR_DESKTOP_MARGIN}px`,
+        ml: `${SIDEBAR_DESKTOP_MARGIN}px`,
+        my: `${SIDEBAR_DESKTOP_MARGIN}px`,
         overflow: 'auto',
       }}
     >

@@ -1,10 +1,16 @@
 import { AppBar, Button, Container, Stack, Toolbar, Typography } from '@mui/material'
-import { Link, Outlet, useNavigate } from 'react-router-dom'
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 export function AppLayout() {
   const { logout, user } = useAuth()
   const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const isHome = pathname === '/'
+
+  if (isHome) {
+    return <Outlet />
+  }
 
   return (
     <>
@@ -16,7 +22,7 @@ export function AppLayout() {
           <Stack direction="row" spacing={1}>
             {user ? (
               <>
-                <Button component={Link} to="/onboarding">Mon parcours</Button>
+                <Button component={Link} to="/dashboard">Mon espace client</Button>
                 <Button onClick={() => { logout(); navigate('/') }} variant="outlined">Se deconnecter</Button>
               </>
             ) : (
