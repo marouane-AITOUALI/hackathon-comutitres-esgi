@@ -1,4 +1,4 @@
-export type SubscriptionStatus = 'draft' | 'pending_documents' | 'pending_validation' | 'accepted' | 'rejected' | 'cancelled' | 'suspended'
+export type SubscriptionStatus = 'draft' | 'pending_documents' | 'pending_payment' | 'pending_validation' | 'accepted' | 'rejected' | 'cancelled' | 'suspended'
 export type DocumentStatus = 'pending' | 'analyzing' | 'validated' | 'rejected' | 'needs_manual_review'
 
 export interface AdminStats {

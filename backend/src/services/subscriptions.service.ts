@@ -155,7 +155,7 @@ export async function submitSubscription(userId: string, id: string) {
   const [offer] = await requireDb().select().from(offers).where(eq(offers.id, current.offerId)).limit(1)
   if (!offer) throw new AppError(404, 'Offre introuvable.')
 
-  const nextStatus = offer.requiredDocuments.length > 0 ? 'pending_documents' : 'pending_validation'
+  const nextStatus = offer.requiredDocuments.length > 0 ? 'pending_documents' : 'pending_payment'
   const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: nextStatus, updatedAt: new Date() })

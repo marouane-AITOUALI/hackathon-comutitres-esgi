@@ -6,6 +6,7 @@ import { useApiUrl } from '../hooks/useApiUrl'
 const statusLabels: Record<SubscriptionStatus, string> = {
   draft: 'Brouillon',
   pending_documents: 'Documents attendus',
+  pending_payment: 'Paiement attendu',
   pending_validation: 'A valider',
   accepted: 'Acceptee',
   rejected: 'Refusee',
@@ -23,7 +24,7 @@ const subscriptionTypes = {
 function statusColor(status: SubscriptionStatus) {
   if (status === 'accepted') return 'success' as const
   if (status === 'rejected' || status === 'cancelled' || status === 'suspended') return 'error' as const
-  if (status === 'pending_documents') return 'warning' as const
+  if (status === 'pending_documents' || status === 'pending_payment') return 'warning' as const
   return 'primary' as const
 }
 
@@ -67,7 +68,7 @@ export function DashboardPage() {
 
   const statCards = [
     { label: 'Souscriptions', value: stats?.subscriptions.total ?? 0 },
-    { label: 'En attente', value: (stats?.subscriptions.pending_documents ?? 0) + (stats?.subscriptions.pending_validation ?? 0) },
+    { label: 'En attente', value: (stats?.subscriptions.pending_documents ?? 0) + (stats?.subscriptions.pending_payment ?? 0) + (stats?.subscriptions.pending_validation ?? 0) },
     { label: 'Acceptees', value: stats?.subscriptions.accepted ?? 0 },
     { label: 'Alertes support', value: stats?.supportAlerts ?? 0 },
   ]

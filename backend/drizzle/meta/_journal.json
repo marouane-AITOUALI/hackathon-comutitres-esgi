@@ -29,6 +29,13 @@
       "when": 1781611162328,
       "tag": "0003_document-analysis",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781619315329,
+      "tag": "0004_payments-renewal-lifecycle",
+      "breakpoints": true
     }
   ]
 }
