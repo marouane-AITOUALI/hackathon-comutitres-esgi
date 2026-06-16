@@ -3,6 +3,7 @@ import { adminRouter } from './admin.routes.js'
 import { healthRouter } from './health.routes.js'
 import { authRouter } from './auth.routes.js'
 import { documentsRouter } from './documents.routes.js'
+import { eligibilityRouter } from './eligibility.routes.js'
 import { onboardingRouter } from './onboarding.routes.js'
 import { profilesRouter } from './profiles.routes.js'
 import { offersRouter } from './offers.routes.js'
@@ -15,6 +16,7 @@ apiRouter.use('/health', healthRouter)
 apiRouter.use('/admin', adminRouter)
 apiRouter.use('/auth', authRouter)
 apiRouter.use('/', documentsRouter)
+apiRouter.use('/eligibility', eligibilityRouter)
 apiRouter.use('/profiles', profilesRouter)
 apiRouter.use('/onboarding', onboardingRouter)
 apiRouter.use('/offers', offersRouter)
