@@ -1,21 +1,20 @@
 import {
   Box,
   Button,
-  IconButton,
   Stack,
   TextField,
   Typography,
 } from '@mui/material'
 import { Link } from 'react-router-dom'
+import { LandingFooter } from '../components/landing/LandingFooter'
+import { LandingHeader } from '../components/landing/LandingHeader'
 import { useAuth } from '../hooks/useAuth'
 import heroDay from '../assets/jour.png'
 import ctaNight from '../assets/nuit.png'
 
 const BRAND_BLUE = '#1972d2'
-const DARK_TEXT = '#1a2b3c'
-const FOOTER_BG = '#0d1b2a'
 
-const navLinks = ['Comment ça marche', 'Nos forfaits', 'Tarifs & aides', 'Aide']
+const DARK_TEXT = '#1a2b3c'
 
 const forfaits = [
   { title: 'Imagine R', desc: 'Pour les étudiants et apprentis', color: '#7c3aed', bg: '#ede9fe', icon: 'graduation' },
@@ -31,13 +30,6 @@ const accessibility = [
   { title: 'Senior', desc: 'Taille de texte adaptée', icon: 'person' },
   { title: 'Handicap', desc: 'Conforme aux normes d’accessibilité', icon: 'wheelchair' },
   { title: 'Mobile First', desc: 'Optimisé mobile et tablette', icon: 'phone' },
-]
-
-const footerColumns = [
-  { title: 'À propos', links: ['Qui sommes-nous ?', 'Nos engagements'] },
-  { title: 'Aide', links: ['FAQ', 'Nous contacter'] },
-  { title: 'Informations', links: ['Mentions légales', 'Conditions générales'] },
-  { title: 'Confidentialité', links: ['Politique de confidentialité', 'Gestion des cookies'] },
 ]
 
 function ForfaitIcon({ type, color }: { type: string; color: string }) {
@@ -100,93 +92,12 @@ function AccessIcon({ type }: { type: string }) {
   }
 }
 
-function BrandLogo({ light = false }: { light?: boolean }) {
-  const subColor = light ? 'rgba(255,255,255,0.85)' : '#64748b'
-
-  return (
-    <Stack direction="row" spacing={1.75} sx={{ alignItems: 'center', flexShrink: 0 }}>
-      <Typography
-        component={Link}
-        to="/"
-        sx={{
-          fontWeight: 800,
-          fontSize: { xs: 18, md: 20 },
-          color: light ? '#fff' : BRAND_BLUE,
-          letterSpacing: -0.3,
-          textDecoration: 'none',
-          lineHeight: 1,
-        }}
-      >
-        comu<span style={{ color: light ? '#93c5fd' : '#3b82f6' }}>titres</span>
-      </Typography>
-
-      <Box
-        sx={{
-          width: '1px',
-          height: 24,
-          bgcolor: light ? 'rgba(255,255,255,0.35)' : '#e2e8f0',
-          flexShrink: 0,
-        }}
-      />
-
-      <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-        <Box
-          sx={{
-            width: 26,
-            height: 26,
-            borderRadius: '50%',
-            border: `2px solid ${light ? '#fff' : BRAND_BLUE}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: light ? '#fff' : BRAND_BLUE }} />
-        </Box>
-        <Typography
-          sx={{
-            fontWeight: 600,
-            fontSize: 10.5,
-            lineHeight: 1.15,
-            color: subColor,
-            maxWidth: 88,
-            display: { xs: 'none', sm: 'block' },
-          }}
-        >
-          Île-de-France
-          <br />
-          Mobilités
-        </Typography>
-      </Stack>
-    </Stack>
-  )
-}
-
-function SocialIcon({ label }: { label: string }) {
-  const paths: Record<string, string> = {
-    x: 'M4 4l16 16M20 4 4 20',
-    facebook: 'M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3Z',
-    instagram: 'M7 2h10a5 5 0 0 1 5 5v10a5 5 0 0 1-5 5H7a5 5 0 0 1-5-5V7a5 5 0 0 1 5-5Z M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z M17.5 6.5h.01',
-    linkedin: 'M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-4 0v7h-4v-12h4v2M2 9h4v12H2z M4 6a2 2 0 1 0 0-4 2 2 0 0 0 0 4Z',
-  }
-
-  return (
-    <IconButton aria-label={label} sx={{ color: 'rgba(255,255,255,0.7)', '&:hover': { color: '#fff' } }}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d={paths[label]} />
-      </svg>
-    </IconButton>
-  )
-}
-
 export function HomePage() {
   const { user } = useAuth()
   const ctaTo = user ? '/onboarding' : '/auth/register'
 
   return (
     <Box sx={{ bgcolor: '#fff', overflowX: 'hidden' }}>
-      {/* HERO */}
       <Box
         sx={{
           position: 'relative',
@@ -206,98 +117,8 @@ export function HomePage() {
           }}
         />
 
-        {/* Header */}
-        <Box
-          component="header"
-          sx={{
-            position: 'relative',
-            zIndex: 2,
-            px: { xs: 2, md: 4, lg: 5 },
-            pt: 1.5,
-            pb: 1,
-          }}
-        >
-          <Box
-            sx={{
-              maxWidth: 1280,
-              mx: 'auto',
-              minHeight: 64,
-              px: { xs: 1.5, md: 2.5 },
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr auto', lg: 'auto 1fr auto' },
-              alignItems: 'center',
-              gap: 2,
-              borderRadius: 3,
-              bgcolor: 'rgba(15, 23, 42, 0.22)',
-              backdropFilter: 'blur(10px)',
-              border: '1px solid rgba(255,255,255,0.14)',
-            }}
-          >
-            <BrandLogo light />
+        <LandingHeader />
 
-            <Stack
-              component="nav"
-              direction="row"
-              spacing={0.5}
-              sx={{
-                display: { xs: 'none', lg: 'flex' },
-                alignItems: 'center',
-                justifyContent: 'center',
-                justifySelf: 'center',
-              }}
-            >
-              {navLinks.map((link) => (
-                <Typography
-                  key={link}
-                  component="a"
-                  href="#"
-                  sx={{
-                    color: 'rgba(255,255,255,0.9)',
-                    fontWeight: 500,
-                    fontSize: 14,
-                    textDecoration: 'none',
-                    px: 1.75,
-                    py: 1,
-                    borderRadius: 2,
-                    whiteSpace: 'nowrap',
-                    transition: 'background-color 0.2s, color 0.2s',
-                    '&:hover': {
-                      color: '#fff',
-                      bgcolor: 'rgba(255,255,255,0.12)',
-                    },
-                  }}
-                >
-                  {link}
-                </Typography>
-              ))}
-            </Stack>
-
-            <Button
-              component={Link}
-              to="/auth/login"
-              sx={{
-                justifySelf: 'end',
-                bgcolor: '#fff',
-                color: BRAND_BLUE,
-                fontWeight: 600,
-                fontSize: 14,
-                borderRadius: 999,
-                px: 3,
-                height: 42,
-                minWidth: { xs: 120, sm: 140 },
-                boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
-                '&:hover': {
-                  bgcolor: '#f8fafc',
-                  boxShadow: '0 4px 14px rgba(0,0,0,0.16)',
-                },
-              }}
-            >
-              Se connecter
-            </Button>
-          </Box>
-        </Box>
-
-        {/* Hero content */}
         <Stack
           spacing={2}
           sx={{
@@ -366,13 +187,8 @@ export function HomePage() {
               sx={{
                 px: 2,
                 flex: 1,
-                '& .MuiInputBase-root': {
-                  height: 48,
-                },
-                '& input': {
-                  fontSize: 15,
-                  py: 0,
-                },
+                '& .MuiInputBase-root': { height: 48 },
+                '& input': { fontSize: 15, py: 0 },
               }}
             />
             <Button
@@ -396,7 +212,6 @@ export function HomePage() {
         </Stack>
       </Box>
 
-      {/* NOS FORFAITS */}
       <Box sx={{ px: { xs: 2, md: 5 }, py: { xs: 6, md: 8 } }}>
         <Stack direction={{ xs: 'column', lg: 'row' }} spacing={{ xs: 4, lg: 6 }} sx={{ maxWidth: 1280, mx: 'auto' }}>
           <Box sx={{ flex: '0 0 auto', maxWidth: 320 }}>
@@ -479,7 +294,6 @@ export function HomePage() {
         </Stack>
       </Box>
 
-      {/* PENSÉ POUR TOUS */}
       <Box sx={{ px: { xs: 2, md: 5 }, py: { xs: 6, md: 8 }, textAlign: 'center' }}>
         <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
           <Typography sx={{ color: BRAND_BLUE, fontWeight: 800, fontSize: 12, letterSpacing: 1.2, mb: 1.5 }}>
@@ -492,10 +306,7 @@ export function HomePage() {
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
             spacing={0}
-            sx={{
-              justifyContent: 'center',
-              alignItems: { xs: 'center', sm: 'flex-start' },
-            }}
+            sx={{ justifyContent: 'center', alignItems: { xs: 'center', sm: 'flex-start' } }}
           >
             {accessibility.map((item, index) => (
               <Stack
@@ -531,7 +342,6 @@ export function HomePage() {
         </Box>
       </Box>
 
-      {/* CTA */}
       <Box
         sx={{
           position: 'relative',
@@ -575,49 +385,7 @@ export function HomePage() {
         </Stack>
       </Box>
 
-      {/* FOOTER */}
-      <Box component="footer" sx={{ bgcolor: FOOTER_BG, color: '#fff', px: { xs: 2, md: 5 }, pt: 6, pb: 3 }}>
-        <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
-          <Stack direction={{ xs: 'column', lg: 'row' }} spacing={5} sx={{ mb: 5 }}>
-            <Box sx={{ flex: 1, maxWidth: 360 }}>
-              <BrandLogo light />
-              <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.65)', fontSize: 14, lineHeight: 1.6 }}>
-                La plateforme officielle de souscription de vos forfaits Île-de-France Mobilités.
-              </Typography>
-            </Box>
-
-            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={{ xs: 4, sm: 6 }} sx={{ flex: 2, justifyContent: 'flex-end' }}>
-              {footerColumns.map((col) => (
-                <Stack key={col.title} spacing={1.25}>
-                  <Typography sx={{ fontWeight: 800, fontSize: 14 }}>{col.title}</Typography>
-                  {col.links.map((link) => (
-                    <Typography
-                      key={link}
-                      component="a"
-                      href="#"
-                      sx={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, textDecoration: 'none', '&:hover': { color: '#fff' } }}
-                    >
-                      {link}
-                    </Typography>
-                  ))}
-                </Stack>
-              ))}
-            </Stack>
-          </Stack>
-
-          <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.12)', pt: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
-            <Typography sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
-              © {new Date().getFullYear()} Comutitres — Île-de-France Mobilités. Tous droits réservés.
-            </Typography>
-            <Stack direction="row" spacing={0.5}>
-              <SocialIcon label="x" />
-              <SocialIcon label="facebook" />
-              <SocialIcon label="instagram" />
-              <SocialIcon label="linkedin" />
-            </Stack>
-          </Box>
-        </Box>
-      </Box>
+      <LandingFooter />
     </Box>
   )
 }
