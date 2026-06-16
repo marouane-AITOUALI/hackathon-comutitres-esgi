@@ -101,3 +101,31 @@ Route protegee. Retourne une orientation explicable :
 
 Tous les payloads sont valides par Zod. Les erreurs utilisent un message
 lisible et, pour la validation, des details par champ.
+
+## Catalogue des offres
+
+### `GET /offers`
+
+Retourne les offres actives par defaut.
+
+Query params optionnels :
+
+- `includeInactive=true` pour inclure les offres desactivees ;
+- `target=senior` pour filtrer par cible metier.
+
+### `GET /offers/:code`
+
+Retourne le detail d'une offre par code, par exemple `NAVIGO_ANNUEL`.
+
+### `GET /offers/:code/required-documents`
+
+Retourne les justificatifs potentiellement requis pour l'offre.
+
+### `GET /offers/:code/conditions`
+
+Retourne les conditions metier simples et les avertissements de l'offre.
+
+### `GET /offers/compare?codes=NAVIGO_ANNUEL,LIBERTE_PLUS`
+
+Compare entre deux et quatre offres pour aider le front et le backoffice a
+expliquer les differences.
