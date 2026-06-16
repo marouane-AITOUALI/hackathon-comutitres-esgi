@@ -88,6 +88,11 @@ export async function recommendOffer(input: RecommendationInput): Promise<OfferR
     return makeResult(offer, 0.72, ['Statut boursier detecte'], [...warnings, "L'eligibilite TST devra etre confirmee."])
   }
 
+  if (age > 0 && age < 11) {
+    const offer = findOffer('IMAGINE_R_JUNIOR')
+    return makeResult(offer, 0.94, ['Porteur junior de moins de 11 ans'], warnings)
+  }
+
   if (status === 'school' || (age > 0 && age < 18)) {
     const offer = findOffer('IMAGINE_R_SCOLAIRE')
     return makeResult(offer, 0.9, ['Porteur scolaire ou mineur'], warnings)
