@@ -1,7 +1,6 @@
 import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
-import { useAuth } from '../hooks/useAuth'
 import { listOffers } from '../services/offers.service'
 import { listSubscriptions } from '../services/subscriptions.service'
 import type { OfferSummary, SubscriptionSummary } from '../types'
@@ -9,6 +8,7 @@ import type { OfferSummary, SubscriptionSummary } from '../types'
 const statusLabel: Record<string, string> = {
   draft: 'Brouillon',
   pending_documents: 'Documents attendus',
+  pending_payment: 'Paiement attendu',
   pending_validation: 'En validation',
   accepted: 'Acceptee',
   rejected: 'Refusee',
@@ -19,6 +19,7 @@ const statusLabel: Record<string, string> = {
 const statusTone: Record<string, 'default' | 'warning' | 'success' | 'error' | 'info'> = {
   draft: 'default',
   pending_documents: 'warning',
+  pending_payment: 'warning',
   pending_validation: 'info',
   accepted: 'success',
   rejected: 'error',
@@ -38,7 +39,6 @@ function countByStatus(subscriptions: SubscriptionSummary[]) {
 }
 
 export function DashboardPage() {
-  const { user } = useAuth()
   const [subscriptions, setSubscriptions] = useState<SubscriptionSummary[]>([])
   const [offers, setOffers] = useState<OfferSummary[]>([])
   const [error, setError] = useState('')

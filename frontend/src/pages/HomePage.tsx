@@ -94,6 +94,7 @@ function AccessIcon({ type }: { type: string }) {
 
 export function HomePage() {
   const { user } = useAuth()
+  const ctaTo = user ? '/onboarding' : '/auth/register'
 
   return (
     <Box sx={{ bgcolor: '#fff', overflowX: 'hidden' }}>

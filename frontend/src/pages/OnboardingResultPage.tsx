@@ -11,7 +11,6 @@ export function OnboardingResultPage() {
   const [answer] = useState(() => getOnboardingDraft() as OnboardingAnswer)
   const [recommendation, setRecommendation] = useState<OfferRecommendation | null>(null)
   const [error, setError] = useState(answer.bearer ? '' : 'Le parcours est incomplet.')
-  const [notice, setNotice] = useState(false)
 
   useEffect(() => {
     if (!answer.bearer) return
@@ -35,7 +34,6 @@ export function OnboardingResultPage() {
             </Stack>
             <div><Typography sx={{ fontWeight: 800 }} variant="h6">Justificatifs potentiellement necessaires</Typography><List dense>{recommendation.requiredDocuments.map((document) => <ListItem key={document}><ListItemText primary={document} /></ListItem>)}</List></div>
             {recommendation.warnings.map((warning) => <Alert key={warning} severity="warning">{warning}</Alert>)}
-            {notice && <Alert severity="info">La poursuite complete de la souscription sera disponible dans une prochaine version du prototype.</Alert>}
             <Divider />
             <Stack direction={{ xs: 'column-reverse', sm: 'row' }} spacing={1} sx={{ justifyContent: 'space-between' }}>
               <Button onClick={() => navigate('/onboarding/needs')}>Modifier mes reponses</Button>
