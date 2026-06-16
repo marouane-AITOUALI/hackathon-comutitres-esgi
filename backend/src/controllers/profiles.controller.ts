@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { AppError } from '../utils/app-error.js'
 import { createProfile, deleteProfile, getProfile, getProfileLifecycle, listProfiles, updateProfile } from '../services/profiles.service.js'
 
-const profileId = (value: string) => z.uuid().parse(value)
+const profileId = (value: unknown) => z.uuid().parse(value)
 
 export const indexProfiles: RequestHandler = async (req, res) => {
   if (!req.auth) throw new AppError(401, 'Authentification requise.')

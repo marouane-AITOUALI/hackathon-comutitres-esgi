@@ -250,3 +250,95 @@ Retourne un score de risque sans modifier le document.
 ### `POST /documents/:id/manual-review`
 
 Enregistre la decision humaine du backoffice.
+
+## Backoffice admin
+
+Toutes les routes `/admin/*` sont protegees par JWT et demandent un utilisateur
+avec `role: "admin"`. Elles servent au pilotage prototype : dossiers,
+documents, offres et alertes support.
+
+### `GET /admin/stats`
+
+Retourne les compteurs principaux du dashboard : utilisateurs, souscriptions
+par statut, documents par statut, offres actives et alertes support.
+
+### `GET /admin/subscriptions`
+
+Liste les souscriptions avec utilisateur, porteur, payeur, offre, session
+onboarding et documents rattaches.
+
+Query optionnelle :
+
+- `status=pending_documents` pour filtrer par statut.
+
+### `GET /admin/subscriptions/:id`
+
+Retourne le detail d'une souscription pour revue backoffice.
+
+### `PATCH /admin/subscriptions/:id/status`
+
+Met a jour le statut d'une souscription.
+
+```json
+{
+  "status": "accepted"
+}
+```
+
+Statuts acceptes : `draft`, `pending_documents`, `pending_validation`,
+`accepted`, `rejected`, `cancelled`, `suspended`.
+
+### `GET /admin/documents/pending`
+
+Retourne les justificatifs en attente d'analyse, en analyse ou necessitant une
+revue manuelle.
+
+### `PATCH /admin/documents/:id/review`
+
+Enregistre une decision humaine sur un justificatif.
+
+```json
+{
+  "accepted": false,
+  "rejectionReason": "Document illisible",
+  "note": "Demander une nouvelle piece plus nette."
+}
+```
+
+### `GET /admin/users`
+
+Liste les utilisateurs publics, sans `passwordHash`, avec le nombre de
+souscriptions associees.
+
+### `GET /admin/offers`
+
+Liste toutes les offres, actives ou non, pour pilotage catalogue.
+
+### `POST /admin/offers`
+
+Cree une offre dans le catalogue.
+
+```json
+{
+  "code": "NAVIGO_EXEMPLE",
+  "name": "Navigo Exemple",
+  "description": "Offre de demonstration",
+  "target": "prototype",
+  "requiredDocuments": ["Piece d'identite"],
+  "isActive": true
+}
+```
+
+### `PATCH /admin/offers/:id`
+
+Modifie une offre existante.
+
+### `GET /admin/support-alerts`
+
+Retourne des alertes calculees sans nouvelle table : justificatifs manquants,
+documents a revoir, dossiers bloques.
+
+### `GET /admin/audit-logs`
+
+Retourne un journal prototype derive des changements de statut souscriptions et
+documents. Une table dediee pourra etre ajoutee plus tard si le besoin augmente.
