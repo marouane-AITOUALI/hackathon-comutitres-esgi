@@ -7,8 +7,20 @@ export const profileStatus = pgEnum('profile_status', ['junior', 'school', 'stud
 export const relationshipToBearer = pgEnum('relationship_to_bearer', ['parent', 'guardian', 'association', 'employer', 'other'])
 export const subscriptionFor = pgEnum('subscription_for', ['self', 'child', 'other', 'organization_beneficiary'])
 export const subscriptionStatus = pgEnum('subscription_status', ['draft', 'pending_documents', 'pending_validation', 'accepted', 'rejected', 'cancelled', 'suspended'])
-export const documentStatus = pgEnum('document_status', ['pending', 'validated', 'rejected'])
+export const documentStatus = pgEnum('document_status', ['pending', 'analyzing', 'validated', 'rejected', 'needs_manual_review'])
 export const documentType = pgEnum('document_type', ['identity', 'proof_of_address', 'eligibility', 'school_certificate', 'tax_notice', 'other'])
+
+export interface DocumentAnalysisResult {
+  provider: 'rules-prototype-free'
+  detectedDocumentType: string
+  confidence: number
+  suggestedStatus: 'validated' | 'needs_manual_review' | 'rejected'
+  extractedFields: Record<string, unknown>
+  reasons: string[]
+  warnings: string[]
+  fraudSignals: string[]
+  analyzedAt: string
+}
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -91,6 +103,8 @@ export const documents = pgTable('documents', {
   type: documentType('type').default('other').notNull(),
   fileUrl: text('file_url').notNull(),
   status: documentStatus('status').default('pending').notNull(),
+  analysisResult: jsonb('analysis_result').$type<DocumentAnalysisResult | Record<string, unknown>>().default({}).notNull(),
+  analyzedAt: timestamp('analyzed_at', { withTimezone: true }),
   rejectionReason: text('rejection_reason'),
   ...timestamps,
 }, (table) => [index('documents_subscription_id_idx').on(table.subscriptionId)])

@@ -172,3 +172,64 @@ Annule la souscription.
 ### `POST /subscriptions/:id/suspend`
 
 Suspend la souscription, utile pour les cas de refus ou de gestion SAV.
+
+## Documents et verification IA prototype
+
+Toutes les routes sont protegees par JWT. Le prototype ne stocke pas encore les
+fichiers : `fileUrl` represente l'emplacement ou le nom du justificatif.
+
+### `POST /subscriptions/:subscriptionId/documents`
+
+Ajoute une piece justificative a une souscription de l'utilisateur connecte.
+
+```json
+{
+  "type": "school_certificate",
+  "fileUrl": "certificat-scolarite-2026.pdf"
+}
+```
+
+### `GET /subscriptions/:subscriptionId/documents`
+
+Liste les justificatifs d'une souscription.
+
+### `GET /documents/:id`
+
+Retourne un justificatif appartenant a l'utilisateur connecte.
+
+### `DELETE /documents/:id`
+
+Supprime un justificatif.
+
+### `PATCH /documents/:id/status`
+
+Met a jour le statut en revue manuelle : `pending`, `validated`, `rejected` ou
+`needs_manual_review`.
+
+### `POST /documents/:id/resubmit`
+
+Remplace le fichier d'un justificatif refuse ou incomplet et le repasse en
+`pending`.
+
+### `POST /documents/:id/analyze`
+
+Lance une verification gratuite basee sur des regles. Elle ne remplace pas une
+vraie IA documentaire, mais fournit :
+
+- un type detecte ;
+- un score de confiance ;
+- un statut suggere ;
+- des raisons explicables ;
+- des signaux de fraude simples.
+
+### `GET /documents/:id/analysis`
+
+Retourne le dernier resultat d'analyse.
+
+### `POST /documents/:id/fraud-check`
+
+Retourne un score de risque sans modifier le document.
+
+### `POST /documents/:id/manual-review`
+
+Enregistre la decision humaine du backoffice.
