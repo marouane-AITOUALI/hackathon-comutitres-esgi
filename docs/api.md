@@ -129,3 +129,46 @@ Retourne les conditions metier simples et les avertissements de l'offre.
 
 Compare entre deux et quatre offres pour aider le front et le backoffice a
 expliquer les differences.
+
+## Souscriptions
+
+Toutes les routes sont protegees par JWT.
+
+### `POST /subscriptions`
+
+Cree une souscription en brouillon depuis une session onboarding ou des profils
+explicites.
+
+```json
+{
+  "onboardingSessionId": "uuid",
+  "offerCode": "NAVIGO_ANNUEL"
+}
+```
+
+### `GET /subscriptions`
+
+Liste les souscriptions de l'utilisateur connecte avec offre, porteur, payeur et
+resume de session.
+
+### `GET /subscriptions/:id`
+
+Retourne une souscription appartenant a l'utilisateur connecte.
+
+### `PATCH /subscriptions/:id`
+
+Modifie une souscription tant qu'elle est en brouillon : offre, session
+onboarding, porteur ou payeur.
+
+### `POST /subscriptions/:id/submit`
+
+Soumet le brouillon. Le statut devient `pending_documents` si l'offre attend des
+justificatifs, sinon `pending_validation`.
+
+### `POST /subscriptions/:id/cancel`
+
+Annule la souscription.
+
+### `POST /subscriptions/:id/suspend`
+
+Suspend la souscription, utile pour les cas de refus ou de gestion SAV.

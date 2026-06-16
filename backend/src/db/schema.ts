@@ -6,7 +6,7 @@ export const profileType = pgEnum('profile_type', ['bearer', 'payer'])
 export const profileStatus = pgEnum('profile_status', ['junior', 'school', 'student', 'active', 'senior', 'solidarity', 'other'])
 export const relationshipToBearer = pgEnum('relationship_to_bearer', ['parent', 'guardian', 'association', 'employer', 'other'])
 export const subscriptionFor = pgEnum('subscription_for', ['self', 'child', 'other', 'organization_beneficiary'])
-export const subscriptionStatus = pgEnum('subscription_status', ['draft', 'pending_documents', 'pending_validation', 'accepted', 'rejected'])
+export const subscriptionStatus = pgEnum('subscription_status', ['draft', 'pending_documents', 'pending_validation', 'accepted', 'rejected', 'cancelled', 'suspended'])
 export const documentStatus = pgEnum('document_status', ['pending', 'validated', 'rejected'])
 export const documentType = pgEnum('document_type', ['identity', 'proof_of_address', 'eligibility', 'school_certificate', 'tax_notice', 'other'])
 
