@@ -175,8 +175,25 @@ Suspend la souscription, utile pour les cas de refus ou de gestion SAV.
 
 ## Documents et verification IA prototype
 
-Toutes les routes sont protegees par JWT. Le prototype ne stocke pas encore les
-fichiers : `fileUrl` represente l'emplacement ou le nom du justificatif.
+Les routes liees a une souscription ou a un document existant sont protegees
+par JWT. Le prototype ne stocke pas encore les fichiers : `fileUrl` represente
+l'emplacement ou le nom du justificatif.
+
+### `POST /documents/analyze/demo`
+
+Route publique de demonstration hackathon. Elle lance l'analyse documentaire
+simulee sans ecrire en base, utile pour montrer la verification IA gratuite
+avant d'avoir une souscription creee.
+
+```json
+{
+  "type": "school_certificate",
+  "fileUrl": "certificat-scolarite-2026.pdf"
+}
+```
+
+Retourne le type detecte, le score de confiance, les raisons, les alertes, les
+signaux de fraude et `needs_manual_review`.
 
 ### `POST /subscriptions/:subscriptionId/documents`
 

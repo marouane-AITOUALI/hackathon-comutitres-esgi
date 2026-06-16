@@ -101,3 +101,24 @@ export function checkDocumentFraud(document: DocumentForAnalysis) {
     needsManualReview: riskScore >= 35 || analysis.suggestedStatus !== 'validated',
   }
 }
+
+export function analyzeDemoDocument(document: DocumentForAnalysis) {
+  const analysis = analyzeDocumentWithRules(document)
+  const fraudCheck = checkDocumentFraud(document)
+  const needsManualReview = fraudCheck.needsManualReview
+
+  return {
+    demo: true,
+    provider: analysis.provider,
+    detectedDocumentType: analysis.detectedDocumentType,
+    confidence: analysis.confidence,
+    suggestedStatus: analysis.suggestedStatus,
+    reasons: analysis.reasons,
+    warnings: analysis.warnings,
+    fraudSignals: analysis.fraudSignals,
+    fraudRiskScore: fraudCheck.riskScore,
+    needsManualReview,
+    needs_manual_review: needsManualReview,
+    analyzedAt: analysis.analyzedAt,
+  }
+}
