@@ -1,6 +1,6 @@
 import { asc, desc, eq, inArray } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
-import { documents, offers, onboardingSessions, profiles, subscriptions, users } from '../db/schema.js'
+import { documents, offers, onboardingSessions, payments, profiles, subscriptions, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput } from '../validation/admin.schemas.js'
 
@@ -109,6 +109,7 @@ async function loadSupportAlerts() {
   const subscriptionRows = await database.select(subscriptionSelection).from(subscriptions).orderBy(desc(subscriptions.updatedAt))
   const offerRows = await database.select(offerSelection).from(offers)
   const documentRows = await database.select(documentSelection).from(documents)
+  const paymentRows = await database.select().from(payments)
   const offerById = new Map(offerRows.map((offer) => [offer.id, offer]))
   const documentsBySubscription = new Map<string, DocumentRow[]>()
 
@@ -132,6 +133,18 @@ async function loadSupportAlerts() {
         subscriptionId: subscription.id,
         title: 'Justificatifs manquants',
         message: `${Math.max(0, requiredDocuments.length - subscriptionDocuments.length)} justificatif(s) attendu(s) pour ${offer?.name ?? 'cette offre'}.`,
+        createdAt: subscription.updatedAt,
+      })
+    }
+
+    if (subscription.status === 'pending_payment') {
+      alerts.push({
+        id: `pending-payment-${subscription.id}`,
+        type: 'pending_payment',
+        severity: 'info',
+        subscriptionId: subscription.id,
+        title: 'Paiement attendu',
+        message: 'Le dossier attend une simulation, un paiement direct ou un mandat SEPA prototype.',
         createdAt: subscription.updatedAt,
       })
     }
@@ -164,6 +177,21 @@ async function loadSupportAlerts() {
     }
   }
 
+  for (const payment of paymentRows) {
+    if (payment.status === 'rejected' || payment.status === 'cancelled') {
+      alerts.push({
+        id: `payment-issue-${payment.id}`,
+        type: 'payment_issue',
+        severity: 'error',
+        subscriptionId: payment.subscriptionId,
+        paymentId: payment.id,
+        title: 'Paiement a regulariser',
+        message: `Paiement ${payment.status} de ${payment.amountCents / 100} ${payment.currency}.`,
+        createdAt: payment.updatedAt,
+      })
+    }
+  }
+
   return alerts.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 25)
 }
 
@@ -173,6 +201,7 @@ export async function getAdminStats() {
   const subscriptionRows = await database.select({ status: subscriptions.status }).from(subscriptions)
   const documentRows = await database.select({ status: documents.status }).from(documents)
   const offerRows = await database.select({ isActive: offers.isActive }).from(offers)
+  const paymentRows = await database.select({ status: payments.status }).from(payments)
   const supportAlerts = await loadSupportAlerts()
 
   return {
@@ -182,7 +211,7 @@ export async function getAdminStats() {
     },
     subscriptions: {
       total: subscriptionRows.length,
-      ...countStatuses(subscriptionRows, ['draft', 'pending_documents', 'pending_validation', 'accepted', 'rejected', 'cancelled', 'suspended'] as const),
+      ...countStatuses(subscriptionRows, ['draft', 'pending_documents', 'pending_payment', 'pending_validation', 'accepted', 'rejected', 'cancelled', 'suspended'] as const),
     },
     documents: {
       total: documentRows.length,
@@ -191,6 +220,10 @@ export async function getAdminStats() {
     offers: {
       total: offerRows.length,
       active: offerRows.filter((offer) => offer.isActive).length,
+    },
+    payments: {
+      total: paymentRows.length,
+      ...countStatuses(paymentRows, ['simulated', 'pending', 'accepted', 'rejected', 'cancelled', 'regularized'] as const),
     },
     supportAlerts: supportAlerts.length,
   }
@@ -307,6 +340,7 @@ export async function getAuditLogs() {
   const database = requireDb()
   const subscriptionRows = await database.select(subscriptionSelection).from(subscriptions).orderBy(desc(subscriptions.updatedAt))
   const documentRows = await database.select(documentSelection).from(documents).orderBy(desc(documents.updatedAt))
+  const paymentRows = await database.select().from(payments).orderBy(desc(payments.updatedAt))
 
   return [
     ...subscriptionRows.map((subscription) => ({
@@ -324,6 +358,14 @@ export async function getAuditLogs() {
       action: `status:${document.status}`,
       summary: `Document ${document.type} ${document.status}`,
       createdAt: document.updatedAt,
+    })),
+    ...paymentRows.map((payment) => ({
+      id: `payment-${payment.id}-${payment.status}`,
+      entityType: 'payment',
+      entityId: payment.id,
+      action: `status:${payment.status}`,
+      summary: `Paiement ${payment.type} ${payment.status}`,
+      createdAt: payment.updatedAt,
     })),
   ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 50)
 }
