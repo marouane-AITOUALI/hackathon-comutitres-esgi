@@ -18,6 +18,8 @@ export const createDocumentSchema = z.object({
   fileUrl,
 })
 
+export const analyzeDocumentDemoSchema = createDocumentSchema
+
 export const resubmitDocumentSchema = z.object({
   type: z.enum(documentTypes).optional(),
   fileUrl,
@@ -43,6 +45,7 @@ export const manualReviewSchema = z.object({
 })
 
 export type CreateDocumentInput = z.infer<typeof createDocumentSchema>
+export type AnalyzeDocumentDemoInput = z.infer<typeof analyzeDocumentDemoSchema>
 export type ResubmitDocumentInput = z.infer<typeof resubmitDocumentSchema>
 export type UpdateDocumentStatusInput = z.infer<typeof updateDocumentStatusSchema>
 export type ManualReviewInput = z.infer<typeof manualReviewSchema>

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { onboardingSchema } from './onboarding.schemas.js'
+import { onboardingWithBearerSchema } from './onboarding.schemas.js'
 
 const password = z.string().min(10).regex(/[a-z]/).regex(/[A-Z]/).regex(/[0-9]/)
 
@@ -16,7 +16,7 @@ export const registerSchema = z.object({
 })
 
 export const registerWithOnboardingSchema = registerSchema.extend({
-  onboarding: onboardingSchema,
+  onboarding: onboardingWithBearerSchema,
   recommendedOffer: recommendedOfferSchema,
 })
 

@@ -1,7 +1,8 @@
 import type { RequestHandler } from 'express'
 import { AppError } from '../utils/app-error.js'
 import { createDocument, deleteDocument, analyzeDocument, fraudCheckDocument, getDocument, getDocumentAnalysis, listDocumentsForSubscription, manualReviewDocument, resubmitDocument, updateDocumentStatus } from '../services/documents.service.js'
-import { createDocumentSchema, documentIdParamsSchema, manualReviewSchema, resubmitDocumentSchema, subscriptionDocumentsParamsSchema, updateDocumentStatusSchema } from '../validation/document.schemas.js'
+import { analyzeDemoDocument } from '../services/document-analysis.service.js'
+import { analyzeDocumentDemoSchema, createDocumentSchema, documentIdParamsSchema, manualReviewSchema, resubmitDocumentSchema, subscriptionDocumentsParamsSchema, updateDocumentStatusSchema } from '../validation/document.schemas.js'
 
 function authUserId(req: Parameters<RequestHandler>[0]) {
   if (!req.auth) throw new AppError(401, 'Authentification requise.')
@@ -12,6 +13,11 @@ export const createForSubscription: RequestHandler = async (req, res) => {
   const { subscriptionId } = subscriptionDocumentsParamsSchema.parse(req.params)
   const body = createDocumentSchema.parse(req.body)
   res.status(201).json(await createDocument(authUserId(req), subscriptionId, body))
+}
+
+export const analyzeDemo: RequestHandler = async (req, res) => {
+  const body = analyzeDocumentDemoSchema.parse(req.body)
+  res.json(analyzeDemoDocument(body))
 }
 
 export const listForSubscription: RequestHandler = async (req, res) => {
