@@ -16,7 +16,7 @@ export function AppLayout() {
           <Stack direction="row" spacing={1}>
             {user ? (
               <>
-                <Button component={Link} to="/onboarding">Mon parcours</Button>
+                <Button component={Link} to="/dashboard">Mon espace client</Button>
                 <Button onClick={() => { logout(); navigate('/') }} variant="outlined">Se deconnecter</Button>
               </>
             ) : (
