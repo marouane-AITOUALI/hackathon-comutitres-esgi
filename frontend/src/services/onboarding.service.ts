@@ -1,4 +1,4 @@
-import type { OfferRecommendation, OnboardingAnswer, OnboardingDraft, OnboardingResponse, RecommendationResponse } from '../types'
+import type { OnboardingAnswer, OnboardingDraft, OnboardingResponse, RecommendationResponse } from '../types'
 import { apiRequest } from './api'
 
 export const ONBOARDING_KEY = 'comutitres_onboarding'
