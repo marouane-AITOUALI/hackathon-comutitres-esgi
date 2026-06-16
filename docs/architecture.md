@@ -26,7 +26,7 @@ L'API suit une architecture simple :
 
 - `routes` : declaration des endpoints et middleware associes.
 - `controllers` : traduction HTTP vers les services.
-- `services` : logique auth, onboarding et recommandation.
+- `services` : logique auth, onboarding, recommandation, documents, paiements et renouvellement.
 - `validation` : schemas Zod des payloads.
 - `middleware` : validation, authentification JWT et gestion des erreurs.
 - `db` : schema Drizzle, connexion et preparation des offres.
@@ -44,6 +44,13 @@ Le modele distingue :
 - la session `onboarding_sessions`, qui conserve les reponses d'orientation ;
 - la `subscription`, qui relie compte, porteur, payeur, offre et session ;
 - les `documents`, prepares pour une future collecte de justificatifs.
+- les `payments`, qui simulent le paiement direct, le mandat et la regularisation ;
+- les `renewal_events`, qui historisent les decisions de renouvellement.
 
 Cette separation couvre notamment un parent payant pour son enfant et une
 association payant pour un beneficiaire TST.
+
+Les routes de paiement restent volontairement gratuites et simulees pour le
+prototype : aucun prestataire externe n'est appele. Les routes lifecycle
+agregent ensuite comptes, profils, souscriptions, documents, paiements et
+renouvellements pour aider le backoffice a comprendre rapidement un dossier.

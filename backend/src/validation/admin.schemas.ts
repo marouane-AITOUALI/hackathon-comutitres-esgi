@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-const subscriptionStatuses = ['draft', 'pending_documents', 'pending_validation', 'accepted', 'rejected', 'cancelled', 'suspended'] as const
+const subscriptionStatuses = ['draft', 'pending_documents', 'pending_payment', 'pending_validation', 'accepted', 'rejected', 'cancelled', 'suspended'] as const
 const offerCode = z.string().trim().min(2).max(80).transform((value) => value.toUpperCase())
 const optionalText = z.string().trim().min(1).max(500).optional()
 

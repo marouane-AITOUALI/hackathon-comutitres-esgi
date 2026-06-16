@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express'
 import { z } from 'zod'
+import { getProfileLifecycleEvents } from '../services/lifecycle.service.js'
 import { AppError } from '../utils/app-error.js'
 import { createProfile, deleteProfile, getProfile, getProfileLifecycle, listProfiles, updateProfile } from '../services/profiles.service.js'
 
@@ -33,4 +34,9 @@ export const destroyProfile: RequestHandler = async (req, res) => {
 export const profileLifecycle: RequestHandler = async (req, res) => {
   if (!req.auth) throw new AppError(401, 'Authentification requise.')
   res.json(await getProfileLifecycle(req.auth.sub, profileId(req.params.id)))
+}
+
+export const profileLifecycleEvents: RequestHandler = async (req, res) => {
+  if (!req.auth) throw new AppError(401, 'Authentification requise.')
+  res.json(await getProfileLifecycleEvents(req.auth.sub, req.auth.role, profileId(req.params.id)))
 }
