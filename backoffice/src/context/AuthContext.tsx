@@ -1,29 +1,27 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { AuthContext } from './auth-context'
-import { clearAdminToken, getAdminToken } from '../services/api'
-import { login as loginRequest, me } from '../services/auth.service'
+import { ApiRequestError, clearAdminToken } from '../services/api'
+import { login as loginRequest, logout as logoutRequest, me } from '../services/auth.service'
 import type { AdminUser } from '../types/auth'
+
+function isAnonymousSession(caught: unknown) {
+  return caught instanceof ApiRequestError && caught.status === 401
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AdminUser | null>(null)
-  const [loading, setLoading] = useState(() => Boolean(getAdminToken()))
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   const assertAdmin = useCallback((candidate: AdminUser) => {
     if (candidate.role !== 'admin') {
       clearAdminToken()
-      throw new Error('Acces refuse : ce compte ne dispose pas du role admin.')
+      throw new Error('Acces refuse')
     }
     return candidate
   }, [])
 
   const refresh = useCallback(async () => {
-    if (!getAdminToken()) {
-      setUser(null)
-      setLoading(false)
-      return
-    }
-
     setLoading(true)
     setError(null)
     try {
@@ -31,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(assertAdmin(response.user))
     } catch (caught) {
       setUser(null)
-      setError(caught instanceof Error ? caught.message : 'Session backoffice invalide.')
+      setError(isAnonymousSession(caught) ? null : caught instanceof Error ? caught.message : 'Session backoffice invalide.')
     } finally {
       setLoading(false)
     }
@@ -54,11 +52,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(() => {
     clearAdminToken()
+    void logoutRequest()
     setUser(null)
   }, [])
 
   useEffect(() => {
-    if (!getAdminToken()) return
     let mounted = true
 
     async function loadSession() {
@@ -69,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch (caught) {
         if (!mounted) return
         setUser(null)
-        setError(caught instanceof Error ? caught.message : 'Session backoffice invalide.')
+        setError(isAnonymousSession(caught) ? null : caught instanceof Error ? caught.message : 'Session backoffice invalide.')
       } finally {
         if (mounted) setLoading(false)
       }

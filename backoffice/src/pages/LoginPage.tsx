@@ -50,7 +50,7 @@ export function LoginPage() {
             <TextField autoComplete="email" label="Email" onChange={(event) => setForm({ ...form, email: event.target.value })} required type="email" value={form.email} />
             <TextField autoComplete="current-password" label="Mot de passe" onChange={(event) => setForm({ ...form, password: event.target.value })} required type="password" value={form.password} />
             <Button disabled={loading} type="submit" variant="contained">{loading ? 'Connexion...' : 'Se connecter'}</Button>
-            <Alert severity="info">Prototype : le JWT est stocke cote navigateur pour faciliter la demo.</Alert>
+            <Alert severity="info">Session securisee par cookie HttpOnly pour le backoffice. Le JWT n'est plus stocke dans localStorage.</Alert>
           </Stack>
         </Box>
       </Paper>

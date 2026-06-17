@@ -1,4 +1,4 @@
-import { apiRequest, setAdminToken } from './api'
+import { apiRequest, clearAdminToken } from './api'
 import type { AuthResponse, MeResponse } from '../types/auth'
 
 export interface LoginPayload {
@@ -12,10 +12,19 @@ export async function login(payload: LoginPayload) {
     method: 'POST',
     body: JSON.stringify(payload),
   })
-  setAdminToken(response.token)
+  clearAdminToken()
   return response
 }
 
 export function me() {
-  return apiRequest<MeResponse>('/auth/me')
+  return apiRequest<MeResponse>('/auth/me', { redirectOnUnauthorized: false })
+}
+
+export function logout() {
+  clearAdminToken()
+  return apiRequest<void>('/auth/logout', {
+    auth: false,
+    method: 'POST',
+    redirectOnUnauthorized: false,
+  })
 }
