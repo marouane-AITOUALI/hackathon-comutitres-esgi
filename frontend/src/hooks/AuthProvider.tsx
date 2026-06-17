@@ -34,6 +34,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const value = useMemo(() => ({
     user,
     loading,
+    updateUser: (currentUser: AuthUser) => {
+      localStorage.setItem(USER_KEY, JSON.stringify(currentUser))
+      setUser(currentUser)
+    },
     setSession: (token: string, currentUser: AuthUser) => {
       localStorage.setItem(AUTH_TOKEN_KEY, token)
       localStorage.setItem(USER_KEY, JSON.stringify(currentUser))

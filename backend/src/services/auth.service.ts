@@ -1,13 +1,33 @@
 import bcrypt from 'bcryptjs'
-import { desc, eq, or } from 'drizzle-orm'
+import { and, desc, eq, ne } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { onboardingSessions, offers, profiles, subscriptions, users } from '../db/schema.js'
 import type { AuthSession, PublicUser, SubscriptionSummary } from '../types/auth.js'
-import type { LoginInput, RegisterInput, RegisterWithOnboardingInput } from '../validation/auth.schemas.js'
+import type { LoginInput, RegisterInput, RegisterWithOnboardingInput, UpdateCurrentUserInput } from '../validation/auth.schemas.js'
 import { AppError } from '../utils/app-error.js'
 import { createAuthToken } from '../utils/jwt.js'
 
-const selection = { id: users.id, firstName: users.firstName, lastName: users.lastName, email: users.email, role: users.role }
+const selection = {
+  id: users.id,
+  firstName: users.firstName,
+  lastName: users.lastName,
+  email: users.email,
+  role: users.role,
+  phone: users.phone,
+  addressLine1: users.addressLine1,
+  addressLine2: users.addressLine2,
+  postalCode: users.postalCode,
+  city: users.city,
+  country: users.country,
+  preferredContact: users.preferredContact,
+  accessibilityPreference: users.accessibilityPreference,
+  marketingOptIn: users.marketingOptIn,
+  marketingOptInAt: users.marketingOptInAt,
+  rgpdConsent: users.rgpdConsent,
+  rgpdConsentedAt: users.rgpdConsentedAt,
+  profileUpdatedAt: users.profileUpdatedAt,
+  updatedAt: users.updatedAt,
+}
 type DatabaseExecutor = Pick<ReturnType<typeof requireDb>, 'select' | 'insert'>
 
 async function getLatestSubscription(database: DatabaseExecutor, userId: string): Promise<SubscriptionSummary | null> {
@@ -134,4 +154,38 @@ export async function getUserById(id: string) {
   const [user] = await database.select(selection).from(users).where(eq(users.id, id)).limit(1)
   if (!user) throw new AppError(404, 'Utilisateur introuvable.')
   return { user, subscription: await getLatestSubscription(database, id) }
+}
+
+export async function updateCurrentUser(id: string, input: UpdateCurrentUserInput) {
+  const database = requireDb()
+  const [currentUser] = await database.select(selection).from(users).where(eq(users.id, id)).limit(1)
+  if (!currentUser) throw new AppError(404, 'Utilisateur introuvable.')
+
+  if (input.email && input.email !== currentUser.email) {
+    const [existing] = await database.select({ id: users.id }).from(users).where(and(eq(users.email, input.email), ne(users.id, id))).limit(1)
+    if (existing) throw new AppError(409, 'Un compte existe deja avec cette adresse email.')
+  }
+
+  const preferredContact = input.preferredContact ?? currentUser.preferredContact
+  const phone = input.phone === undefined ? currentUser.phone : input.phone
+  if ((preferredContact === 'phone' || preferredContact === 'sms') && !phone) {
+    throw new AppError(400, 'Un numero de telephone est requis pour ce canal de contact.')
+  }
+
+  const marketingOptIn = input.marketingOptIn ?? currentUser.marketingOptIn
+  const [updated] = await database
+    .update(users)
+    .set({
+      ...input,
+      phone,
+      country: 'FR',
+      marketingOptInAt: marketingOptIn ? currentUser.marketingOptInAt ?? new Date() : null,
+      profileUpdatedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(users.id, id))
+    .returning(selection)
+
+  if (!updated) throw new AppError(500, "Le profil n'a pas pu etre mis a jour.")
+  return { user: updated, subscription: await getLatestSubscription(database, id) }
 }
