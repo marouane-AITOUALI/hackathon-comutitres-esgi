@@ -4,8 +4,9 @@ import { onboardingWithBearerSchema } from './onboarding.schemas.js'
 const password = z.string().min(10).regex(/[a-z]/).regex(/[A-Z]/).regex(/[0-9]/)
 
 const recommendedOfferSchema = z.object({
-  offerId: z.uuid(),
-})
+  offerId: z.uuid().optional(),
+  offerCode: z.string().trim().min(1).optional(),
+}).refine((value) => value.offerId || value.offerCode, { message: 'Une offre recommandee est requise.' })
 
 export const registerSchema = z.object({
   firstName: z.string().trim().min(1).max(80),
