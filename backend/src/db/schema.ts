@@ -1,14 +1,29 @@
 import { relations } from 'drizzle-orm'
-import { boolean, date, index, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { boolean, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 export const userRole = pgEnum('user_role', ['user', 'admin'])
 export const profileType = pgEnum('profile_type', ['bearer', 'payer'])
 export const profileStatus = pgEnum('profile_status', ['junior', 'school', 'student', 'active', 'senior', 'solidarity', 'other'])
 export const relationshipToBearer = pgEnum('relationship_to_bearer', ['parent', 'guardian', 'association', 'employer', 'other'])
 export const subscriptionFor = pgEnum('subscription_for', ['self', 'child', 'other', 'organization_beneficiary'])
-export const subscriptionStatus = pgEnum('subscription_status', ['draft', 'pending_documents', 'pending_validation', 'accepted', 'rejected'])
-export const documentStatus = pgEnum('document_status', ['pending', 'validated', 'rejected'])
+export const subscriptionStatus = pgEnum('subscription_status', ['draft', 'pending_documents', 'pending_payment', 'pending_validation', 'accepted', 'rejected', 'cancelled', 'suspended'])
+export const documentStatus = pgEnum('document_status', ['pending', 'analyzing', 'validated', 'rejected', 'needs_manual_review'])
 export const documentType = pgEnum('document_type', ['identity', 'proof_of_address', 'eligibility', 'school_certificate', 'tax_notice', 'other'])
+export const paymentType = pgEnum('payment_type', ['simulation', 'direct', 'mandate', 'regularization'])
+export const paymentStatus = pgEnum('payment_status', ['simulated', 'pending', 'accepted', 'rejected', 'cancelled', 'regularized'])
+export const renewalAction = pgEnum('renewal_action', ['accepted', 'refused', 'suspended'])
+
+export interface DocumentAnalysisResult {
+  provider: 'rules-prototype-free'
+  detectedDocumentType: string
+  confidence: number
+  suggestedStatus: 'validated' | 'needs_manual_review' | 'rejected'
+  extractedFields: Record<string, unknown>
+  reasons: string[]
+  warnings: string[]
+  fraudSignals: string[]
+  analyzedAt: string
+}
 
 const timestamps = {
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
@@ -91,11 +106,55 @@ export const documents = pgTable('documents', {
   type: documentType('type').default('other').notNull(),
   fileUrl: text('file_url').notNull(),
   status: documentStatus('status').default('pending').notNull(),
+  analysisResult: jsonb('analysis_result').$type<DocumentAnalysisResult | Record<string, unknown>>().default({}).notNull(),
+  analyzedAt: timestamp('analyzed_at', { withTimezone: true }),
   rejectionReason: text('rejection_reason'),
   ...timestamps,
 }, (table) => [index('documents_subscription_id_idx').on(table.subscriptionId)])
 
-export const usersRelations = relations(users, ({ many }) => ({ profiles: many(profiles), onboardingSessions: many(onboardingSessions), subscriptions: many(subscriptions) }))
+export const payments = pgTable('payments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  subscriptionId: uuid('subscription_id').notNull().references(() => subscriptions.id, { onDelete: 'cascade' }),
+  type: paymentType('type').notNull(),
+  status: paymentStatus('status').default('pending').notNull(),
+  amountCents: integer('amount_cents').notNull(),
+  currency: text('currency').default('EUR').notNull(),
+  provider: text('provider').default('prototype-free').notNull(),
+  externalReference: text('external_reference'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  index('payments_user_id_idx').on(table.userId),
+  index('payments_subscription_id_idx').on(table.subscriptionId),
+  index('payments_status_idx').on(table.status),
+])
+
+export const renewalEvents = pgTable('renewal_events', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  subscriptionId: uuid('subscription_id').notNull().references(() => subscriptions.id, { onDelete: 'cascade' }),
+  action: renewalAction('action').notNull(),
+  reason: text('reason'),
+  effectiveAt: timestamp('effective_at', { withTimezone: true }).defaultNow().notNull(),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+  ...timestamps,
+}, (table) => [
+  index('renewal_events_user_id_idx').on(table.userId),
+  index('renewal_events_subscription_id_idx').on(table.subscriptionId),
+  index('renewal_events_action_idx').on(table.action),
+])
+
+export const usersRelations = relations(users, ({ many }) => ({ profiles: many(profiles), onboardingSessions: many(onboardingSessions), subscriptions: many(subscriptions), payments: many(payments), renewalEvents: many(renewalEvents) }))
 export const profilesRelations = relations(profiles, ({ one }) => ({ user: one(users, { fields: [profiles.userId], references: [users.id] }) }))
 export const offersRelations = relations(offers, ({ many }) => ({ subscriptions: many(subscriptions) }))
 export const documentsRelations = relations(documents, ({ one }) => ({ subscription: one(subscriptions, { fields: [documents.subscriptionId], references: [subscriptions.id] }) }))
+export const paymentsRelations = relations(payments, ({ one }) => ({
+  user: one(users, { fields: [payments.userId], references: [users.id] }),
+  subscription: one(subscriptions, { fields: [payments.subscriptionId], references: [subscriptions.id] }),
+}))
+export const renewalEventsRelations = relations(renewalEvents, ({ one }) => ({
+  user: one(users, { fields: [renewalEvents.userId], references: [users.id] }),
+  subscription: one(subscriptions, { fields: [renewalEvents.subscriptionId], references: [subscriptions.id] }),
+}))

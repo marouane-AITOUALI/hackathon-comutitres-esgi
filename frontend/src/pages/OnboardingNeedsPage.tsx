@@ -32,7 +32,7 @@ export function OnboardingNeedsPage() {
     setError('')
     try {
       const created = await createOnboarding(answer as OnboardingAnswer)
-      sessionStorage.setItem('comutitres_onboarding_session_id', created.session.id)
+      sessionStorage.setItem('comutitres_onboarding_session_id', created.session?.id ?? created.id)
       navigate('/onboarding/result')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "La session n'a pas pu etre enregistree.")

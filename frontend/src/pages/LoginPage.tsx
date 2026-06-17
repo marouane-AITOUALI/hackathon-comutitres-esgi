@@ -41,7 +41,7 @@ export function LoginPage() {
     try {
       const response = await login(form)
       setSession(response.token, response.user)
-      navigate('/onboarding')
+      navigate('/dashboard')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Connexion impossible.')
     } finally {

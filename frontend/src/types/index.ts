@@ -1,5 +1,10 @@
 export type UserRole = 'user' | 'admin'
 export type ProfileStatus = 'junior' | 'school' | 'student' | 'active' | 'senior' | 'solidarity' | 'other'
+export type SubscriptionStatus = 'draft' | 'pending_documents' | 'pending_payment' | 'pending_validation' | 'accepted' | 'rejected' | 'cancelled' | 'suspended'
+export type DocumentStatus = 'pending' | 'analyzing' | 'validated' | 'rejected' | 'needs_manual_review'
+export type DocumentType = 'identity' | 'proof_of_address' | 'eligibility' | 'school_certificate' | 'tax_notice' | 'other'
+export type PaymentStatus = 'simulated' | 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'regularized'
+export type PaymentType = 'simulation' | 'direct' | 'mandate' | 'regularization'
 export type SubscriptionFor = 'self' | 'child' | 'other' | 'organization_beneficiary'
 export type RelationshipToBearer = 'parent' | 'guardian' | 'association' | 'employer' | 'other'
 export type Frequency = 'daily' | 'regular' | 'occasional'
@@ -58,14 +63,130 @@ export interface OnboardingAnswer {
 export type OnboardingDraft = Partial<OnboardingAnswer>
 
 export interface OfferRecommendation {
+  offerId: string | null
   offerCode: string
   offerName: string
-  confidence: number
+  confidencePercent: number
   reasons: string[]
   requiredDocuments: string[]
   warnings: string[]
 }
 
+export interface RecommendationResponse {
+  success: boolean
+  recommendation: OfferRecommendation
+}
+
 export interface OnboardingResponse {
-  session: { id: string }
+  id: string
+  session?: { id: string }
+}
+
+export interface OfferSummary {
+  id: string
+  code: string
+  name: string
+  description: string | null
+  target: string
+  requiredDocuments: string[]
+  isActive: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ProfileSummary {
+  id: string
+  type: 'bearer' | 'payer'
+  status: ProfileStatus
+  firstName: string
+  lastName: string
+  birthDate: string | null
+  email: string | null
+  relationshipToBearer: RelationshipToBearer | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface OnboardingSessionSummary {
+  id: string
+  currentStep: string
+  subscriptionFor: SubscriptionFor
+  isBearerPayer: boolean
+}
+
+export interface SubscriptionEntity {
+  id: string
+  userId: string
+  bearerProfileId: string | null
+  payerProfileId: string | null
+  offerId: string | null
+  onboardingSessionId: string | null
+  status: SubscriptionStatus
+  createdAt: string
+  updatedAt: string
+}
+
+export interface DocumentAnalysisResult {
+  provider?: string
+  detectedDocumentType?: string
+  confidence?: number
+  suggestedStatus?: string
+  reasons?: string[]
+  warnings?: string[]
+  fraudSignals?: string[]
+  analyzedAt?: string
+}
+
+export interface DocumentSummary {
+  id: string
+  subscriptionId: string
+  type: DocumentType
+  fileUrl: string
+  status: DocumentStatus
+  analysisResult?: DocumentAnalysisResult | Record<string, unknown>
+  analyzedAt?: string | null
+  rejectionReason?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface PaymentSummary {
+  id: string
+  userId: string
+  subscriptionId: string
+  type: PaymentType
+  status: PaymentStatus
+  amountCents: number
+  currency: string
+  provider: string
+  externalReference?: string | null
+  metadata?: Record<string, unknown>
+  processedAt?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface SubscriptionSummary {
+  subscription: SubscriptionEntity
+  offer: OfferSummary | null
+  bearerProfile: ProfileSummary | null
+  payerProfile: ProfileSummary | null
+  onboardingSession: OnboardingSessionSummary | null
+  documents: DocumentSummary[]
+  payments: PaymentSummary[]
+}
+
+export interface SubscriptionNextAction {
+  code: string
+  priority: 'low' | 'medium' | 'high'
+  label: string
+  detail: string
+}
+
+export interface OffersResponse {
+  offers: OfferSummary[]
+}
+
+export interface SubscriptionsResponse {
+  subscriptions: SubscriptionSummary[]
 }
