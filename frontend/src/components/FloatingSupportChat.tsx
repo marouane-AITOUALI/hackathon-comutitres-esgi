@@ -18,7 +18,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useEffect, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 import { colors } from '../theme/colors'
 
@@ -685,10 +685,16 @@ function initials(firstName?: string, lastName?: string) {
   return `${firstName?.[0] ?? ''}${lastName?.[0] ?? ''}`.trim().toUpperCase() || 'U'
 }
 
-export function FloatingSupportChat() {
+interface FloatingSupportChatProps {
+  mode?: 'floating' | 'page'
+}
+
+export function FloatingSupportChat({ mode = 'floating' }: FloatingSupportChatProps = {}) {
+  const isPageMode = mode === 'page'
   const navigate = useNavigate()
+  const location = useLocation()
   const { user } = useAuth()
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(isPageMode)
   const [hasUnread, setHasUnread] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [input, setInput] = useState('')
@@ -812,19 +818,19 @@ export function FloatingSupportChat() {
     replyTimeoutsRef.current.push(timeout)
   }
 
-  return (
-    <Box sx={{ position: 'fixed', right: { xs: 16, md: 28 }, bottom: { xs: 16, md: 28 }, zIndex: 1400 }}>
-      {open ? (
+  const chatWindow = (
         <Paper
-          elevation={10}
+          elevation={isPageMode ? 0 : 8}
           sx={{
-            width: { xs: 'calc(100vw - 32px)', sm: 390 },
-            height: { xs: 560, sm: 600 },
-            maxHeight: 'calc(100vh - 32px)',
+            width: isPageMode ? '100%' : { xs: 'calc(100vw - 32px)', sm: 390 },
+            height: isPageMode ? { xs: 'calc(100vh - 220px)', md: 'calc(100vh - 170px)' } : { xs: 560, sm: 600 },
+            minHeight: isPageMode ? { xs: 560, md: 640 } : undefined,
+            maxHeight: isPageMode ? undefined : 'calc(100vh - 32px)',
             borderRadius: 2,
             overflow: 'hidden',
             border: '1px solid',
-            borderColor: colors.greyMedium,
+            borderColor: alpha(colors.blueIleDeFrance, isPageMode ? 0.75 : 0.55),
+            boxShadow: isPageMode ? 'none' : `0 14px 34px ${alpha(colors.anthracite, 0.16)}`,
             display: 'flex',
             flexDirection: 'column',
           }}
@@ -833,8 +839,10 @@ export function FloatingSupportChat() {
             sx={{
               px: 2,
               py: 1.5,
-              bgcolor: colors.blueIleDeFrance,
-              color: colors.white,
+              bgcolor: colors.white,
+              color: colors.anthracite,
+              borderBottom: '1px solid',
+              borderColor: alpha(colors.blueIleDeFrance, 0.36),
               display: 'flex',
               alignItems: 'center',
               gap: 1.25,
@@ -845,7 +853,8 @@ export function FloatingSupportChat() {
                 width: 36,
                 height: 36,
                 borderRadius: '50%',
-                bgcolor: alpha(colors.white, 0.16),
+                bgcolor: alpha(colors.blueIleDeFrance, 0.16),
+                color: colors.blueInteraction,
                 display: 'grid',
                 placeItems: 'center',
                 flexShrink: 0,
@@ -855,21 +864,25 @@ export function FloatingSupportChat() {
             </Box>
             <Box sx={{ minWidth: 0, flex: 1 }}>
               <Typography sx={{ fontWeight: 800, lineHeight: 1.2 }}>Assistant support</Typography>
-              <Typography sx={{ fontSize: 12, opacity: 0.86 }}>Réponses CGVU et parcours client</Typography>
+              <Typography sx={{ color: colors.greyDark, fontSize: 12 }}>Réponses CGVU et parcours client</Typography>
             </Box>
             <Tooltip title="Ouvrir la page support">
-              <IconButton color="inherit" onClick={() => navigate('/support')} size="small">
-                <OpenInFullIcon fontSize="small" />
-              </IconButton>
+              <span>
+                <IconButton color="inherit" disabled={isPageMode} onClick={() => navigate('/support')} size="small" sx={{ display: isPageMode ? 'none' : 'inline-flex' }}>
+                  <OpenInFullIcon fontSize="small" />
+                </IconButton>
+              </span>
             </Tooltip>
-            <Tooltip title="Fermer">
-              <IconButton color="inherit" onClick={() => setOpen(false)} size="small">
-                <CloseIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            {!isPageMode ? (
+              <Tooltip title="Fermer">
+                <IconButton color="inherit" onClick={() => setOpen(false)} size="small">
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : null}
           </Box>
 
-          <Box ref={listRef} sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: colors.blueLight }}>
+          <Box ref={listRef} sx={{ flex: 1, overflowY: 'auto', p: 2, bgcolor: colors.greyLight40 }}>
             <Stack spacing={1.25}>
               {messages.map((message) => (
                 <Box
@@ -886,8 +899,8 @@ export function FloatingSupportChat() {
                       sx={{
                         width: 30,
                         height: 30,
-                        bgcolor: colors.blueIleDeFrance,
-                        color: colors.white,
+                        bgcolor: alpha(colors.blueIleDeFrance, 0.18),
+                        color: colors.blueInteraction,
                         flexShrink: 0,
                       }}
                     >
@@ -903,8 +916,8 @@ export function FloatingSupportChat() {
                         borderRadius: 2,
                         bgcolor: message.from === 'user' ? colors.blueIleDeFrance : colors.white,
                         color: message.from === 'user' ? colors.white : colors.anthracite,
-                        border: message.from === 'bot' ? '1px solid' : 'none',
-                        borderColor: colors.greyMedium,
+                        border: '1px solid',
+                        borderColor: message.from === 'user' ? alpha(colors.blueIleDeFrance, 0.72) : colors.greyMedium,
                         boxShadow: message.from === 'bot' ? `0 1px 4px ${alpha(colors.anthracite, 0.08)}` : 'none',
                       }}
                     >
@@ -987,7 +1000,7 @@ export function FloatingSupportChat() {
                         sx={{
                           bgcolor: colors.white,
                           border: '1px solid',
-                          borderColor: colors.blueMedium,
+                          borderColor: alpha(colors.blueIleDeFrance, 0.38),
                           borderRadius: 2,
                           p: 1,
                           boxShadow: `0 1px 4px ${alpha(colors.anthracite, 0.06)}`,
@@ -1003,7 +1016,9 @@ export function FloatingSupportChat() {
                             onClick={() => handleGuidedCheck(message, true)}
                             size="small"
                             sx={{
-                              bgcolor: message.guidanceAnswer === true ? colors.blueIleDeFrance : colors.blueLight,
+                              bgcolor: message.guidanceAnswer === true ? colors.blueIleDeFrance : colors.white,
+                              border: '1px solid',
+                              borderColor: message.guidanceAnswer === true ? colors.blueIleDeFrance : colors.greyMedium,
                               color: message.guidanceAnswer === true ? colors.white : colors.anthracite,
                               opacity: '1 !important',
                               fontWeight: 800,
@@ -1067,8 +1082,8 @@ export function FloatingSupportChat() {
                     sx={{
                       width: 30,
                       height: 30,
-                      bgcolor: colors.blueIleDeFrance,
-                      color: colors.white,
+                      bgcolor: alpha(colors.blueIleDeFrance, 0.18),
+                      color: colors.blueInteraction,
                       flexShrink: 0,
                     }}
                   >
@@ -1159,9 +1174,9 @@ export function FloatingSupportChat() {
                       height: 34,
                       borderRadius: 1.5,
                       justifyContent: 'flex-start',
-                      bgcolor: colors.blueLight,
+                      bgcolor: colors.white,
                       border: '1px solid',
-                      borderColor: colors.blueMedium,
+                      borderColor: alpha(colors.blueIleDeFrance, 0.34),
                       color: colors.anthracite,
                       '& .MuiChip-label': {
                         overflow: 'hidden',
@@ -1179,26 +1194,71 @@ export function FloatingSupportChat() {
 
           </Box>
         </Paper>
-      ) : (
+  )
+
+  if (isPageMode) return chatWindow
+
+  return (
+    <Box sx={{ position: 'fixed', right: { xs: 16, md: 28 }, bottom: { xs: 16, md: 28 }, zIndex: 1400 }}>
+      {open ? chatWindow : (
         <Tooltip title="Ouvrir le support">
-          <Badge color="error" invisible={!hasUnread} overlap="circular" variant="dot">
-            <Fab
-              aria-label="Ouvrir l'assistant IA"
-              onClick={() => setOpen(true)}
-              sx={{
-                color: colors.white,
-                bgcolor: colors.blueIleDeFrance,
-                background: colors.blueIleDeFrance,
-                boxShadow: `0 12px 28px ${alpha(colors.blueIleDeFrance, 0.42)}`,
-                '&:hover': {
-                  bgcolor: colors.blueInteraction,
-                  background: colors.blueInteraction,
-                },
-              }}
-            >
-              <AutoAwesomeRoundedIcon />
-            </Fab>
-          </Badge>
+          <Box
+            key={location.pathname}
+            sx={{
+              position: 'relative',
+              display: 'inline-flex',
+              '@keyframes supportFabEnter': {
+                '0%': { opacity: 0, transform: 'translateY(18px) scale(0.72) rotate(-12deg)' },
+                '58%': { opacity: 1, transform: 'translateY(-5px) scale(1.08) rotate(5deg)' },
+                '78%': { transform: 'translateY(2px) scale(0.98) rotate(-2deg)' },
+                '100%': { opacity: 1, transform: 'translateY(0) scale(1) rotate(0deg)' },
+              },
+              '@keyframes supportFabHalo': {
+                '0%': { opacity: 0.42, transform: 'scale(0.9)' },
+                '70%': { opacity: 0, transform: 'scale(1.42)' },
+                '100%': { opacity: 0, transform: 'scale(1.42)' },
+              },
+              animation: 'supportFabEnter 620ms cubic-bezier(0.2, 0.85, 0.25, 1.25) both',
+              '&::before, &::after': {
+                content: '""',
+                position: 'absolute',
+                inset: 4,
+                borderRadius: '50%',
+                border: '1px solid',
+                borderColor: alpha(colors.blueIleDeFrance, 0.55),
+                animation: 'supportFabHalo 2.4s ease-out infinite',
+                pointerEvents: 'none',
+              },
+              '&::after': {
+                animationDelay: '0.8s',
+              },
+            }}
+          >
+            <Badge color="error" invisible={!hasUnread} overlap="circular" variant="dot">
+              <Fab
+                aria-label="Ouvrir l'assistant IA"
+                onClick={() => setOpen(true)}
+                sx={{
+                  color: colors.white,
+                  bgcolor: colors.blueIleDeFrance,
+                  background: colors.blueIleDeFrance,
+                  boxShadow: `0 12px 28px ${alpha(colors.blueIleDeFrance, 0.42)}`,
+                  transition: 'transform 160ms ease, background-color 160ms ease, box-shadow 160ms ease',
+                  '&:hover': {
+                    bgcolor: colors.blueInteraction,
+                    background: colors.blueInteraction,
+                    boxShadow: `0 14px 32px ${alpha(colors.blueInteraction, 0.44)}`,
+                    transform: 'translateY(-2px) scale(1.04)',
+                  },
+                  '&:active': {
+                    transform: 'translateY(0) scale(0.98)',
+                  },
+                }}
+              >
+                <AutoAwesomeRoundedIcon />
+              </Fab>
+            </Badge>
+          </Box>
         </Tooltip>
       )}
     </Box>
