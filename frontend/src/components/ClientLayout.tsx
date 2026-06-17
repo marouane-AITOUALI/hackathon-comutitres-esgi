@@ -1,6 +1,7 @@
 import { Box } from '@mui/material'
 import { useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { FloatingSupportChat } from './FloatingSupportChat'
 import { useAuth } from '../hooks/useAuth'
 import { Header } from '../pages/Header'
 import { Sidebar } from '../pages/Sidebar'
@@ -63,6 +64,7 @@ export function ClientLayout() {
         <Box component="main" sx={{ flex: 1, minHeight: 0, p: { xs: 2, md: 4 }, overflowX: 'hidden', overflowY: 'auto' }}>
           <Outlet />
         </Box>
+        {activeKey !== 'support' ? <FloatingSupportChat /> : null}
       </Box>
     </Box>
   )
