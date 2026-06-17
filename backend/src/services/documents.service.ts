@@ -121,6 +121,14 @@ export async function getDocument(userId: string, role: string, id: string) {
   return publicDocument(await findDocumentForAccess(userId, role, id))
 }
 
+export async function getDocumentSignedUrl(userId: string, role: string, id: string) {
+  const document = await findDocumentForAccess(userId, role, id)
+  return {
+    documentId: document.id,
+    signedUrl: await createPrivateSignedUrl(document.storageBucket, document.storagePath),
+  }
+}
+
 export async function deleteDocument(userId: string, role: string, id: string) {
   const document = await findDocumentForAccess(userId, role, id)
   await requireDb().delete(documents).where(eq(documents.id, id))

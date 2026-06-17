@@ -131,14 +131,14 @@ export const subscriptions = pgTable('subscriptions', {
 export const documents = pgTable('documents', {
   id: uuid('id').defaultRandom().primaryKey(),
   subscriptionId: uuid('subscription_id').notNull().references(() => subscriptions.id, { onDelete: 'cascade' }),
-  ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'cascade' }),
+  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   type: documentType('type').default('other').notNull(),
   fileUrl: text('file_url').notNull(),
-  storageBucket: text('storage_bucket').default('subscription-documents'),
-  storagePath: text('storage_path'),
-  originalFilename: text('original_filename'),
-  mimeType: text('mime_type'),
-  sizeBytes: integer('size_bytes'),
+  storageBucket: text('storage_bucket').default('subscription-documents').notNull(),
+  storagePath: text('storage_path').notNull(),
+  originalFilename: text('original_filename').notNull(),
+  mimeType: text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
   status: documentStatus('status').default('pending').notNull(),
   analysisResult: jsonb('analysis_result').$type<DocumentAnalysisResult | Record<string, unknown>>().default({}).notNull(),
   analyzedAt: timestamp('analyzed_at', { withTimezone: true }),
@@ -195,7 +195,10 @@ export const usersRelations = relations(users, ({ many, one }) => ({
 export const userAvatarsRelations = relations(userAvatars, ({ one }) => ({ owner: one(users, { fields: [userAvatars.ownerId], references: [users.id] }) }))
 export const profilesRelations = relations(profiles, ({ one }) => ({ user: one(users, { fields: [profiles.userId], references: [users.id] }) }))
 export const offersRelations = relations(offers, ({ many }) => ({ subscriptions: many(subscriptions) }))
-export const documentsRelations = relations(documents, ({ one }) => ({ subscription: one(subscriptions, { fields: [documents.subscriptionId], references: [subscriptions.id] }) }))
+export const documentsRelations = relations(documents, ({ one }) => ({
+  owner: one(users, { fields: [documents.ownerId], references: [users.id] }),
+  subscription: one(subscriptions, { fields: [documents.subscriptionId], references: [subscriptions.id] }),
+}))
 export const paymentsRelations = relations(payments, ({ one }) => ({
   user: one(users, { fields: [payments.userId], references: [users.id] }),
   subscription: one(subscriptions, { fields: [payments.subscriptionId], references: [subscriptions.id] }),

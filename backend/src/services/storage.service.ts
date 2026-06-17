@@ -7,22 +7,25 @@ export const AVATARS_BUCKET = 'user-avatars'
 export const DOCUMENTS_BUCKET = 'subscription-documents'
 
 const signedUrlTtlSeconds = 60 * 15
-const documentMaxSizeBytes = 10 * 1024 * 1024
-const avatarMaxSizeBytes = 2 * 1024 * 1024
+export const DOCUMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024
+export const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024
 
-const documentMimeTypes = new Set([
+export const DOCUMENT_ALLOWED_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
   'image/png',
   'image/webp',
   'image/heic',
-])
+] as const
 
-const avatarMimeTypes = new Set([
+export const AVATAR_ALLOWED_MIME_TYPES = [
   'image/jpeg',
   'image/png',
   'image/webp',
-])
+] as const
+
+const documentMimeTypes = new Set<string>(DOCUMENT_ALLOWED_MIME_TYPES)
+const avatarMimeTypes = new Set<string>(AVATAR_ALLOWED_MIME_TYPES)
 
 let storageClient: SupabaseClient | null = null
 
@@ -86,7 +89,7 @@ async function uploadBuffer(bucket: string, path: string, file: Express.Multer.F
 }
 
 export async function uploadAvatarFile(userId: string, file: Express.Multer.File): Promise<UploadedFileMetadata> {
-  assertFile(file, avatarMimeTypes, avatarMaxSizeBytes)
+  assertFile(file, avatarMimeTypes, AVATAR_MAX_SIZE_BYTES)
   const path = `users/${userId}/${randomUUID()}${extensionFor(file)}`
   await uploadBuffer(AVATARS_BUCKET, path, file)
 
@@ -105,7 +108,7 @@ export async function uploadSubscriptionDocumentFile(
   type: string,
   file: Express.Multer.File,
 ): Promise<UploadedFileMetadata> {
-  assertFile(file, documentMimeTypes, documentMaxSizeBytes)
+  assertFile(file, documentMimeTypes, DOCUMENT_MAX_SIZE_BYTES)
   const path = `users/${userId}/subscriptions/${subscriptionId}/${type}/${randomUUID()}${extensionFor(file)}`
   await uploadBuffer(DOCUMENTS_BUCKET, path, file)
 
@@ -121,7 +124,11 @@ export async function uploadSubscriptionDocumentFile(
 export async function createPrivateSignedUrl(bucket: string | null | undefined, path: string | null | undefined) {
   if (!bucket || !path) return null
   const { data, error } = await requireStorageClient().storage.from(bucket).createSignedUrl(path, signedUrlTtlSeconds)
-  if (error) throw new AppError(502, "L'URL securisee du fichier n'a pas pu etre generee.", error.message)
+  if (error) {
+    const message = error.message.toLowerCase()
+    if (message.includes('not found') || message.includes('introuvable')) return null
+    throw new AppError(502, "L'URL securisee du fichier n'a pas pu etre generee.", error.message)
+  }
   return data.signedUrl
 }
 

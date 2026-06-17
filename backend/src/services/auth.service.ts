@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs'
-import { and, desc, eq, ne } from 'drizzle-orm'
+import { and, desc, eq, ne, or } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { onboardingSessions, offers, profiles, subscriptions, userAvatars, users } from '../db/schema.js'
 import type { AuthSession, PublicUser, SubscriptionSummary } from '../types/auth.js'
