@@ -1,56 +1,127 @@
-import { Card, CardContent, Chip, Grid, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material'
+import { Alert, Button, Grid, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { EmptyState } from '../components/common/EmptyState'
+import { LoadingState } from '../components/common/LoadingState'
+import { StatCard } from '../components/common/StatCard'
+import { StatusBadge } from '../components/common/StatusBadge'
+import { getAdminStats, getPendingDocuments, getSupportAlerts } from '../services/admin.service'
+import { getAdminSubscriptions } from '../services/subscriptions.service'
+import type { AdminStats, SupportAlert } from '../types/admin'
+import type { PendingDocumentItem } from '../types/document'
+import type { AdminSubscriptionItem } from '../types/subscription'
 
-const stats = [
-  { label: 'Souscriptions', value: 3 },
-  { label: 'En attente', value: 2 },
-  { label: 'Acceptees', value: 1 },
-  { label: 'Refusees', value: 0 },
-]
+function profileName(profile: AdminSubscriptionItem['bearerProfile']) {
+  return profile ? `${profile.firstName} ${profile.lastName}` : 'Non renseigne'
+}
 
-const subscriptions = [
-  { id: 'DEMO-001', type: 'Parent pour enfant', bearer: 'Lea Martin', payer: 'Nora Martin', offer: 'Imagine R Scolaire', status: 'Documents attendus', color: 'warning' as const },
-  { id: 'DEMO-002', type: 'Pour soi-meme', bearer: 'Samir Diallo', payer: 'Samir Diallo', offer: 'Navigo Annuel', status: 'A valider', color: 'primary' as const },
-  { id: 'DEMO-003', type: 'Association', bearer: 'Camille Robert', payer: 'Association Horizon', offer: 'TST Solidarite 75%', status: 'Acceptee', color: 'success' as const },
-]
+function riskAlerts(alerts: SupportAlert[]) {
+  return alerts.filter((alert) => alert.severity === 'error' || alert.type.includes('payment') || alert.type.includes('blocked'))
+}
 
 export function DashboardPage() {
+  const [stats, setStats] = useState<AdminStats | null>(null)
+  const [subscriptions, setSubscriptions] = useState<AdminSubscriptionItem[]>([])
+  const [documents, setDocuments] = useState<PendingDocumentItem[]>([])
+  const [alerts, setAlerts] = useState<SupportAlert[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    async function loadDashboard() {
+      try {
+        const [statsResponse, subscriptionsResponse, alertsResponse, documentsResponse] = await Promise.all([
+          getAdminStats(),
+          getAdminSubscriptions(),
+          getSupportAlerts(),
+          getPendingDocuments(),
+        ])
+        if (!mounted) return
+        setStats(statsResponse)
+        setSubscriptions(subscriptionsResponse.subscriptions)
+        setAlerts(alertsResponse.alerts)
+        setDocuments(documentsResponse.documents)
+      } catch (err) {
+        if (!mounted) return
+        setError(err instanceof Error ? err.message : 'Erreur de chargement du backoffice.')
+      } finally {
+        if (mounted) setLoading(false)
+      }
+    }
+    loadDashboard()
+    return () => { mounted = false }
+  }, [])
+
+  const priorityAlerts = useMemo(() => riskAlerts(alerts).slice(0, 4), [alerts])
+  const statCards = [
+    { label: 'Souscriptions en attente', value: (stats?.subscriptions.pending_documents ?? 0) + (stats?.subscriptions.pending_payment ?? 0) + (stats?.subscriptions.pending_validation ?? 0), tone: 'warning' as const },
+    { label: 'Documents a traiter', value: documents.length, tone: 'primary' as const },
+    { label: 'Alertes support', value: stats?.supportAlerts ?? alerts.length, tone: 'error' as const },
+    { label: 'Dossiers valides', value: stats?.subscriptions.accepted ?? 0, tone: 'success' as const },
+    { label: 'Dossiers refuses', value: stats?.subscriptions.rejected ?? 0, tone: 'error' as const },
+    { label: 'Paiements echoues', value: stats?.payments?.rejected ?? 0, tone: 'warning' as const },
+  ]
+
+  if (loading) return <LoadingState label="Chargement du dashboard..." />
+
   return (
     <Stack spacing={3}>
-      <div>
-        <Typography component="h1" variant="h4">
-          Pilotage des souscriptions
-        </Typography>
-        <Typography color="text.secondary">Vue prototype des parcours, porteurs, payeurs et offres recommandees.</Typography>
-      </div>
+      {error && <Alert severity="error">{error}</Alert>}
+
       <Grid container spacing={2}>
-        {stats.map((stat) => (
-          <Grid key={stat.label} size={{ xs: 12, sm: 6, lg: 3 }}>
-            <Card>
-              <CardContent>
-                <Typography color="text.secondary">{stat.label}</Typography>
-                <Typography variant="h4">{stat.value}</Typography>
-              </CardContent>
-            </Card>
+        {statCards.map((stat) => (
+          <Grid key={stat.label} size={{ xs: 12, sm: 6, lg: 4 }}>
+            <StatCard label={stat.label} tone={stat.tone} value={stat.value} />
           </Grid>
         ))}
       </Grid>
-      <Card>
-        <CardContent>
-          <Typography component="h2" sx={{ fontWeight: 800, mb: 2 }} variant="h6">Dernieres demandes</Typography>
-          <TableContainer>
-            <Table aria-label="Dernieres demandes de souscription">
-              <TableHead><TableRow><TableCell>Reference</TableCell><TableCell>Type de souscription</TableCell><TableCell>Porteur</TableCell><TableCell>Payeur</TableCell><TableCell>Offre recommandee</TableCell><TableCell>Statut</TableCell></TableRow></TableHead>
-              <TableBody>
-                {subscriptions.map((row) => (
-                  <TableRow key={row.id}>
-                    <TableCell>{row.id}</TableCell><TableCell>{row.type}</TableCell><TableCell>{row.bearer}</TableCell><TableCell>{row.payer}</TableCell><TableCell>{row.offer}</TableCell><TableCell><Chip color={row.color} label={row.status} size="small" /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </CardContent>
-      </Card>
+
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, lg: 5 }}>
+          <Paper sx={{ borderRadius: 4, height: '100%', p: 3 }}>
+            <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>Actions prioritaires</Typography>
+            <Stack spacing={1.5}>
+              {priorityAlerts.length === 0 && <EmptyState title="Aucune alerte critique" description="Les dossiers a risque apparaitront ici." />}
+              {priorityAlerts.map((alert) => (
+                <Alert key={alert.id} severity={alert.severity === 'error' ? 'error' : 'warning'}>
+                  <strong>{alert.title}</strong> - {alert.message}
+                </Alert>
+              ))}
+            </Stack>
+          </Paper>
+        </Grid>
+        <Grid size={{ xs: 12, lg: 7 }}>
+          <Paper sx={{ borderRadius: 4, height: '100%', p: 3 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', mb: 2 }}>
+              <Typography component="h2" sx={{ fontWeight: 900 }} variant="h6">Dernieres souscriptions</Typography>
+              <Button component={Link} to="/subscriptions" variant="outlined">Voir toutes</Button>
+            </Stack>
+            <TableContainer>
+              <Table aria-label="Dernieres demandes de souscription">
+                <TableHead><TableRow><TableCell>Reference</TableCell><TableCell>Porteur</TableCell><TableCell>Offre</TableCell><TableCell>Statut</TableCell></TableRow></TableHead>
+                <TableBody>
+                  {subscriptions.slice(0, 6).map((row) => (
+                    <TableRow key={row.subscription.id}>
+                      <TableCell>{row.subscription.id.slice(0, 8)}</TableCell>
+                      <TableCell>{profileName(row.bearerProfile)}</TableCell>
+                      <TableCell>{row.offer?.name ?? 'Non renseignee'}</TableCell>
+                      <TableCell><StatusBadge status={row.subscription.status} /></TableCell>
+                    </TableRow>
+                  ))}
+                  {subscriptions.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={4}>
+                        <Typography color="text.secondary">Aucune souscription a afficher pour le moment.</Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </Grid>
+      </Grid>
     </Stack>
   )
 }

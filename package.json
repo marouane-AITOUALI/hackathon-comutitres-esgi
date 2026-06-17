@@ -17,5 +17,8 @@
     "docker:up": "docker compose up --build",
     "docker:down": "docker compose down",
     "docker:prod": "docker compose -f compose.prod.yml up --build"
+  },
+  "dependencies": {
+    "@mui/icons-material": "^9.1.1"
   }
 }

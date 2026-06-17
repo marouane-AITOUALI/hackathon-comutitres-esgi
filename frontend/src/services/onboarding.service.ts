@@ -1,4 +1,4 @@
-import type { OfferRecommendation, OnboardingAnswer, OnboardingDraft, OnboardingResponse } from '../types'
+import type { OnboardingAnswer, OnboardingDraft, OnboardingResponse, RecommendationResponse } from '../types'
 import { apiRequest } from './api'
 
 export const ONBOARDING_KEY = 'comutitres_onboarding'
@@ -51,7 +51,7 @@ export const createOnboarding = (answer: OnboardingAnswer) =>
   })
 
 export const getRecommendation = (answer: OnboardingAnswer) =>
-  apiRequest<OfferRecommendation>('/recommendations', {
+  apiRequest<RecommendationResponse>('/recommendations', {
     method: 'POST',
     body: JSON.stringify({
       age: calculateAge(answer.bearer.birthDate),
@@ -65,4 +65,4 @@ export const getRecommendation = (answer: OnboardingAnswer) =>
       solidarity: answer.solidarity,
       department: answer.department || undefined,
     }),
-  })
+  }).then((response) => response.recommendation)

@@ -22,14 +22,23 @@ necessaire pour les mineurs et les prises en charge par une structure.
 - `passwordHash` n'est jamais renvoye par l'API.
 - Les secrets sont dans `.env`, ignore par Git.
 - Les routes utilisateur sont protegees par JWT.
+- Le backoffice utilise un cookie `HttpOnly` pour eviter d'exposer le token
+  admin a JavaScript.
 - Une session d'onboarding ne peut etre lue que par son proprietaire.
 - Le bouton Ile-de-France Mobilites Connect est informatif uniquement : aucun
   fournisseur OAuth ni partage de donnees n'est implemente.
 
 ## Points a renforcer avant production
 
-- Stocker la session dans un cookie `HttpOnly` plutot que `localStorage`.
+- Migrer aussi le frontend utilisateur vers une session cookie `HttpOnly`.
 - Definir les durees de conservation et une procedure d'effacement.
 - Ajouter des droits d'acces au backoffice et une journalisation.
 - Chiffrer et limiter l'acces aux justificatifs.
 - Presenter une notice d'information RGPD complete et les droits de la personne.
+
+## Paiement et documents dans la demo
+
+Le paiement reste simule : aucun vrai numero de carte, IBAN complet ou donnee
+bancaire sensible n'est collecte. Les justificatifs sont representes par des
+metadonnees `fileUrl` et un resultat d'analyse par regles, sans stockage de
+fichier reel dans ce prototype.
