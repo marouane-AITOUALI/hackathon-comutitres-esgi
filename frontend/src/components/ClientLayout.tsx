@@ -52,6 +52,7 @@ export function ClientLayout() {
 
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, height: '100vh', overflow: 'hidden' }}>
         <Header
+          avatarUrl={user?.avatarUrl}
           greeting={`Bonjour ${user?.firstName ?? 'Alice'}`}
           userName={user ? `${user.firstName} ${user.lastName}` : 'Alice Dupont'}
           onMenuToggle={() => setMobileOpen(true)}

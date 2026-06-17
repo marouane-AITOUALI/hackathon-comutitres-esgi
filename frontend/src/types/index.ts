@@ -18,6 +18,7 @@ export interface User {
   lastName: string
   email: string
   role: UserRole
+  avatarUrl?: string | null
 }
 
 export type AuthUser = User
@@ -140,8 +141,15 @@ export interface DocumentAnalysisResult {
 export interface DocumentSummary {
   id: string
   subscriptionId: string
+  ownerId?: string | null
   type: DocumentType
   fileUrl: string
+  storageBucket?: string | null
+  storagePath?: string | null
+  originalFilename?: string | null
+  mimeType?: string | null
+  sizeBytes?: number | null
+  signedUrl?: string | null
   status: DocumentStatus
   analysisResult?: DocumentAnalysisResult | Record<string, unknown>
   analyzedAt?: string | null

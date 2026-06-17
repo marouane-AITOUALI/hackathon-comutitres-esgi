@@ -1,11 +1,12 @@
 import bcrypt from 'bcryptjs'
 import { desc, eq } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
-import { onboardingSessions, offers, profiles, subscriptions, users } from '../db/schema.js'
+import { onboardingSessions, offers, profiles, subscriptions, userAvatars, users } from '../db/schema.js'
 import type { AuthSession, PublicUser, SubscriptionSummary } from '../types/auth.js'
 import type { LoginInput, RegisterInput, RegisterWithOnboardingInput } from '../validation/auth.schemas.js'
 import { AppError } from '../utils/app-error.js'
 import { createAuthToken } from '../utils/jwt.js'
+import { createPrivateSignedUrl } from './storage.service.js'
 
 const selection = { id: users.id, firstName: users.firstName, lastName: users.lastName, email: users.email, role: users.role }
 type DatabaseExecutor = Pick<ReturnType<typeof requireDb>, 'select' | 'insert'>
@@ -20,8 +21,19 @@ async function getLatestSubscription(database: DatabaseExecutor, userId: string)
   return subscription ?? null
 }
 
+async function withAvatar(database: DatabaseExecutor, user: PublicUser): Promise<PublicUser> {
+  const [avatar] = await database
+    .select({ storageBucket: userAvatars.storageBucket, storagePath: userAvatars.storagePath })
+    .from(userAvatars)
+    .where(eq(userAvatars.ownerId, user.id))
+    .limit(1)
+
+  if (!avatar) return { ...user, avatarUrl: null }
+  return { ...user, avatarUrl: await createPrivateSignedUrl(avatar.storageBucket, avatar.storagePath) }
+}
+
 const session = async (database: DatabaseExecutor, user: PublicUser): Promise<AuthSession> => ({
-  user,
+  user: await withAvatar(database, user),
   token: createAuthToken({ sub: user.id, email: user.email, role: user.role }),
   subscription: await getLatestSubscription(database, user.id),
 })
@@ -129,5 +141,5 @@ export async function getUserById(id: string) {
   const database = requireDb()
   const [user] = await database.select(selection).from(users).where(eq(users.id, id)).limit(1)
   if (!user) throw new AppError(404, 'Utilisateur introuvable.')
-  return { user, subscription: await getLatestSubscription(database, id) }
+  return { user: await withAvatar(database, user), subscription: await getLatestSubscription(database, id) }
 }

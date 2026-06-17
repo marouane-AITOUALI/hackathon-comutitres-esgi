@@ -36,6 +36,20 @@
       "when": 1781619315329,
       "tag": "0004_payments-renewal-lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781703613015,
+      "tag": "0005_supabase-storage-files",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781704300000,
+      "tag": "0006_apply-storage-files-idempotent",
+      "breakpoints": true
     }
   ]
 }
