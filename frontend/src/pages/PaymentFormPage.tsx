@@ -103,7 +103,7 @@ export function PaymentFormPage() {
 
     void load()
     return () => { mounted = false }
-  }, [preselectedId])
+  }, [preselectedId, subscriptionId])
 
   useEffect(() => {
     if (selected?.bearerProfile) {
@@ -306,7 +306,7 @@ export function PaymentFormPage() {
                   label="4 derniers chiffres IBAN"
                   value={ibanLast4}
                   onChange={(event) => setIbanLast4(event.target.value.replace(/\D/g, '').slice(0, 4))}
-                  inputProps={{ inputMode: 'numeric', maxLength: 4 }}
+                  slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 4 } }}
                   fullWidth
                 />
                 <FormControlLabel

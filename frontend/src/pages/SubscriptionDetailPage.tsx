@@ -183,7 +183,6 @@ export function SubscriptionDetailPage() {
   const activeDocument = activeDocumentType ? item?.documents.find((document) => document.type === activeDocumentType) : undefined
   const preparedCount = documentSteps.filter((type) => preparedFiles[type]).length
   const completedCount = documentSteps.filter((type) => item?.documents.some((document) => document.type === type) || preparedFiles[type]).length
-  const validatedCount = documentSteps.filter((type) => item?.documents.some((document) => document.type === type && document.status === 'validated')).length
   const allDocumentsDeposited = completedCount === documentSteps.length
   const paymentStepIndex = documentSteps.length
   const finalStepIndex = documentSteps.length + 1

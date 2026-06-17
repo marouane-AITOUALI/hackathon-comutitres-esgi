@@ -33,7 +33,7 @@ export function CardPaymentFields({
         onChange={(event) => onCardNumberChange(formatCardNumber(event.target.value))}
         placeholder="1234 5678 9012 3456"
         fullWidth
-        inputProps={{ inputMode: 'numeric', autoComplete: 'cc-number' }}
+        slotProps={{ htmlInput: { inputMode: 'numeric', autoComplete: 'cc-number' } }}
       />
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
         <TextField
@@ -42,7 +42,7 @@ export function CardPaymentFields({
           onChange={(event) => onExpiryChange(formatExpiry(event.target.value))}
           placeholder="12/28"
           sx={{ flex: 1 }}
-          inputProps={{ inputMode: 'numeric', autoComplete: 'cc-exp' }}
+          slotProps={{ htmlInput: { inputMode: 'numeric', autoComplete: 'cc-exp' } }}
         />
         <TextField
           label="CVV"
@@ -50,7 +50,7 @@ export function CardPaymentFields({
           onChange={(event) => onCvvChange(formatCvv(event.target.value))}
           placeholder="123"
           sx={{ flex: 1 }}
-          inputProps={{ inputMode: 'numeric', autoComplete: 'cc-csc', maxLength: 4 }}
+          slotProps={{ htmlInput: { inputMode: 'numeric', autoComplete: 'cc-csc', maxLength: 4 } }}
         />
       </Stack>
       <TextField
@@ -59,7 +59,7 @@ export function CardPaymentFields({
         onChange={(event) => onCardholderNameChange(event.target.value)}
         placeholder="Nom Prénom"
         fullWidth
-        inputProps={{ autoComplete: 'cc-name' }}
+        slotProps={{ htmlInput: { autoComplete: 'cc-name' } }}
       />
     </Stack>
   )
