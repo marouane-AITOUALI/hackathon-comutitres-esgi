@@ -241,17 +241,19 @@ export function ProfilePage() {
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2.5} sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}>
           <Stack direction="row" spacing={2} sx={{ alignItems: 'center', minWidth: 0 }}>
             <Avatar
-              sx={{
-                bgcolor: colors.blueInteraction,
-                color: colors.white,
-                fontSize: 26,
-                fontWeight: 850,
-                height: 72,
-                width: 72,
-              }}
-            >
-              {userInitials}
-            </Avatar>
+            alt={`${user.firstName} ${user.lastName}`}
+            src={user.avatarUrl ?? undefined}
+            sx={{
+              bgcolor: colors.blueInteraction,
+              color: colors.white,
+              fontSize: 26,
+              fontWeight: 850,
+              height: 72,
+              width: 72,
+            }}
+          >
+            {userInitials}
+          </Avatar>
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="h4" sx={{ fontWeight: 850, mb: 0.5 }}>
                 {user.firstName} {user.lastName}
