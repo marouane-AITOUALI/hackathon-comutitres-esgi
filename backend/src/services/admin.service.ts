@@ -55,6 +55,22 @@ const offerSelection = {
   updatedAt: offers.updatedAt,
 }
 
+const paymentSelection = {
+  id: payments.id,
+  userId: payments.userId,
+  subscriptionId: payments.subscriptionId,
+  type: payments.type,
+  status: payments.status,
+  amountCents: payments.amountCents,
+  currency: payments.currency,
+  provider: payments.provider,
+  externalReference: payments.externalReference,
+  metadata: payments.metadata,
+  processedAt: payments.processedAt,
+  createdAt: payments.createdAt,
+  updatedAt: payments.updatedAt,
+}
+
 function countStatuses<T extends string>(items: Array<{ status: T }>, values: readonly T[]) {
   const counters = Object.fromEntries(values.map((value) => [value, 0])) as Record<T, number>
   for (const item of items) counters[item.status] = (counters[item.status] ?? 0) + 1
@@ -69,6 +85,7 @@ async function enrichSubscription(subscription: SubscriptionRow) {
   const [payerProfile] = subscription.payerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : []
   const [onboardingSession] = subscription.onboardingSessionId ? await database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : []
   const subscriptionDocuments = await database.select(documentSelection).from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt))
+  const subscriptionPayments = await database.select(paymentSelection).from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt))
 
   return {
     subscription,
@@ -83,6 +100,7 @@ async function enrichSubscription(subscription: SubscriptionRow) {
       isBearerPayer: onboardingSession.isBearerPayer,
     } : null,
     documents: subscriptionDocuments,
+    payments: subscriptionPayments,
   }
 }
 

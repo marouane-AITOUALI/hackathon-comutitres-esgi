@@ -42,6 +42,16 @@ const OFFER_LABELS: Record<string, string> = {
   AMETHYSTE: 'Amethyste',
 }
 
+const FALLBACK_OFFERS = Object.entries(OFFER_LABELS).map(([code, name]) => ({
+  id: null,
+  code,
+  name,
+  description: null,
+  target: 'catalogue local',
+  requiredDocuments: DEFAULT_IDENTITY,
+  isActive: true,
+}))
+
 function toPercent(value: number) {
   return Math.max(0, Math.min(100, Math.round(value * 100)))
 }
@@ -105,11 +115,22 @@ function getWarnings(input: RecommendationInput) {
 }
 
 async function loadOffers() {
-  const db = requireDb()
-  const allOffers = await db.select().from(offers)
+  try {
+    const db = requireDb()
+    const allOffers = await db.select().from(offers)
+    if (allOffers.length > 0) {
+      return {
+        allOffers,
+        findOffer: (code: string) => allOffers.find((offer: any) => offer.code === code) ?? null,
+      }
+    }
+  } catch {
+    // Tests and offline demos can still use the recommendation rules without a database.
+  }
+
   return {
-    allOffers,
-    findOffer: (code: string) => allOffers.find((offer: any) => offer.code === code) ?? null,
+    allOffers: FALLBACK_OFFERS,
+    findOffer: (code: string) => FALLBACK_OFFERS.find((offer) => offer.code === code) ?? null,
   }
 }
 

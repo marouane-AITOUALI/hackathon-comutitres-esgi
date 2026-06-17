@@ -8,6 +8,11 @@ Les routes protegees attendent :
 Authorization: Bearer <token>
 ```
 
+Le backoffice peut aussi utiliser le cookie `HttpOnly`
+`comutitres_auth_token`, pose par `/auth/login` et envoye avec
+`credentials: include`. Le header Bearer reste supporte pour le frontend
+utilisateur prototype.
+
 ## Sante
 
 ### `GET /health`
@@ -44,7 +49,12 @@ Retourne l'utilisateur public et un JWT.
 
 ### `GET /auth/me`
 
-Route protegee qui retourne l'utilisateur lie au JWT, sans `passwordHash`.
+Route protegee qui retourne l'utilisateur lie au JWT ou au cookie de session,
+sans `passwordHash`.
+
+### `POST /auth/logout`
+
+Efface le cookie de session backoffice et retourne `204`.
 
 ## Onboarding
 
@@ -172,6 +182,12 @@ Annule la souscription.
 ### `POST /subscriptions/:id/suspend`
 
 Suspend la souscription, utile pour les cas de refus ou de gestion SAV.
+
+### `GET /subscriptions/:id/next-actions`
+
+Retourne les prochaines actions conseillees pour un dossier : documents
+manquants, revue documentaire, regularisation paiement ou validation finale.
+Un admin peut appeler cette route pour alimenter le detail backoffice.
 
 ## Documents et verification IA prototype
 

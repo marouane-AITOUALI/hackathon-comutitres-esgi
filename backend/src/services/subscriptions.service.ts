@@ -1,6 +1,6 @@
 import { and, desc, eq, or } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
-import { offers, onboardingSessions, profiles, subscriptions } from '../db/schema.js'
+import { documents, offers, onboardingSessions, payments, profiles, subscriptions } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import type { CreateSubscriptionInput, UpdateSubscriptionInput } from '../validation/subscription.schemas.js'
 
@@ -24,6 +24,21 @@ async function findOwnSubscription(userId: string, id: string) {
     .select(subscriptionSelection)
     .from(subscriptions)
     .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
+    .limit(1)
+
+  if (!subscription) throw new AppError(404, 'Souscription introuvable.')
+  return subscription
+}
+
+async function findSubscriptionForAccess(userId: string, role: string, id: string) {
+  const where = role === 'admin'
+    ? eq(subscriptions.id, id)
+    : and(eq(subscriptions.id, id), eq(subscriptions.userId, userId))
+
+  const [subscription] = await requireDb()
+    .select(subscriptionSelection)
+    .from(subscriptions)
+    .where(where)
     .limit(1)
 
   if (!subscription) throw new AppError(404, 'Souscription introuvable.')
@@ -130,6 +145,64 @@ export async function listSubscriptions(userId: string) {
 
 export async function getSubscription(userId: string, id: string) {
   return enrich(await findOwnSubscription(userId, id))
+}
+
+export async function getSubscriptionNextActions(userId: string, role: string, id: string) {
+  const subscription = await findSubscriptionForAccess(userId, role, id)
+  const [offer] = subscription.offerId ? await requireDb().select().from(offers).where(eq(offers.id, subscription.offerId)).limit(1) : []
+  const documentRows = await requireDb().select().from(documents).where(eq(documents.subscriptionId, subscription.id))
+  const paymentRows = await requireDb().select().from(payments).where(eq(payments.subscriptionId, subscription.id))
+  const actions = []
+
+  const requiredDocuments = offer?.requiredDocuments ?? []
+  const providedTypes = new Set(documentRows.map((document) => document.type as string))
+  const missingDocuments = requiredDocuments.filter((documentType) => !providedTypes.has(documentType))
+  if (missingDocuments.length > 0) {
+    actions.push({
+      code: 'missing_documents',
+      priority: 'high',
+      label: 'Demander les justificatifs manquants',
+      detail: `${missingDocuments.length} justificatif(s) attendu(s) : ${missingDocuments.join(', ')}.`,
+    })
+  }
+
+  if (documentRows.some((document) => document.status === 'pending' || document.status === 'needs_manual_review')) {
+    actions.push({
+      code: 'review_documents',
+      priority: 'high',
+      label: 'Verifier les documents en attente',
+      detail: 'Une revue humaine ou une analyse par regles est necessaire.',
+    })
+  }
+
+  if (paymentRows.some((payment) => payment.status === 'rejected' || payment.status === 'cancelled')) {
+    actions.push({
+      code: 'regularize_payment',
+      priority: 'high',
+      label: 'Regulariser le paiement',
+      detail: 'Un paiement bloque la progression du dossier.',
+    })
+  }
+
+  if (subscription.status === 'pending_validation') {
+    actions.push({
+      code: 'validate_subscription',
+      priority: 'medium',
+      label: 'Valider ou refuser la souscription',
+      detail: 'Le dossier est pret pour une decision backoffice.',
+    })
+  }
+
+  if (actions.length === 0) {
+    actions.push({
+      code: 'no_action',
+      priority: 'low',
+      label: 'Aucune action prioritaire',
+      detail: 'Le dossier ne presente pas de blocage detecte par le prototype.',
+    })
+  }
+
+  return { subscriptionId: subscription.id, actions }
 }
 
 export async function updateSubscription(userId: string, id: string, input: UpdateSubscriptionInput) {

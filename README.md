@@ -77,12 +77,21 @@ cd backend
 npm run db:generate
 npm run db:migrate
 npm run db:seed
+npm run db:seed:admin
+npm run db:seed:demo
 ```
 
 Le modele conceptuel est documente dans `docs/database-model.md`.
 
 `db:migrate` et `db:seed` ecrivent dans la base configuree. Ne lancer ces
 commandes sur Supabase qu'apres validation de la migration locale.
+
+Les seeds de demo sont idempotents :
+
+- `db:seed:admin` prepare `admin@comutitres.fr / Admin123!` ou les valeurs
+  `ADMIN_*` definies dans `backend/.env`.
+- `db:seed:demo` prepare les offres, un parent demo, un enfant porteur, une
+  souscription Imagine R Scolaire, des justificatifs et des paiements simules.
 
 ## Parcours utilisateur
 
@@ -96,3 +105,20 @@ Le frontend propose :
 
 Le bouton Ile-de-France Mobilites Connect est visible mais volontairement non
 implemente dans cette version.
+
+## Backoffice demo
+
+Apres seed admin/demo, ouvrir le backoffice sur `/login` et se connecter avec :
+
+```txt
+admin@comutitres.fr
+Admin123!
+```
+
+La session backoffice utilise un cookie `HttpOnly`. Le frontend utilisateur
+conserve son stockage JWT prototype pour le parcours client.
+
+Voir aussi :
+
+- `docs/backoffice.md`
+- `docs/demo-scenario.md`

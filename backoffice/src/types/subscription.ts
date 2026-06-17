@@ -1,5 +1,6 @@
 import type { AdminDocument } from './document'
 import type { AdminOffer } from './offer'
+import type { AdminPayment } from './payment'
 
 export type SubscriptionStatus =
   | 'draft'
@@ -49,4 +50,12 @@ export interface AdminSubscriptionItem {
     isBearerPayer: boolean
   } | null
   documents: AdminDocument[]
+  payments: AdminPayment[]
+}
+
+export interface SubscriptionNextAction {
+  code: string
+  priority: 'low' | 'medium' | 'high'
+  label: string
+  detail: string
 }

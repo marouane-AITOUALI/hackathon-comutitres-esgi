@@ -1,5 +1,5 @@
 import { apiRequest } from './api'
-import type { AdminSubscriptionItem, SubscriptionStatus } from '../types/subscription'
+import type { AdminSubscriptionItem, SubscriptionNextAction, SubscriptionStatus } from '../types/subscription'
 
 export const getAdminSubscriptions = (status?: SubscriptionStatus | '') => {
   const query = status ? `?status=${status}` : ''
@@ -12,4 +12,9 @@ export const updateAdminSubscriptionStatus = (id: string, status: SubscriptionSt
   apiRequest<AdminSubscriptionItem>(`/admin/subscriptions/${id}/status`, {
     method: 'PATCH',
     body: JSON.stringify({ status }),
+  })
+
+export const getSubscriptionNextActions = (id: string) =>
+  apiRequest<{ subscriptionId: string; actions: SubscriptionNextAction[] }>(`/subscriptions/${id}/next-actions`, {
+    redirectOnUnauthorized: false,
   })
