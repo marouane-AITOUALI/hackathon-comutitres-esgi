@@ -1,4 +1,4 @@
-import type { AccessibilityPreference, AuthResponse, AuthUser, ContactPreference } from '../types'
+import type { AccessibilityPreference, AuthResponse, AuthUser, ContactPreference, OfferRecommendation, OnboardingAnswer } from '../types'
 import { apiRequest } from './api'
 
 export interface RegisterPayload {
