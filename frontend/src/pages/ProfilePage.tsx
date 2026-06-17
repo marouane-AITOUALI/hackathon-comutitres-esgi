@@ -1,8 +1,9 @@
 import { Alert, Avatar, Box, Button, CircularProgress, FormControlLabel, MenuItem, Paper, Stack, Switch, TextField, Typography } from '@mui/material'
 import { CheckCircle2, Home, Mail, Phone, Save, ShieldCheck, UserRound } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ChangeEvent } from 'react'
 import { searchFrenchAddresses, type AddressSuggestion } from '../services/address.service'
 import { updateMe, type UpdateMePayload } from '../services/auth.service'
+import { replaceMyAvatar } from '../services/user-files.service'
 import { colors } from '../theme/colors'
 import type { AccessibilityPreference, AuthUser, ContactPreference } from '../types'
 import { useAuth } from '../hooks/useAuth'
@@ -46,6 +47,8 @@ const addressOptionalPattern = /^[\p{L}\p{N}\p{M}\s'",.-]*$/u
 const cityPattern = /^[\p{L}\p{M}\s'.-]+$/u
 const postalPattern = /^[a-zA-Z0-9\s-]+$/
 const addressSearchMinLength = 3
+const avatarMaxSizeBytes = 2 * 1024 * 1024
+const avatarAllowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 function initials(user: AuthUser | null) {
   if (!user) return 'CT'
@@ -118,9 +121,10 @@ function validateForm(form: ProfileForm): ProfileErrors {
 }
 
 export function ProfilePage() {
-  const { updateUser, user } = useAuth()
+  const { refreshUser, updateUser, user } = useAuth()
   const [form, setForm] = useState<ProfileForm>(() => buildForm(user))
   const [saving, setSaving] = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState<ProfileErrors>({})
   const [addressLoading, setAddressLoading] = useState(false)
@@ -179,6 +183,35 @@ export function ProfilePage() {
     }))
     setSuccess('')
     setError('')
+  }
+
+  async function uploadAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setError('')
+    setSuccess('')
+
+    if (!avatarAllowedMimeTypes.has(file.type)) {
+      setError('Format avatar non autorise. Utilisez JPG, PNG ou WebP.')
+      return
+    }
+    if (file.size > avatarMaxSizeBytes) {
+      setError('Avatar trop lourd. Taille maximale : 2 MB.')
+      return
+    }
+
+    setAvatarUploading(true)
+    try {
+      await replaceMyAvatar(file)
+      await refreshUser()
+      setSuccess('Photo de profil mise a jour.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "L'avatar n'a pas pu etre mis a jour.")
+    } finally {
+      setAvatarUploading(false)
+    }
   }
 
   async function submit() {
@@ -241,25 +274,34 @@ export function ProfilePage() {
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2.5} sx={{ alignItems: { md: 'center' }, justifyContent: 'space-between' }}>
           <Stack direction="row" spacing={2} sx={{ alignItems: 'center', minWidth: 0 }}>
             <Avatar
-            alt={`${user.firstName} ${user.lastName}`}
-            src={user.avatarUrl ?? undefined}
-            sx={{
-              bgcolor: colors.blueInteraction,
-              color: colors.white,
-              fontSize: 26,
-              fontWeight: 850,
-              height: 72,
-              width: 72,
-            }}
-          >
-            {userInitials}
-          </Avatar>
+              alt={`${user.firstName} ${user.lastName}`}
+              src={user.avatarUrl ?? undefined}
+              sx={{
+                bgcolor: colors.blueInteraction,
+                color: colors.white,
+                fontSize: 26,
+                fontWeight: 850,
+                height: 72,
+                width: 72,
+              }}
+            >
+              {userInitials}
+            </Avatar>
             <Box sx={{ minWidth: 0 }}>
               <Typography variant="h4" sx={{ fontWeight: 850, mb: 0.5 }}>
                 {user.firstName} {user.lastName}
               </Typography>
               <Typography color="text.secondary">{user.email}</Typography>
             </Box>
+          </Stack>
+          <Stack spacing={0.75} sx={{ alignItems: { xs: 'stretch', md: 'flex-end' } }}>
+            <Button component="label" disabled={avatarUploading} variant="outlined">
+              {avatarUploading ? 'Envoi en cours...' : 'Modifier la photo'}
+              <input accept="image/jpeg,image/png,image/webp" hidden onChange={uploadAvatar} type="file" />
+            </Button>
+            <Typography color="text.secondary" variant="caption">
+              JPG, PNG ou WebP. 2 MB maximum.
+            </Typography>
           </Stack>
         </Stack>
       </Paper>

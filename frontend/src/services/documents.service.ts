@@ -27,3 +27,12 @@ export const resubmitDocument = (id: string, payload: { type?: DocumentType; fil
     method: 'POST',
     body: documentFormData(payload),
   })
+
+export const replaceDocumentFile = (id: string, payload: { type?: DocumentType; file: File }) =>
+  apiRequest<{ document: DocumentSummary }>(`/documents/${id}`, {
+    method: 'PUT',
+    body: documentFormData(payload),
+  })
+
+export const getDocumentSignedUrl = (id: string) =>
+  apiRequest<{ documentId: string; signedUrl: string | null }>(`/documents/${id}/signed-url`)
