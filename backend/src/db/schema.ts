@@ -2,6 +2,8 @@ import { relations } from 'drizzle-orm'
 import { boolean, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 export const userRole = pgEnum('user_role', ['user', 'admin'])
+export const contactPreference = pgEnum('contact_preference', ['email', 'phone', 'sms'])
+export const accessibilityPreference = pgEnum('accessibility_preference', ['none', 'screen_reader', 'large_text', 'reduced_motion', 'plain_language', 'human_support'])
 export const profileType = pgEnum('profile_type', ['bearer', 'payer'])
 export const profileStatus = pgEnum('profile_status', ['junior', 'school', 'student', 'active', 'senior', 'solidarity', 'other'])
 export const relationshipToBearer = pgEnum('relationship_to_bearer', ['parent', 'guardian', 'association', 'employer', 'other'])
@@ -37,8 +39,19 @@ export const users = pgTable('users', {
   email: text('email').notNull(),
   passwordHash: text('password_hash').notNull(),
   role: userRole('role').default('user').notNull(),
+  phone: text('phone'),
+  addressLine1: text('address_line1'),
+  addressLine2: text('address_line2'),
+  postalCode: text('postal_code'),
+  city: text('city'),
+  country: text('country').default('FR').notNull(),
+  preferredContact: contactPreference('preferred_contact').default('email').notNull(),
+  accessibilityPreference: accessibilityPreference('accessibility_preference').default('none').notNull(),
+  marketingOptIn: boolean('marketing_opt_in').default(false).notNull(),
+  marketingOptInAt: timestamp('marketing_opt_in_at', { withTimezone: true }),
   rgpdConsent: boolean('rgpd_consent').notNull(),
   rgpdConsentedAt: timestamp('rgpd_consented_at', { withTimezone: true }),
+  profileUpdatedAt: timestamp('profile_updated_at', { withTimezone: true }),
   ...timestamps,
 }, (table) => [uniqueIndex('users_email_idx').on(table.email)])
 
