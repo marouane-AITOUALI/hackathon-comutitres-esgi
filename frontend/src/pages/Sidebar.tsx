@@ -36,7 +36,7 @@ function SidebarContent({ activeKey = 'dashboard', onNavigate }: Pick<SidebarPro
   const navigate = useNavigate()
 
   const handleDownload = () => {
-    navigate('/mobile-app')
+    window.open('/mobile-app', '_blank', 'noopener,noreferrer')
   }
 
   return (

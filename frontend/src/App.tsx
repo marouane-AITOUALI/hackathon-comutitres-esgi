@@ -22,6 +22,7 @@ function App() {
     <Routes>
       <Route path="auth/login" element={<LoginPage />} />
       <Route path="auth/register" element={<RegisterPage />} />
+      <Route path="mobile-app" element={<MobileAppPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<ClientLayout />}>
           <Route path="dashboard" element={<DashboardPage />} />
@@ -32,7 +33,6 @@ function App() {
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="profil" element={<ProfilePage />} />
           <Route path="support" element={<SupportPage />} />
-          <Route path="mobile-app" element={<MobileAppPage />} />
         </Route>
         <Route path="onboarding" element={<OnboardingChatPage />} />
         <Route path="onboarding/*" element={<Navigate replace to="/onboarding" />} />
