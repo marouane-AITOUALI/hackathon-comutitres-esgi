@@ -1,11 +1,13 @@
-import { Alert, Box, Chip, Paper, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { listSubscriptions } from '../services/subscriptions.service'
 import type { SubscriptionSummary } from '../types'
 
 const statusLabel: Record<string, string> = {
   draft: 'Brouillon',
   pending_documents: 'Documents attendus',
+  pending_payment: 'Paiement attendu',
   pending_validation: 'En validation',
   accepted: 'Acceptee',
   rejected: 'Refusee',
@@ -16,6 +18,7 @@ const statusLabel: Record<string, string> = {
 const statusTone: Record<string, 'default' | 'warning' | 'success' | 'error' | 'info'> = {
   draft: 'default',
   pending_documents: 'warning',
+  pending_payment: 'warning',
   pending_validation: 'info',
   accepted: 'success',
   rejected: 'error',
@@ -71,7 +74,10 @@ export function SubscriptionsPage() {
                 <Typography variant="h6" sx={{ fontWeight: 800 }}>{item.offer?.name ?? 'Offre non associee'}</Typography>
                 <Typography color="text.secondary" variant="body2">{item.subscription.id}</Typography>
               </Box>
-              <Chip color={statusTone[item.subscription.status]} label={statusLabel[item.subscription.status] ?? item.subscription.status} />
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
+                <Chip color={statusTone[item.subscription.status]} label={statusLabel[item.subscription.status] ?? item.subscription.status} />
+                <Button component={Link} size="small" to={`/subscriptions/${item.subscription.id}`} variant="outlined">Voir le suivi</Button>
+              </Stack>
             </Stack>
 
             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
@@ -90,6 +96,10 @@ export function SubscriptionsPage() {
               <Paper variant="outlined" sx={{ flex: 1, p: 2, borderRadius: 2 }}>
                 <Typography color="text.secondary" variant="body2">Derniere mise a jour</Typography>
                 <Typography sx={{ fontWeight: 700 }}>{new Date(item.subscription.updatedAt).toLocaleDateString('fr-FR')}</Typography>
+              </Paper>
+              <Paper variant="outlined" sx={{ flex: 1, p: 2, borderRadius: 2 }}>
+                <Typography color="text.secondary" variant="body2">Documents / paiements</Typography>
+                <Typography sx={{ fontWeight: 700 }}>{item.documents?.length ?? 0} doc. - {item.payments?.length ?? 0} paiement(s)</Typography>
               </Paper>
             </Stack>
           </Paper>

@@ -20,26 +20,30 @@ const documentSelection = {
   updatedAt: documents.updatedAt,
 }
 
-async function findOwnSubscription(userId: string, subscriptionId: string) {
+async function findSubscriptionForAccess(userId: string, role: string, subscriptionId: string) {
+  const where = role === 'admin'
+    ? eq(subscriptions.id, subscriptionId)
+    : and(eq(subscriptions.id, subscriptionId), eq(subscriptions.userId, userId))
+
   const [subscription] = await requireDb()
     .select()
     .from(subscriptions)
-    .where(and(eq(subscriptions.id, subscriptionId), eq(subscriptions.userId, userId)))
+    .where(where)
     .limit(1)
 
   if (!subscription) throw new AppError(404, 'Souscription introuvable.')
   return subscription
 }
 
-async function findOwnDocument(userId: string, id: string) {
+async function findDocumentForAccess(userId: string, role: string, id: string) {
   const [row] = await requireDb()
-    .select({ document: documentSelection })
+    .select({ document: documentSelection, subscriptionUserId: subscriptions.userId })
     .from(documents)
     .innerJoin(subscriptions, eq(documents.subscriptionId, subscriptions.id))
-    .where(and(eq(documents.id, id), eq(subscriptions.userId, userId)))
+    .where(eq(documents.id, id))
     .limit(1)
 
-  if (!row) throw new AppError(404, 'Document introuvable.')
+  if (!row || (role !== 'admin' && row.subscriptionUserId !== userId)) throw new AppError(404, 'Document introuvable.')
   return row.document
 }
 
@@ -47,8 +51,8 @@ function publicDocument(document: DocumentRow) {
   return { document }
 }
 
-export async function createDocument(userId: string, subscriptionId: string, input: CreateDocumentInput) {
-  await findOwnSubscription(userId, subscriptionId)
+export async function createDocument(userId: string, role: string, subscriptionId: string, input: CreateDocumentInput) {
+  await findSubscriptionForAccess(userId, role, subscriptionId)
   const [created] = await requireDb()
     .insert(documents)
     .values({ subscriptionId, type: input.type, fileUrl: input.fileUrl, status: 'pending' })
@@ -58,8 +62,8 @@ export async function createDocument(userId: string, subscriptionId: string, inp
   return publicDocument(created)
 }
 
-export async function listDocumentsForSubscription(userId: string, subscriptionId: string) {
-  await findOwnSubscription(userId, subscriptionId)
+export async function listDocumentsForSubscription(userId: string, role: string, subscriptionId: string) {
+  await findSubscriptionForAccess(userId, role, subscriptionId)
   const rows = await requireDb()
     .select(documentSelection)
     .from(documents)
@@ -69,18 +73,18 @@ export async function listDocumentsForSubscription(userId: string, subscriptionI
   return { documents: rows }
 }
 
-export async function getDocument(userId: string, id: string) {
-  return publicDocument(await findOwnDocument(userId, id))
+export async function getDocument(userId: string, role: string, id: string) {
+  return publicDocument(await findDocumentForAccess(userId, role, id))
 }
 
-export async function deleteDocument(userId: string, id: string) {
-  await findOwnDocument(userId, id)
+export async function deleteDocument(userId: string, role: string, id: string) {
+  await findDocumentForAccess(userId, role, id)
   await requireDb().delete(documents).where(eq(documents.id, id))
   return { deleted: true, id }
 }
 
-export async function updateDocumentStatus(userId: string, id: string, input: UpdateDocumentStatusInput) {
-  await findOwnDocument(userId, id)
+export async function updateDocumentStatus(userId: string, role: string, id: string, input: UpdateDocumentStatusInput) {
+  await findDocumentForAccess(userId, role, id)
   const [updated] = await requireDb()
     .update(documents)
     .set({
@@ -95,8 +99,8 @@ export async function updateDocumentStatus(userId: string, id: string, input: Up
   return publicDocument(updated)
 }
 
-export async function resubmitDocument(userId: string, id: string, input: ResubmitDocumentInput) {
-  const current = await findOwnDocument(userId, id)
+export async function resubmitDocument(userId: string, role: string, id: string, input: ResubmitDocumentInput) {
+  const current = await findDocumentForAccess(userId, role, id)
   const [updated] = await requireDb()
     .update(documents)
     .set({
@@ -115,8 +119,8 @@ export async function resubmitDocument(userId: string, id: string, input: Resubm
   return publicDocument(updated)
 }
 
-export async function analyzeDocument(userId: string, id: string) {
-  const document = await findOwnDocument(userId, id)
+export async function analyzeDocument(userId: string, role: string, id: string) {
+  const document = await findDocumentForAccess(userId, role, id)
   const analysis = analyzeDocumentWithRules(document)
   const [updated] = await requireDb()
     .update(documents)
@@ -134,8 +138,8 @@ export async function analyzeDocument(userId: string, id: string) {
   return { document: updated, analysis }
 }
 
-export async function getDocumentAnalysis(userId: string, id: string) {
-  const document = await findOwnDocument(userId, id)
+export async function getDocumentAnalysis(userId: string, role: string, id: string) {
+  const document = await findDocumentForAccess(userId, role, id)
   return {
     documentId: document.id,
     analysis: document.analysisResult,
@@ -143,16 +147,16 @@ export async function getDocumentAnalysis(userId: string, id: string) {
   }
 }
 
-export async function fraudCheckDocument(userId: string, id: string) {
-  const document = await findOwnDocument(userId, id)
+export async function fraudCheckDocument(userId: string, role: string, id: string) {
+  const document = await findDocumentForAccess(userId, role, id)
   return {
     documentId: document.id,
     fraudCheck: checkDocumentFraud(document),
   }
 }
 
-export async function manualReviewDocument(userId: string, id: string, input: ManualReviewInput) {
-  await findOwnDocument(userId, id)
+export async function manualReviewDocument(userId: string, role: string, id: string, input: ManualReviewInput) {
+  await findDocumentForAccess(userId, role, id)
   const [updated] = await requireDb()
     .update(documents)
     .set({

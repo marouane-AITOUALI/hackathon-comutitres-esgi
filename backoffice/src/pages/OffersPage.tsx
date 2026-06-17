@@ -19,6 +19,9 @@ export function OffersPage() {
   const [offers, setOffers] = useState<AdminOffer[]>([])
   const [payload, setPayload] = useState<OfferPayload>(emptyPayload)
   const [documentsText, setDocumentsText] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editPayload, setEditPayload] = useState<OfferPayload>(emptyPayload)
+  const [editDocumentsText, setEditDocumentsText] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -65,6 +68,39 @@ export function OffersPage() {
     }
   }
 
+  function startEdit(offer: AdminOffer) {
+    setEditingId(offer.id)
+    setEditPayload({
+      code: offer.code,
+      name: offer.name,
+      description: offer.description ?? '',
+      target: offer.target,
+      requiredDocuments: offer.requiredDocuments,
+      isActive: offer.isActive !== false,
+    })
+    setEditDocumentsText(offer.requiredDocuments.join(', '))
+  }
+
+  async function saveEdit() {
+    if (!editingId) return
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      const response = await updateAdminOffer(editingId, {
+        ...editPayload,
+        requiredDocuments: editDocumentsText.split(',').map((item) => item.trim()).filter(Boolean),
+      })
+      setOffers((current) => current.map((item) => item.id === editingId ? response.offer : item).sort((a, b) => a.name.localeCompare(b.name)))
+      setEditingId(null)
+      setSuccess('Offre mise a jour.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Mise a jour de l'offre impossible.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (loading) return <LoadingState label="Chargement des offres..." />
 
   return (
@@ -104,20 +140,46 @@ export function OffersPage() {
               <TableRow><TableCell>Code</TableCell><TableCell>Nom</TableCell><TableCell>Cible</TableCell><TableCell>Documents</TableCell><TableCell>Statut</TableCell><TableCell align="right">Action</TableCell></TableRow>
             </TableHead>
             <TableBody>
-              {offers.map((offer) => (
-                <TableRow key={offer.id}>
-                  <TableCell>{offer.code}</TableCell>
-                  <TableCell>{offer.name}</TableCell>
-                  <TableCell>{offer.target}</TableCell>
-                  <TableCell>{offer.requiredDocuments.length > 0 ? offer.requiredDocuments.join(', ') : 'Aucun'}</TableCell>
-                  <TableCell><StatusBadge status={offer.isActive === false ? 'cancelled' : 'validated'} label={offer.isActive === false ? 'Inactive' : 'Active'} /></TableCell>
-                  <TableCell align="right">
-                    <Button onClick={() => toggleOffer(offer)} size="small" variant="outlined">
-                      {offer.isActive === false ? 'Activer' : 'Desactiver'}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {offers.map((offer) => {
+                const editing = editingId === offer.id
+                return (
+                  <TableRow key={offer.id}>
+                    <TableCell>
+                      {editing ? <TextField label="Code" onChange={(event) => setEditPayload((current) => ({ ...current, code: event.target.value }))} size="small" value={editPayload.code} /> : offer.code}
+                    </TableCell>
+                    <TableCell>
+                      {editing ? (
+                        <Stack spacing={1}>
+                          <TextField label="Nom" onChange={(event) => setEditPayload((current) => ({ ...current, name: event.target.value }))} size="small" value={editPayload.name} />
+                          <TextField label="Description" onChange={(event) => setEditPayload((current) => ({ ...current, description: event.target.value }))} size="small" value={editPayload.description} />
+                        </Stack>
+                      ) : offer.name}
+                    </TableCell>
+                    <TableCell>
+                      {editing ? <TextField label="Cible" onChange={(event) => setEditPayload((current) => ({ ...current, target: event.target.value }))} size="small" value={editPayload.target} /> : offer.target}
+                    </TableCell>
+                    <TableCell>
+                      {editing ? <TextField label="Documents" onChange={(event) => setEditDocumentsText(event.target.value)} size="small" value={editDocumentsText} /> : offer.requiredDocuments.length > 0 ? offer.requiredDocuments.join(', ') : 'Aucun'}
+                    </TableCell>
+                    <TableCell><StatusBadge status={offer.isActive === false ? 'cancelled' : 'validated'} label={offer.isActive === false ? 'Inactive' : 'Active'} /></TableCell>
+                    <TableCell align="right">
+                      {editing ? (
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                          <Button disabled={saving} onClick={saveEdit} size="small" variant="contained">Enregistrer</Button>
+                          <Button disabled={saving} onClick={() => setEditingId(null)} size="small" variant="outlined">Annuler</Button>
+                        </Stack>
+                      ) : (
+                        <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                          <Button onClick={() => startEdit(offer)} size="small" variant="outlined">Modifier</Button>
+                          <Button onClick={() => toggleOffer(offer)} size="small" variant="outlined">
+                            {offer.isActive === false ? 'Activer' : 'Desactiver'}
+                          </Button>
+                        </Stack>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         </TableContainer>

@@ -4,7 +4,7 @@ import { EmptyState } from '../components/common/EmptyState'
 import { LoadingState } from '../components/common/LoadingState'
 import { StatusBadge } from '../components/common/StatusBadge'
 import { getPendingDocuments } from '../services/admin.service'
-import { reviewDocument } from '../services/documents.service'
+import { analyzeDocument, reviewDocument } from '../services/documents.service'
 import type { PendingDocumentItem } from '../types/document'
 
 function holderName(item: PendingDocumentItem) {
@@ -17,6 +17,13 @@ function confidence(item: PendingDocumentItem) {
   return result && typeof result === 'object' && 'confidence' in result && typeof result.confidence === 'number'
     ? `${result.confidence}%`
     : 'Non disponible'
+}
+
+function warnings(item: PendingDocumentItem) {
+  const result = item.document.analysisResult
+  return result && typeof result === 'object' && 'warnings' in result && Array.isArray(result.warnings)
+    ? result.warnings.join(' ')
+    : ''
 }
 
 export function DocumentsPage() {
@@ -52,6 +59,21 @@ export function DocumentsPage() {
     }
   }
 
+  async function analyze(id: string) {
+    setSavingId(id)
+    setError('')
+    setSuccess('')
+    try {
+      const response = await analyzeDocument(id)
+      setRows((current) => current.map((item) => item.document.id === id ? { ...item, document: response.document } : item))
+      setSuccess('Analyse documentaire simulee terminee.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Analyse documentaire impossible.')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
   if (loading) return <LoadingState label="Chargement des documents..." />
 
   return (
@@ -71,10 +93,13 @@ export function DocumentsPage() {
               <TableRow>
                 <TableCell>Document</TableCell>
                 <TableCell>Porteur</TableCell>
+                <TableCell>Offre</TableCell>
                 <TableCell>Dossier</TableCell>
                 <TableCell>Statut</TableCell>
                 <TableCell>Confiance IA</TableCell>
+                <TableCell>Warnings</TableCell>
                 <TableCell>Revue manuelle</TableCell>
+                <TableCell>Date upload</TableCell>
                 <TableCell>Motif refus</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
@@ -86,14 +111,17 @@ export function DocumentsPage() {
                   <TableRow key={item.document.id}>
                     <TableCell>{item.document.type}</TableCell>
                     <TableCell>{holderName(item)}</TableCell>
+                    <TableCell>{item.subscription.offer?.name ?? 'Non renseignee'}</TableCell>
                     <TableCell>{item.document.subscriptionId.slice(0, 8)}</TableCell>
                     <TableCell><StatusBadge status={item.document.status} /></TableCell>
                     <TableCell>{confidence(item)}</TableCell>
+                    <TableCell sx={{ maxWidth: 220 }}>{warnings(item) || 'Aucun'}</TableCell>
                     <TableCell>
                       {requiresManualReview
                         ? <StatusBadge status="needs_manual_review" />
                         : <Button disabled size="small" variant="outlined">Non requis</Button>}
                     </TableCell>
+                    <TableCell>{new Date(item.document.createdAt).toLocaleDateString('fr-FR')}</TableCell>
                     <TableCell>
                       <TextField
                         disabled={savingId === item.document.id}
@@ -105,6 +133,7 @@ export function DocumentsPage() {
                     </TableCell>
                     <TableCell align="right">
                       <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ justifyContent: 'flex-end' }}>
+                        <Button disabled={savingId === item.document.id} onClick={() => analyze(item.document.id)} size="small" variant="outlined">Analyser</Button>
                         <Button disabled={savingId === item.document.id} onClick={() => review(item.document.id, true)} size="small" variant="contained">Valider</Button>
                         <Button
                           color="error"

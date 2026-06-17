@@ -16,7 +16,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const assertAdmin = useCallback((candidate: AdminUser) => {
     if (candidate.role !== 'admin') {
       clearAdminToken()
-      throw new Error('Acces refuse')
+      throw new Error('Acces reserve au personnel Comutitres.')
     }
     return candidate
   }, [])

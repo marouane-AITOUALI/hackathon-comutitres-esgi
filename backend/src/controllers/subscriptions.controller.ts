@@ -1,11 +1,16 @@
 import type { RequestHandler } from 'express'
-import { cancelSubscription, createSubscription, getSubscription, listSubscriptions, submitSubscription, suspendSubscription, updateSubscription } from '../services/subscriptions.service.js'
+import { cancelSubscription, createSubscription, getSubscription, getSubscriptionNextActions, listSubscriptions, submitSubscription, suspendSubscription, updateSubscription } from '../services/subscriptions.service.js'
 import { AppError } from '../utils/app-error.js'
 import { createSubscriptionSchema, subscriptionIdParamsSchema, updateSubscriptionSchema } from '../validation/subscription.schemas.js'
 
 function authUserId(req: Parameters<RequestHandler>[0]) {
   if (!req.auth) throw new AppError(401, 'Authentification requise.')
   return req.auth.sub
+}
+
+function authSession(req: Parameters<RequestHandler>[0]) {
+  if (!req.auth) throw new AppError(401, 'Authentification requise.')
+  return req.auth
 }
 
 export const create: RequestHandler = async (req, res) => {
@@ -20,6 +25,12 @@ export const list: RequestHandler = async (req, res) => {
 export const getById: RequestHandler = async (req, res) => {
   const { id } = subscriptionIdParamsSchema.parse(req.params)
   res.json(await getSubscription(authUserId(req), id))
+}
+
+export const nextActions: RequestHandler = async (req, res) => {
+  const { id } = subscriptionIdParamsSchema.parse(req.params)
+  const session = authSession(req)
+  res.json(await getSubscriptionNextActions(session.sub, session.role, id))
 }
 
 export const update: RequestHandler = async (req, res) => {

@@ -36,6 +36,10 @@ export function SupportAlertsPage() {
     <Stack spacing={3}>
       {error && <Alert severity="error">{error}</Alert>}
 
+      <Alert severity="info" sx={{ borderRadius: 3 }}>
+        Le backoffice anticipe les appels support au lieu de les subir : documents manquants, paiements bloques et dossiers a risque remontent ici.
+      </Alert>
+
       <Paper sx={{ borderRadius: 4, p: 3 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
           <TextField fullWidth label="Rechercher une alerte" onChange={(event) => setSearch(event.target.value)} value={search} />
