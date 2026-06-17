@@ -26,15 +26,20 @@ function getActiveKey(pathname: string) {
 }
 
 export function ClientLayout() {
-  const { user } = useAuth()
+  const { logout, user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const activeKey = useMemo(() => getActiveKey(location.pathname), [location.pathname])
 
+  const handleLogout = () => {
+    logout()
+    navigate('/auth/login', { replace: true })
+  }
+
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default', pr: { xs: 0, md: 2 } }}>
+    <Box sx={{ display: 'flex', height: '100vh', minHeight: 0, overflow: 'hidden', bgcolor: 'background.default', pr: { xs: 0, md: 2 } }}>
       <Sidebar
         activeKey={activeKey}
         mobileOpen={mobileOpen}
@@ -45,14 +50,16 @@ export function ClientLayout() {
         }}
       />
 
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, height: '100vh', overflow: 'hidden' }}>
         <Header
           greeting={`Bonjour ${user?.firstName ?? 'Alice'}`}
           userName={user ? `${user.firstName} ${user.lastName}` : 'Alice Dupont'}
           onMenuToggle={() => setMobileOpen(true)}
+          onLogout={handleLogout}
+          onProfileClick={() => navigate('/profil')}
         />
 
-        <Box component="main" sx={{ flex: 1, p: { xs: 2, md: 4 }, overflow: 'auto' }}>
+        <Box component="main" sx={{ flex: 1, minHeight: 0, p: { xs: 2, md: 4 }, overflowX: 'hidden', overflowY: 'auto' }}>
           <Outlet />
         </Box>
       </Box>
