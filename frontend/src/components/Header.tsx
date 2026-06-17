@@ -59,7 +59,7 @@ function Logos() {
   )
 }
 
-export function LandingHeader() {
+export function Header() {
   return (
     <Box
       component="header"

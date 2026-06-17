@@ -6,8 +6,8 @@ import {
   Typography,
 } from '@mui/material'
 import { Link } from 'react-router-dom'
-import { LandingFooter } from '../components/landing/LandingFooter'
-import { LandingHeader } from '../components/landing/LandingHeader'
+import { Footer } from '../components/Footer'
+import { Header } from '../components/Header'
 import { useAuth } from '../hooks/useAuth'
 import heroDay from '../assets/jour.png'
 import ctaNight from '../assets/nuit.png'
@@ -117,7 +117,7 @@ export function HomePage() {
           }}
         />
 
-        <LandingHeader />
+        <Header />
 
         <Stack
           spacing={2}
@@ -385,7 +385,7 @@ export function HomePage() {
         </Stack>
       </Box>
 
-      <LandingFooter />
+      <Footer />
     </Box>
   )
 }

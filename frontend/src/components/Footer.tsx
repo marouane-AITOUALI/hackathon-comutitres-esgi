@@ -81,7 +81,7 @@ function SocialIcon({ label }: { label: string }) {
   )
 }
 
-export function LandingFooter() {
+export function Footer() {
   return (
     <Box component="footer" sx={{ bgcolor: FOOTER_BG, color: '#fff', px: { xs: 2, md: 5 }, pt: 6, pb: 3 }}>
       <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
