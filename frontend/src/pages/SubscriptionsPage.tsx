@@ -1,6 +1,6 @@
 import { Alert, Box, Button, Chip, LinearProgress, Paper, Stack, Typography } from '@mui/material'
-import { ArrowRight, BadgeCheck, CalendarClock, CreditCard, FileCheck2, FileWarning, Plus, UserRound } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { ArrowRight, BadgeCheck, CalendarClock, CreditCard, FileCheck2, FileWarning, FolderOpen, Layers3, Plus, UserRound } from 'lucide-react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { listSubscriptions } from '../services/subscriptions.service'
 import { colors } from '../theme/colors'
@@ -28,13 +28,13 @@ const statusTone: Record<SubscriptionStatus, 'default' | 'warning' | 'success' |
   suspended: 'warning',
 }
 
-const filterOptions: Array<{ key: 'all' | SubscriptionStatus; label: string }> = [
-  { key: 'all', label: 'Tous' },
-  { key: 'accepted', label: 'Actifs' },
-  { key: 'pending_documents', label: 'Documents' },
-  { key: 'pending_payment', label: 'Paiement' },
-  { key: 'pending_validation', label: 'Validation' },
-  { key: 'draft', label: 'Brouillons' },
+const filterOptions: Array<{ key: 'all' | SubscriptionStatus; label: string; icon: ReactNode }> = [
+  { key: 'all', label: 'Tous', icon: <Layers3 size={16} /> },
+  { key: 'accepted', label: 'Actifs', icon: <BadgeCheck size={16} /> },
+  { key: 'pending_documents', label: 'Documents', icon: <FolderOpen size={16} /> },
+  { key: 'pending_payment', label: 'Paiement', icon: <CreditCard size={16} /> },
+  { key: 'pending_validation', label: 'Validation', icon: <CalendarClock size={16} /> },
+  { key: 'draft', label: 'Brouillons', icon: <FileCheck2 size={16} /> },
 ]
 
 function formatDate(value: string) {
@@ -86,6 +86,11 @@ function countByStatus(subscriptions: SubscriptionSummary[]) {
     },
     { total: 0, active: 0, documents: 0, payments: 0, validation: 0 },
   )
+}
+
+function filterCount(key: 'all' | SubscriptionStatus, subscriptions: SubscriptionSummary[]) {
+  if (key === 'all') return subscriptions.length
+  return subscriptions.filter((item) => item.subscription.status === key).length
 }
 
 export function SubscriptionsPage() {
@@ -174,23 +179,66 @@ export function SubscriptionsPage() {
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3}>
         <Paper sx={{ flex: 1, p: 3, borderRadius: 3 }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, mb: 2.5 }}>
+          <Stack direction={{ xs: 'column', xl: 'row' }} spacing={2.5} sx={{ justifyContent: 'space-between', alignItems: { xl: 'flex-start' }, mb: 2.5 }}>
             <Box>
               <Typography variant="h6" sx={{ fontWeight: 850 }}>Mes dossiers</Typography>
               <Typography color="text.secondary">Filtrez par étape et ouvrez le suivi détaillé.</Typography>
             </Box>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
+            <Box
+              aria-label="Filtres des dossiers par étape"
+              role="group"
+              sx={{
+                display: 'grid',
+                gridTemplateColumns: { xs: '1fr 1fr', sm: 'repeat(3, minmax(132px, 1fr))', xl: 'repeat(6, auto)' },
+                gap: 1,
+                width: { xs: '100%', xl: 'auto' },
+              }}
+            >
               {filterOptions.map((option) => (
-                <Chip
+                <Button
                   key={option.key}
-                  clickable
-                  color={activeFilter === option.key ? 'primary' : 'default'}
-                  label={option.label}
                   onClick={() => setActiveFilter(option.key)}
-                  sx={{ fontWeight: 700 }}
-                />
+                  startIcon={option.icon}
+                  variant={activeFilter === option.key ? 'contained' : 'outlined'}
+                  sx={{
+                    bgcolor: activeFilter === option.key ? colors.blueInteraction : colors.white,
+                    borderColor: activeFilter === option.key ? colors.blueInteraction : colors.greyMedium,
+                    color: activeFilter === option.key ? colors.white : colors.anthracite,
+                    justifyContent: 'flex-start',
+                    minHeight: 42,
+                    px: 1.5,
+                    '&:hover': {
+                      bgcolor: activeFilter === option.key ? colors.blueFocus : colors.blueLight,
+                      borderColor: colors.blueInteraction,
+                    },
+                    '& .MuiButton-endIcon': { ml: 'auto' },
+                    '& .MuiButton-startIcon': { color: 'inherit', mr: 1 },
+                  }}
+                  endIcon={
+                    <Box
+                      component="span"
+                      sx={{
+                        alignItems: 'center',
+                        bgcolor: activeFilter === option.key ? 'rgba(255,255,255,0.22)' : colors.greyLight40,
+                        borderRadius: 99,
+                        color: activeFilter === option.key ? colors.white : colors.greyDark,
+                        display: 'inline-flex',
+                        fontSize: 12,
+                        fontWeight: 800,
+                        height: 22,
+                        justifyContent: 'center',
+                        minWidth: 28,
+                        px: 0.75,
+                      }}
+                    >
+                      {filterCount(option.key, subscriptions)}
+                    </Box>
+                  }
+                >
+                  {option.label}
+                </Button>
               ))}
-            </Stack>
+            </Box>
           </Stack>
 
           {!loading && subscriptions.length === 0 && (
@@ -218,9 +266,17 @@ export function SubscriptionsPage() {
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { md: 'flex-start' } }}>
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="h6" sx={{ fontWeight: 850 }}>{item.offer?.name ?? 'Offre non associée'}</Typography>
-                        <Typography color="text.secondary" variant="body2">
-                          Dossier {item.subscription.id.slice(0, 8)} · maj {formatDate(item.subscription.updatedAt)}
-                        </Typography>
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', mt: 0.5 }}>
+                          <Typography color="text.secondary" variant="body2">
+                            Dossier {item.subscription.id.slice(0, 8)}
+                          </Typography>
+                          <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', color: colors.greyDark }}>
+                            <CalendarClock size={14} />
+                            <Typography color="text.secondary" variant="body2">
+                              Mis à jour le {formatDate(item.subscription.updatedAt)}
+                            </Typography>
+                          </Stack>
+                        </Stack>
                       </Box>
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                         <Chip color={statusTone[item.subscription.status]} label={statusLabel[item.subscription.status]} sx={{ fontWeight: 700 }} />
@@ -252,10 +308,15 @@ export function SubscriptionsPage() {
                         </Stack>
                       </Paper>
                       <Paper variant="outlined" sx={{ p: 1.75, borderRadius: 2, bgcolor: colors.greyLight40 }}>
-                        <Typography color="text.secondary" variant="caption">Documents</Typography>
-                        <Typography sx={{ fontWeight: 750 }}>
-                          {item.documents?.length ?? 0} total · {missingDocuments} à traiter
-                        </Typography>
+                        <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
+                          <FolderOpen size={17} color={colors.greyDark} />
+                          <Box>
+                            <Typography color="text.secondary" variant="caption">Documents</Typography>
+                            <Typography sx={{ fontWeight: 750 }}>
+                              {item.documents?.length ?? 0} total, {missingDocuments} à traiter
+                            </Typography>
+                          </Box>
+                        </Stack>
                       </Paper>
                       <Paper variant="outlined" sx={{ p: 1.75, borderRadius: 2, bgcolor: colors.greyLight40 }}>
                         <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>

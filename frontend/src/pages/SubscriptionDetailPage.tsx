@@ -1,9 +1,10 @@
 import { Alert, Box, Button, Chip, Grid, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { ArrowLeft, ArrowRight, CreditCard } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { analyzeDocument, createDocument, resubmitDocument } from '../services/documents.service'
-import { createDirectPayment, createMandatePayment, regularizePayment, simulatePayment } from '../services/payments.service'
 import { getSubscriptionById, getSubscriptionNextActions } from '../services/subscriptions.service'
+import { colors } from '../theme/colors'
 import type { DocumentSummary, DocumentType, PaymentSummary, SubscriptionNextAction, SubscriptionStatus, SubscriptionSummary } from '../types'
 
 const statusLabel: Record<SubscriptionStatus, string> = {
@@ -83,8 +84,6 @@ export function SubscriptionDetailPage() {
   const [item, setItem] = useState<SubscriptionSummary | null>(null)
   const [actions, setActions] = useState<SubscriptionNextAction[]>([])
   const [documentForm, setDocumentForm] = useState<{ type: DocumentType; fileUrl: string }>({ type: 'school_certificate', fileUrl: '' })
-  const [paymentMode, setPaymentMode] = useState<'one_time' | 'monthly'>('one_time')
-  const [ibanLast4, setIbanLast4] = useState('1234')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -174,75 +173,14 @@ export function SubscriptionDetailPage() {
     }
   }
 
-  async function simulate() {
-    if (!id) return
-    setSaving(true)
-    setError('')
-    setSuccess('')
-    try {
-      const response = await simulatePayment({ subscriptionId: id, paymentMode })
-      await refresh()
-      setSuccess(`Simulation : ${(response.simulation.totalCents / 100).toFixed(2)} EUR.`)
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Simulation impossible.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function pay(simulateFailure = false) {
-    if (!id) return
-    setSaving(true)
-    setError('')
-    setSuccess('')
-    try {
-      await createDirectPayment({ subscriptionId: id, cardToken: 'demo-card-token', simulateFailure })
-      await refresh()
-      setSuccess(simulateFailure ? 'Paiement refuse simule. Une regularisation sera demandee.' : 'Paiement accepte. Le dossier passe en validation.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Paiement impossible.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function mandate() {
-    if (!id) return
-    setSaving(true)
-    setError('')
-    setSuccess('')
-    try {
-      await createMandatePayment({ subscriptionId: id, holderName: profileName(item?.payerProfile ?? item?.bearerProfile ?? null), ibanLast4, mandateAccepted: true })
-      await refresh()
-      setSuccess('Mandat SEPA prototype accepte.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Mandat impossible.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function regularize(idToRegularize: string) {
-    setSaving(true)
-    setError('')
-    setSuccess('')
-    try {
-      await regularizePayment(idToRegularize)
-      await refresh()
-      setSuccess('Paiement regularise.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Regularisation impossible.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   if (loading) return <Alert severity="info">Chargement du dossier...</Alert>
   if (!item) return <Alert severity="error">{error || 'Dossier introuvable.'}</Alert>
 
   return (
     <Stack spacing={3}>
-      <Button component={Link} to="/subscriptions" variant="outlined" sx={{ alignSelf: 'flex-start' }}>Retour aux souscriptions</Button>
+      <Button component={Link} startIcon={<ArrowLeft size={18} />} to="/subscriptions" variant="outlined" sx={{ alignSelf: 'flex-start' }}>
+        Retour aux souscriptions
+      </Button>
       {error && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
 
@@ -259,9 +197,26 @@ export function SubscriptionDetailPage() {
 
       <Grid container spacing={2}>
         {actions.map((action) => (
-          <Grid key={action.code} size={{ xs: 12, md: 4 }}>
-            <Alert severity={action.priority === 'high' ? 'warning' : 'info'} sx={{ height: '100%' }}>
-              <strong>{action.label}</strong><br />{action.detail}
+          <Grid key={action.code} size={{ xs: 12 }}>
+            <Alert
+              severity={action.priority === 'high' ? 'warning' : 'info'}
+              sx={{
+                height: '100%',
+                '& .MuiAlert-message': { width: '100%' },
+              }}
+            >
+              <Stack
+                direction={{ xs: 'column', lg: 'row' }}
+                spacing={{ xs: 0.25, lg: 1 }}
+                sx={{ alignItems: { lg: 'center' }, minWidth: 0 }}
+              >
+                <Typography component="strong" sx={{ fontWeight: 850, whiteSpace: 'nowrap' }}>
+                  {action.label}
+                </Typography>
+                <Typography color="text.secondary" sx={{ whiteSpace: { lg: 'nowrap' } }}>
+                  {action.detail}
+                </Typography>
+              </Stack>
             </Alert>
           </Grid>
         ))}
@@ -311,24 +266,24 @@ export function SubscriptionDetailPage() {
       </Paper>
 
       <Paper sx={{ p: 3, borderRadius: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>Paiement prototype</Typography>
-        <Typography color="text.secondary" sx={{ mb: 2 }}>Simulation gratuite : aucune vraie donnee bancaire n'est collectee.</Typography>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
-          <TextField label="Mode" onChange={(event) => setPaymentMode(event.target.value as 'one_time' | 'monthly')} select value={paymentMode} sx={{ minWidth: 180 }}>
-            <MenuItem value="one_time">Comptant</MenuItem>
-            <MenuItem value="monthly">Mensuel</MenuItem>
-          </TextField>
-          <Button disabled={saving} onClick={simulate} variant="outlined">Simuler</Button>
-          <Button disabled={saving} onClick={() => pay(false)} variant="contained">Payer demo</Button>
-          <Button color="warning" disabled={saving} onClick={() => pay(true)} variant="outlined">Simuler echec</Button>
+        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' }, mb: 2 }}>
+          <Box>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.75 }}>
+              <CreditCard size={20} color={colors.blueInteraction} />
+              <Typography variant="h6" sx={{ fontWeight: 800 }}>Paiements</Typography>
+            </Stack>
+            <Typography color="text.secondary">
+              Consultez l'historique de ce dossier. Les paiements et régularisations se font depuis l'espace dédié.
+            </Typography>
+          </Box>
+          <Button component={Link} endIcon={<ArrowRight size={18} />} to="/paiements" variant="contained">
+            Ouvrir paiements
+          </Button>
         </Stack>
-        <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ mb: 2 }}>
-          <TextField label="4 derniers chiffres IBAN" onChange={(event) => setIbanLast4(event.target.value)} value={ibanLast4} />
-          <Button disabled={saving || !/^\d{4}$/.test(ibanLast4)} onClick={mandate} variant="outlined">Signer mandat demo</Button>
-        </Stack>
+
         <TableContainer>
           <Table size="small">
-            <TableHead><TableRow><TableCell>Reference</TableCell><TableCell>Type</TableCell><TableCell>Montant</TableCell><TableCell>Statut</TableCell><TableCell align="right">Action</TableCell></TableRow></TableHead>
+            <TableHead><TableRow><TableCell>Reference</TableCell><TableCell>Type</TableCell><TableCell>Montant</TableCell><TableCell>Statut</TableCell></TableRow></TableHead>
             <TableBody>
               {(item.payments ?? []).map((payment) => (
                 <TableRow key={payment.id}>
@@ -336,11 +291,6 @@ export function SubscriptionDetailPage() {
                   <TableCell>{payment.type}</TableCell>
                   <TableCell>{formatAmount(payment)}</TableCell>
                   <TableCell><Chip color={statusTone[payment.status]} label={payment.status} size="small" /></TableCell>
-                  <TableCell align="right">
-                    <Button disabled={saving || !['rejected', 'cancelled', 'pending'].includes(payment.status)} onClick={() => regularize(payment.id)} size="small" variant="outlined">
-                      Regulariser
-                    </Button>
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
