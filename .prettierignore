@@ -1,0 +1,8 @@
+node_modules
+dist
+build
+coverage
+.git
+backend/drizzle
+*.tsbuildinfo
+package-lock.json

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or } from 'drizzle-orm'
+import { desc, eq, inArray, or } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { documents, onboardingSessions, payments, profiles, renewalEvents, subscriptions, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
