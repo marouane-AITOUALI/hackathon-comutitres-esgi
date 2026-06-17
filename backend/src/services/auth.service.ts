@@ -115,7 +115,11 @@ export async function registerUserWithOnboarding(input: RegisterWithOnboardingIn
   return requireDb().transaction(async (tx) => {
     const user = await createUser(tx, input)
     const bundle = await createOnboardingBundle(tx, user.id, input.onboarding)
-    const [offer] = await tx.select({ id: offers.id }).from(offers).where(eq(offers.id, input.recommendedOffer.offerId)).limit(1)
+    const offerConditions = [
+      input.recommendedOffer.offerId ? eq(offers.id, input.recommendedOffer.offerId) : undefined,
+      input.recommendedOffer.offerCode ? eq(offers.code, input.recommendedOffer.offerCode) : undefined,
+    ].filter((condition) => condition !== undefined)
+    const [offer] = await tx.select({ id: offers.id }).from(offers).where(or(...offerConditions)).limit(1)
     if (!offer) throw new AppError(400, 'Offre recommandee introuvable.')
 
     const [subscription] = await tx.insert(subscriptions).values({

@@ -9,8 +9,9 @@ const addressLineOptional = z.string().trim().max(160).regex(/^[\p{L}\p{N}\p{M}\
 const city = z.string().trim().min(2).max(100).regex(/^[\p{L}\p{M}\s'.-]+$/u, 'Ville invalide.')
 
 const recommendedOfferSchema = z.object({
-  offerId: z.uuid(),
-})
+  offerId: z.uuid().optional(),
+  offerCode: z.string().trim().min(1).optional(),
+}).refine((value) => value.offerId || value.offerCode, { message: 'Une offre recommandee est requise.' })
 
 export const registerSchema = z.object({
   firstName: humanName,
