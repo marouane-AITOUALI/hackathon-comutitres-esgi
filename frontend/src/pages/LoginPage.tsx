@@ -19,20 +19,29 @@ import CreditCardOutlinedIcon from '@mui/icons-material/CreditCardOutlined'
 import RouteOutlinedIcon from '@mui/icons-material/RouteOutlined'
 import NotificationsNoneOutlinedIcon from '@mui/icons-material/NotificationsNoneOutlined'
 import PhoneIphoneOutlinedIcon from '@mui/icons-material/PhoneIphoneOutlined'
-import { useState, type FormEvent } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useState, type FormEvent } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { IdfmConnectButton } from '../components/IdfmConnectButton'
 import { useAuth } from '../hooks/useAuth'
 import { login } from '../services/auth.service'
 
 export function LoginPage() {
   const navigate = useNavigate()
-  const { setSession } = useAuth()
+  const location = useLocation()
+  const { loading: authLoading, setSession, user } = useAuth()
   const [form, setForm] = useState({ email: '', password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
+
+  const redirectTo = typeof location.state === 'object' && location.state && 'from' in location.state && typeof location.state.from === 'string'
+    ? location.state.from
+    : '/dashboard'
+
+  useEffect(() => {
+    if (!authLoading && user) navigate(redirectTo, { replace: true })
+  }, [authLoading, navigate, redirectTo, user])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -41,7 +50,7 @@ export function LoginPage() {
     try {
       const response = await login(form)
       setSession(response.token, response.user)
-      navigate('/dashboard')
+      navigate(redirectTo, { replace: true })
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Connexion impossible.')
     } finally {
@@ -324,7 +333,7 @@ function FeatureItem({
   description: string
 }) {
   return (
-    <Stack direction="row" spacing={2} alignItems="flex-start">
+    <Stack direction="row" spacing={2} sx={{ alignItems: 'flex-start' }}>
       <Box
         sx={{
           display: 'flex',
