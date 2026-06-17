@@ -110,10 +110,11 @@ function getDocumentAction(document: DocumentSummary) {
   return 'Analyser'
 }
 
-function getDocumentName(fileUrl: string) {
-  const cleanUrl = fileUrl.split('?')[0]
+function getDocumentName(document: DocumentSummary) {
+  if (document.originalFilename) return document.originalFilename
+  const cleanUrl = document.fileUrl.split('?')[0]
   const lastSegment = cleanUrl.split('/').filter(Boolean).at(-1)
-  return lastSegment ? decodeURIComponent(lastSegment) : fileUrl
+  return lastSegment ? decodeURIComponent(lastSegment) : document.fileUrl
 }
 
 function getDocumentIssue(document: DocumentSummary) {
@@ -391,7 +392,7 @@ export function DocumentsPage() {
                               </Box>
                               <Box sx={{ minWidth: 0 }}>
                                 <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-                                  <Typography sx={{ fontWeight: 850, overflowWrap: 'anywhere' }}>{getDocumentName(document.fileUrl)}</Typography>
+                                  <Typography sx={{ fontWeight: 850, overflowWrap: 'anywhere' }}>{getDocumentName(document)}</Typography>
                                   {document.status === 'validated' ? (
                                     <Box
                                       aria-label={statusLabel[document.status]}

@@ -13,7 +13,7 @@ export const createForSubscription: RequestHandler = async (req, res) => {
   const { subscriptionId } = subscriptionDocumentsParamsSchema.parse(req.params)
   const body = createDocumentSchema.parse(req.body)
   const session = authSession(req)
-  res.status(201).json(await createDocument(session.sub, session.role, subscriptionId, body))
+  res.status(201).json(await createDocument(session.sub, session.role, subscriptionId, body, req.file))
 }
 
 export const analyzeDemo: RequestHandler = async (req, res) => {
@@ -50,7 +50,7 @@ export const resubmit: RequestHandler = async (req, res) => {
   const { id } = documentIdParamsSchema.parse(req.params)
   const body = resubmitDocumentSchema.parse(req.body)
   const session = authSession(req)
-  res.json(await resubmitDocument(session.sub, session.role, id, body))
+  res.json(await resubmitDocument(session.sub, session.role, id, body, req.file))
 }
 
 export const analyze: RequestHandler = async (req, res) => {

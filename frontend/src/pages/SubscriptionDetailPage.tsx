@@ -86,6 +86,10 @@ function confidence(document: DocumentSummary) {
     : 'Non analysée'
 }
 
+function displayDocumentName(document: DocumentSummary) {
+  return document.originalFilename ?? document.fileUrl
+}
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} Ko`
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`
@@ -209,10 +213,8 @@ export function SubscriptionDetailPage() {
         const file = preparedFiles[type]
         if (!file) continue
         const existingDocument = item?.documents.find((document) => document.type === type)
-        const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-')
-        const fileUrl = `uploads/${id}/${Date.now()}-${safeFileName}`
-        if (existingDocument) await resubmitDocument(existingDocument.id, { type, fileUrl })
-        else await createDocument(id, { type, fileUrl })
+        if (existingDocument) await resubmitDocument(existingDocument.id, { type, file })
+        else await createDocument(id, { type, file })
       }
       setPreparedFiles({})
       await refresh()
@@ -536,7 +538,7 @@ export function SubscriptionDetailPage() {
                           <Typography sx={{ fontWeight: 850 }}>{documentTypeLabels[type]}</Typography>
                           <Typography sx={{ color: meta.color, fontSize: 13, fontWeight: 750 }}>{meta.label}</Typography>
                           <Typography color="text.secondary" variant="body2" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {preparedFile?.name ?? document?.fileUrl ?? 'Aucun fichier déposé'}
+                            {preparedFile?.name ?? (document ? displayDocumentName(document) : null) ?? 'Aucun fichier déposé'}
                           </Typography>
                         </Box>
                       </Stack>

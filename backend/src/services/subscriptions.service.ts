@@ -2,6 +2,7 @@ import { and, desc, eq, or } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
+import { createPrivateSignedUrl } from './storage.service.js'
 import type { CreateSubscriptionInput, UpdateSubscriptionInput } from '../validation/subscription.schemas.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
@@ -91,6 +92,10 @@ async function enrich(subscription: SubscriptionRow) {
   const [onboardingSession] = subscription.onboardingSessionId ? await database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : []
   const subscriptionDocuments = await database.select().from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt))
   const subscriptionPayments = await database.select().from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt))
+  const documentsWithSignedUrls = await Promise.all(subscriptionDocuments.map(async (document) => ({
+    ...document,
+    signedUrl: await createPrivateSignedUrl(document.storageBucket, document.storagePath),
+  })))
 
   return {
     subscription,
@@ -103,7 +108,7 @@ async function enrich(subscription: SubscriptionRow) {
       subscriptionFor: onboardingSession.subscriptionFor,
       isBearerPayer: onboardingSession.isBearerPayer,
     } : null,
-    documents: subscriptionDocuments,
+    documents: documentsWithSignedUrls,
     payments: subscriptionPayments,
   }
 }

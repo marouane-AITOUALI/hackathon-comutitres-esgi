@@ -192,6 +192,8 @@ async function ensureSubscription(userId: string, bearerProfileId: string, payer
 
 async function ensureDocument(subscriptionId: string, type: 'identity' | 'school_certificate', status: 'pending' | 'validated', fileUrl: string) {
   const database = requireDb()
+  const [subscription] = await database.select().from(subscriptions).where(eq(subscriptions.id, subscriptionId)).limit(1)
+  if (!subscription) throw new Error(`La souscription ${subscriptionId} est introuvable pour le document demo.`)
   const analysisResult = status === 'validated'
     ? {
         provider: 'rules-prototype-free',
@@ -210,7 +212,20 @@ async function ensureDocument(subscriptionId: string, type: 'identity' | 'school
   if (existing) {
     const [updated] = await database
       .update(documents)
-      .set({ status, fileUrl, analysisResult, analyzedAt: status === 'validated' ? new Date() : null, rejectionReason: null, updatedAt: new Date() })
+      .set({
+        ownerId: subscription.userId,
+        status,
+        fileUrl,
+        storageBucket: 'subscription-documents',
+        storagePath: fileUrl,
+        originalFilename: fileUrl.split('/').at(-1) ?? fileUrl,
+        mimeType: 'application/pdf',
+        sizeBytes: 0,
+        analysisResult,
+        analyzedAt: status === 'validated' ? new Date() : null,
+        rejectionReason: null,
+        updatedAt: new Date(),
+      })
       .where(eq(documents.id, existing.id))
       .returning()
     if (!updated) throw new Error(`Le document demo ${type} n'a pas pu etre mis a jour.`)
@@ -219,7 +234,20 @@ async function ensureDocument(subscriptionId: string, type: 'identity' | 'school
 
   const [created] = await database
     .insert(documents)
-    .values({ subscriptionId, type, status, fileUrl, analysisResult, analyzedAt: status === 'validated' ? new Date() : null })
+    .values({
+      subscriptionId,
+      ownerId: subscription.userId,
+      type,
+      status,
+      fileUrl,
+      storageBucket: 'subscription-documents',
+      storagePath: fileUrl,
+      originalFilename: fileUrl.split('/').at(-1) ?? fileUrl,
+      mimeType: 'application/pdf',
+      sizeBytes: 0,
+      analysisResult,
+      analyzedAt: status === 'validated' ? new Date() : null,
+    })
     .returning()
 
   if (!created) throw new Error(`Le document demo ${type} n'a pas pu etre cree.`)
