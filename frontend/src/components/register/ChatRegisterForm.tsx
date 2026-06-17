@@ -109,7 +109,7 @@ export function ChatRegisterForm({ onRegister }: Props) {
       setTimeout(() => inputRef.current?.focus(), 50)
     }, 1000)
     return () => clearTimeout(t)
-  }, [restartKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [restartKey])
 
   function reset() {
     setMessages([])

@@ -1,4 +1,5 @@
 {
+  "id": "1fb2cbc6-c4f3-442b-8ae1-63a84d8602b7",
   "id": "ba8ee1a1-0e74-429e-8e3e-229f9e4e797d",
   "prevId": "a84edcf1-9086-4510-b927-b0d658ca7e39",
   "version": "7",
@@ -1294,6 +1295,41 @@
           "notNull": true,
           "default": "'user'"
         },
+        "phone": {
+          "name": "phone",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "preferred_contact": {
+          "name": "preferred_contact",
+          "type": "contact_preference",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'email'"
+        },
+        "accessibility_preference": {
+          "name": "accessibility_preference",
+          "type": "accessibility_preference",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'none'"
+        },
+        "marketing_opt_in": {
+          "name": "marketing_opt_in",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "marketing_opt_in_at": {
+          "name": "marketing_opt_in_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "rgpd_consent": {
           "name": "rgpd_consent",
           "type": "boolean",
@@ -1302,6 +1338,12 @@
         },
         "rgpd_consented_at": {
           "name": "rgpd_consented_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "profile_updated_at": {
+          "name": "profile_updated_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
@@ -1347,6 +1389,27 @@
     }
   },
   "enums": {
+    "public.accessibility_preference": {
+      "name": "accessibility_preference",
+      "schema": "public",
+      "values": [
+        "none",
+        "screen_reader",
+        "large_text",
+        "reduced_motion",
+        "plain_language",
+        "human_support"
+      ]
+    },
+    "public.contact_preference": {
+      "name": "contact_preference",
+      "schema": "public",
+      "values": [
+        "email",
+        "phone",
+        "sms"
+      ]
+    },
     "public.document_status": {
       "name": "document_status",
       "schema": "public",
@@ -1476,4 +1539,5 @@
     "schemas": {},
     "tables": {}
   }
+}
 }
