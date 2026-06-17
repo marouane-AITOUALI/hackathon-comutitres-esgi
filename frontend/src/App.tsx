@@ -9,6 +9,7 @@ import { LoginPage } from './pages/LoginPage'
 import { OnboardingChatPage } from './pages/OnboardingChatPage'
 import { OffersPage } from './pages/OffersPage'
 import { PaiementsPage } from './pages/PaiementsPage'
+import { PaymentFormPage } from './pages/PaymentFormPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { RegisterPage } from './pages/RegisterPage'
 import { SubscriptionDetailPage } from './pages/SubscriptionDetailPage'
@@ -27,6 +28,7 @@ function App() {
           <Route path="subscriptions/:id" element={<SubscriptionDetailPage />} />
           <Route path="offers" element={<OffersPage />} />
           <Route path="paiements" element={<PaiementsPage />} />
+          <Route path="paiements/nouveau" element={<PaymentFormPage />} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="profil" element={<ProfilePage />} />
           <Route path="support" element={<SupportPage />} />

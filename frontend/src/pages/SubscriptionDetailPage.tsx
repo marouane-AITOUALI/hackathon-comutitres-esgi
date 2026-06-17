@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Chip, Paper, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Checkbox, Chip, FormControlLabel, MenuItem, Paper, Stack, Tab, Tabs, TextField, Typography } from '@mui/material'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   AlertCircle,
@@ -8,8 +8,10 @@ import {
   Circle,
   ClipboardCheck,
   CloudUpload,
+  CreditCard,
   FileText,
   FolderOpen,
+  Landmark,
   RotateCcw,
   Send,
   ShieldCheck,
@@ -17,7 +19,10 @@ import {
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { analyzeDocument, createDocument, resubmitDocument } from '../services/documents.service'
+import { createDirectPayment, createMandatePayment, simulatePayment } from '../services/payments.service'
 import { getSubscriptionById } from '../services/subscriptions.service'
+import { CardPaymentFields } from '../components/payment/CardPaymentFields'
+import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
 import { colors } from '../theme/colors'
 import type { DocumentSummary, DocumentType, SubscriptionStatus, SubscriptionSummary } from '../types'
 
@@ -104,6 +109,10 @@ function documentStatusMeta(document?: DocumentSummary) {
   return { label: 'Déposé', color: colors.orangeDark, icon: <FileText size={18} /> }
 }
 
+function formatEuros(cents: number, currency = 'EUR') {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency }).format(cents / 100)
+}
+
 function uniqueDocumentTypes(types: DocumentType[]) {
   return types.filter((type, index, list) => list.indexOf(type) === index)
 }
@@ -119,6 +128,25 @@ export function SubscriptionDetailPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [paymentMode, setPaymentMode] = useState<'one_time' | 'monthly'>('one_time')
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'mandate'>('card')
+  const [cardNumber, setCardNumber] = useState('')
+  const [cardExpiry, setCardExpiry] = useState('')
+  const [cardCvv, setCardCvv] = useState('')
+  const [cardholderName, setCardholderName] = useState('')
+  const [simulateFailure, setSimulateFailure] = useState(false)
+  const [holderName, setHolderName] = useState('')
+  const [ibanLast4, setIbanLast4] = useState('')
+  const [mandateAccepted, setMandateAccepted] = useState(false)
+  const [simulation, setSimulation] = useState<{
+    amountCents: number
+    feesCents: number
+    totalCents: number
+    currency: string
+    warnings: string[]
+  } | null>(null)
+  const [simulating, setSimulating] = useState(false)
+  const [paying, setPaying] = useState(false)
 
   async function refresh() {
     if (!id) return
@@ -151,15 +179,27 @@ export function SubscriptionDetailPage() {
     return uniqueDocumentTypes(requiredTypes.length > 0 ? requiredTypes : existingTypes.length > 0 ? existingTypes : ['other'])
   }, [item])
 
-  const activeDocumentType = documentSteps[Math.min(activeStep, documentSteps.length - 1)]
-  const activeDocument = item?.documents.find((document) => document.type === activeDocumentType)
+  const activeDocumentType = activeStep < documentSteps.length ? documentSteps[activeStep] : undefined
+  const activeDocument = activeDocumentType ? item?.documents.find((document) => document.type === activeDocumentType) : undefined
   const preparedCount = documentSteps.filter((type) => preparedFiles[type]).length
   const completedCount = documentSteps.filter((type) => item?.documents.some((document) => document.type === type) || preparedFiles[type]).length
   const validatedCount = documentSteps.filter((type) => item?.documents.some((document) => document.type === type && document.status === 'validated')).length
   const allDocumentsDeposited = completedCount === documentSteps.length
-  const isFinalStep = activeStep >= documentSteps.length
-  const stepperItems = [...documentSteps, 'final' as const]
+  const paymentStepIndex = documentSteps.length
+  const finalStepIndex = documentSteps.length + 1
+  const isPaymentStep = activeStep === paymentStepIndex
+  const isFinalStep = activeStep === finalStepIndex
+  const stepperItems = [...documentSteps, 'payment' as const, 'final' as const]
   const selectedDocumentFile = activeDocumentType ? preparedFiles[activeDocumentType] ?? null : null
+  const hasCompletedPayment = (item?.payments ?? []).some((payment) => ['accepted', 'regularized'].includes(payment.status))
+
+  useEffect(() => {
+    if (item?.bearerProfile) {
+      const name = `${item.bearerProfile.firstName} ${item.bearerProfile.lastName}`
+      setHolderName(name)
+      setCardholderName(name)
+    }
+  }, [item])
 
   function selectDocumentFile(file?: File) {
     if (!file || !activeDocumentType) return
@@ -199,8 +239,60 @@ export function SubscriptionDetailPage() {
   }
 
   function goToStep(step: number) {
-    setActiveStep(Math.max(0, Math.min(step, documentSteps.length)))
+    setActiveStep(Math.max(0, Math.min(step, finalStepIndex)))
     if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  async function runPaymentSimulation() {
+    if (!id) return
+    setSimulating(true)
+    setError('')
+    setSuccess('')
+    setSimulation(null)
+    try {
+      const response = await simulatePayment({ subscriptionId: id, paymentMode })
+      setSimulation(response.simulation)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Simulation impossible.')
+    } finally {
+      setSimulating(false)
+    }
+  }
+
+  async function submitPayment() {
+    if (!id) return
+    if (!simulation) {
+      setError('Lancez d’abord une simulation pour connaître le montant.')
+      return
+    }
+
+    setPaying(true)
+    setError('')
+    setSuccess('')
+    try {
+      if (paymentMethod === 'card') {
+        const cardError = validateCardFields(cardNumber, cardExpiry, cardCvv, cardholderName)
+        if (cardError) {
+          setError(cardError)
+          return
+        }
+        await createDirectPayment({ subscriptionId: id, cardToken: buildCardToken(cardNumber), simulateFailure })
+        setSuccess(simulateFailure ? 'Paiement refusé (simulation).' : 'Paiement accepté.')
+      } else {
+        if (!mandateAccepted) {
+          setError('Vous devez accepter le mandat SEPA.')
+          return
+        }
+        await createMandatePayment({ subscriptionId: id, holderName, ibanLast4, mandateAccepted: true })
+        setSuccess('Mandat SEPA enregistré.')
+      }
+      await refresh()
+      setSimulation(null)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Paiement impossible.')
+    } finally {
+      setPaying(false)
+    }
   }
 
   async function submitFullDossier() {
@@ -253,7 +345,7 @@ export function SubscriptionDetailPage() {
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 850 }}>Constitution du dossier</Typography>
             <Typography color="text.secondary">
-              Déposez les justificatifs un par un. Le paiement sera traité ensuite dans l’espace Paiements si le dossier le nécessite.
+              Déposez les justificatifs, réglez le paiement, puis envoyez le dossier pour validation.
             </Typography>
           </Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -271,30 +363,37 @@ export function SubscriptionDetailPage() {
             mb: 3,
           }}
         >
-          <Box sx={{ display: 'flex', minWidth: { xs: 680, md: '100%' }, alignItems: 'flex-start' }}>
+          <Box sx={{ display: 'flex', minWidth: { xs: 820, md: '100%' }, alignItems: 'flex-start' }}>
             {stepperItems.map((step, index) => {
               const isFinal = step === 'final'
-              const type = isFinal ? null : step
+              const isPayment = step === 'payment'
+              const type = !isFinal && !isPayment ? step : null
               const document = type ? item.documents.find((candidate) => candidate.type === type) : undefined
               const preparedFile = type ? preparedFiles[type] : undefined
               const meta = isFinal
                 ? {
-                    label: allDocumentsDeposited ? 'Prêt à envoyer' : 'À compléter',
-                    color: allDocumentsDeposited ? colors.greenDark : colors.greyDark,
+                    label: allDocumentsDeposited && hasCompletedPayment ? 'Prêt à envoyer' : 'À compléter',
+                    color: allDocumentsDeposited && hasCompletedPayment ? colors.greenDark : colors.greyDark,
                     icon: <Send size={19} />,
                   }
-                : preparedFile && document?.status !== 'validated'
+                : isPayment
                   ? {
-                      label: 'Prêt à envoyer',
-                      color: colors.blueInteraction,
-                      icon: <CloudUpload size={18} />,
+                      label: hasCompletedPayment ? 'Payé' : allDocumentsDeposited ? 'À régler' : 'En attente',
+                      color: hasCompletedPayment ? colors.greenDark : allDocumentsDeposited ? colors.orangeDark : colors.greyDark,
+                      icon: <CreditCard size={19} />,
                     }
-                : documentStatusMeta(document)
+                  : preparedFile && document?.status !== 'validated'
+                    ? {
+                        label: 'Prêt à envoyer',
+                        color: colors.blueInteraction,
+                        icon: <CloudUpload size={18} />,
+                      }
+                    : documentStatusMeta(document)
               const selected = activeStep === index
-              const stepLabel = isFinal || !type ? 'Envoi final' : documentTypeLabels[type]
+              const stepLabel = isFinal ? 'Envoi final' : isPayment ? 'Paiement' : documentTypeLabels[type!]
 
               return (
-                <Box key={isFinal ? 'final' : type} sx={{ flex: 1, minWidth: 120, position: 'relative', textAlign: 'center' }}>
+                <Box key={isFinal ? 'final' : isPayment ? 'payment' : type} sx={{ flex: 1, minWidth: 110, position: 'relative', textAlign: 'center' }}>
                   {index < stepperItems.length - 1 && (
                     <Box
                       sx={{
@@ -346,7 +445,7 @@ export function SubscriptionDetailPage() {
           </Box>
         </Box>
 
-        {!isFinalStep && activeDocumentType && (
+        {!isFinalStep && !isPaymentStep && activeDocumentType && (
           <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 3 }}>
             <Stack spacing={2.5} sx={{ alignItems: 'center' }}>
               <Box sx={{ width: '100%', maxWidth: 820 }}>
@@ -479,9 +578,98 @@ export function SubscriptionDetailPage() {
                 Précédent
               </Button>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
-                <Button endIcon={<ArrowRight size={17} />} onClick={() => goToStep(activeStep + 1)} variant="outlined">
+                <Button
+                  disabled={activeStep === documentSteps.length - 1 && !allDocumentsDeposited}
+                  endIcon={<ArrowRight size={17} />}
+                  onClick={() => goToStep(activeStep === documentSteps.length - 1 ? paymentStepIndex : activeStep + 1)}
+                  variant="outlined"
+                >
                   Suivant
                 </Button>
+              </Stack>
+            </Stack>
+          </Paper>
+        )}
+
+        {isPaymentStep && (
+          <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 3 }}>
+            <Stack spacing={2.5}>
+              <Box>
+                <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 1 }}>
+                  <CreditCard size={20} color={colors.blueInteraction} />
+                  <Typography variant="h6" sx={{ fontWeight: 850 }}>Règlement du forfait</Typography>
+                </Stack>
+                <Typography color="text.secondary">
+                  Après le certificat de scolarité, réglez votre forfait avant l’envoi final.
+                </Typography>
+              </Box>
+
+              {!allDocumentsDeposited && (
+                <Alert severity="warning">
+                  Terminez d’abord le dépôt de tous les justificatifs.
+                </Alert>
+              )}
+
+              {hasCompletedPayment && (
+                <Alert severity="success" icon={<CheckCircle2 size={18} />}>
+                  Paiement enregistré. Vous pouvez passer à l’envoi final.
+                </Alert>
+              )}
+
+              {allDocumentsDeposited && !hasCompletedPayment && (
+                <>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'flex-end' } }}>
+                    <TextField select label="Fréquence" value={paymentMode} onChange={(e) => { setPaymentMode(e.target.value as 'one_time' | 'monthly'); setSimulation(null) }} sx={{ minWidth: 220 }}>
+                      <MenuItem value="one_time">Paiement unique</MenuItem>
+                      <MenuItem value="monthly">Mensualisation</MenuItem>
+                    </TextField>
+                    <Button disabled={simulating} onClick={() => void runPaymentSimulation()} variant="outlined" sx={{ fontWeight: 700, minHeight: 44 }}>
+                      {simulating ? 'Simulation...' : 'Simuler le montant'}
+                    </Button>
+                  </Stack>
+
+                  {simulation && (
+                    <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, bgcolor: colors.blueLight }}>
+                      <Typography sx={{ fontWeight: 800 }}>Total : {formatEuros(simulation.totalCents, simulation.currency)}</Typography>
+                    </Paper>
+                  )}
+
+                  <Tabs value={paymentMethod} onChange={(_, v: 'card' | 'mandate') => setPaymentMethod(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                    <Tab icon={<CreditCard size={16} />} iconPosition="start" label="Carte bancaire" value="card" sx={{ fontWeight: 700, textTransform: 'none' }} />
+                    <Tab icon={<Landmark size={16} />} iconPosition="start" label="Prélèvement SEPA" value="mandate" sx={{ fontWeight: 700, textTransform: 'none' }} />
+                  </Tabs>
+
+                  {paymentMethod === 'card' ? (
+                    <Stack spacing={2}>
+                      <CardPaymentFields
+                        cardNumber={cardNumber}
+                        onCardNumberChange={setCardNumber}
+                        expiry={cardExpiry}
+                        onExpiryChange={setCardExpiry}
+                        cvv={cardCvv}
+                        onCvvChange={setCardCvv}
+                        cardholderName={cardholderName}
+                        onCardholderNameChange={setCardholderName}
+                      />
+                      <FormControlLabel control={<Checkbox checked={simulateFailure} onChange={(e) => setSimulateFailure(e.target.checked)} />} label="Simuler un refus" />
+                    </Stack>
+                  ) : (
+                    <Stack spacing={2}>
+                      <TextField label="Titulaire du compte" value={holderName} onChange={(e) => setHolderName(e.target.value)} fullWidth />
+                      <TextField label="4 derniers chiffres IBAN" value={ibanLast4} onChange={(e) => setIbanLast4(e.target.value.replace(/\D/g, '').slice(0, 4))} fullWidth />
+                      <FormControlLabel control={<Checkbox checked={mandateAccepted} onChange={(e) => setMandateAccepted(e.target.checked)} />} label="J’autorise le prélèvement SEPA" />
+                    </Stack>
+                  )}
+
+                  <Button disabled={paying || !simulation} onClick={() => void submitPayment()} variant="contained" sx={{ alignSelf: { sm: 'flex-start' }, fontWeight: 700 }}>
+                    {paying ? 'Traitement...' : paymentMethod === 'card' ? 'Payer maintenant' : 'Valider le mandat'}
+                  </Button>
+                </>
+              )}
+
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between' }}>
+                <Button onClick={() => goToStep(paymentStepIndex - 1)} startIcon={<ArrowLeft size={17} />} variant="outlined">Précédent</Button>
+                <Button disabled={!hasCompletedPayment} endIcon={<ArrowRight size={17} />} onClick={() => goToStep(finalStepIndex)} variant="outlined">Suivant</Button>
               </Stack>
             </Stack>
           </Paper>
@@ -497,9 +685,11 @@ export function SubscriptionDetailPage() {
                     <Typography variant="h6" sx={{ fontWeight: 850 }}>Vérification avant envoi</Typography>
                   </Stack>
                   <Typography color="text.secondary">
-                    {allDocumentsDeposited
-                      ? `${completedCount} document(s) sont déposés. ${validatedCount} sont déjà validés.`
-                      : `${documentSteps.length - completedCount} document(s) restent à déposer avant l'envoi du dossier.`}
+                    {allDocumentsDeposited && hasCompletedPayment
+                      ? `${completedCount} document(s) déposés, paiement validé.`
+                      : !allDocumentsDeposited
+                        ? `${documentSteps.length - completedCount} document(s) restent à déposer.`
+                        : 'Validez le paiement avant l’envoi final.'}
                   </Typography>
                 </Box>
               </Stack>
@@ -549,7 +739,7 @@ export function SubscriptionDetailPage() {
 
               <Stack spacing={1.5} sx={{ alignItems: 'center', pt: 1 }}>
                 <Button
-                  disabled={!allDocumentsDeposited || saving}
+                  disabled={!allDocumentsDeposited || !hasCompletedPayment || saving}
                   onClick={submitFullDossier}
                   startIcon={<Send size={20} />}
                   variant="contained"
@@ -558,12 +748,15 @@ export function SubscriptionDetailPage() {
                   Envoyer pour validation
                 </Button>
                 <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-                  <ShieldCheck size={18} color={allDocumentsDeposited ? colors.greenDark : colors.greyDark} />
+                  <ShieldCheck size={18} color={allDocumentsDeposited && hasCompletedPayment ? colors.greenDark : colors.greyDark} />
                   <Typography color="text.secondary" variant="body2">
-                    Les documents seront transmis à Comutitres pour contrôle.
+                    Documents et paiement seront transmis à Comutitres.
                   </Typography>
                 </Stack>
               </Stack>
+              <Button onClick={() => goToStep(paymentStepIndex)} startIcon={<ArrowLeft size={17} />} variant="outlined" sx={{ alignSelf: 'flex-start' }}>
+                Retour au paiement
+              </Button>
             </Stack>
           </Paper>
         )}

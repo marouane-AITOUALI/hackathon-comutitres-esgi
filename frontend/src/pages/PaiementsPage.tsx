@@ -67,8 +67,15 @@ export function PaiementsPage() {
   return (
     <Stack spacing={3}>
       <Box>
-        <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>Paiements</Typography>
-        <Typography color="text.secondary">Historique et regularisation des paiements simules du prototype.</Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' }, mb: 0.5 }}>
+          <Box>
+            <Typography variant="h4" sx={{ fontWeight: 800 }}>Paiements</Typography>
+            <Typography color="text.secondary">Historique et régularisation des paiements.</Typography>
+          </Box>
+          <Button component={Link} to="/paiements/nouveau" variant="contained" sx={{ fontWeight: 700, borderRadius: 2, whiteSpace: 'nowrap' }}>
+            Effectuer un paiement
+          </Button>
+        </Stack>
       </Box>
 
       {error && <Alert severity="error">{error}</Alert>}
