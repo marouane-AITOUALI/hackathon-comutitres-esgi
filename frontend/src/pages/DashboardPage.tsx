@@ -111,7 +111,10 @@ export function DashboardPage() {
                     {item.bearerProfile ? `${item.bearerProfile.firstName} ${item.bearerProfile.lastName}` : 'Profil porteur manquant'}
                   </Typography>
                 </Box>
-                <Chip color={statusTone[item.subscription.status]} label={statusLabel[item.subscription.status] ?? item.subscription.status} />
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' } }}>
+                  <Chip color={statusTone[item.subscription.status]} label={statusLabel[item.subscription.status] ?? item.subscription.status} />
+                  <Button component={Link} size="small" to={`/subscriptions/${item.subscription.id}`} variant="outlined">Suivre</Button>
+                </Stack>
               </Stack>
             </Paper>
           ))}

@@ -89,6 +89,8 @@ async function enrich(subscription: SubscriptionRow) {
   const [bearerProfile] = subscription.bearerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.bearerProfileId)).limit(1) : []
   const [payerProfile] = subscription.payerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : []
   const [onboardingSession] = subscription.onboardingSessionId ? await database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : []
+  const subscriptionDocuments = await database.select().from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt))
+  const subscriptionPayments = await database.select().from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt))
 
   return {
     subscription,
@@ -101,6 +103,8 @@ async function enrich(subscription: SubscriptionRow) {
       subscriptionFor: onboardingSession.subscriptionFor,
       isBearerPayer: onboardingSession.isBearerPayer,
     } : null,
+    documents: subscriptionDocuments,
+    payments: subscriptionPayments,
   }
 }
 

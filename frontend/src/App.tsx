@@ -14,6 +14,7 @@ import { OffersPage } from './pages/OffersPage'
 import { PaiementsPage } from './pages/PaiementsPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { RegisterPage } from './pages/RegisterPage'
+import { SubscriptionDetailPage } from './pages/SubscriptionDetailPage'
 import { SubscriptionsPage } from './pages/SubscriptionsPage'
 import { SupportPage } from './pages/SupportPage'
 
@@ -29,6 +30,7 @@ function App() {
         <Route element={<ClientLayout />}>
           <Route path="dashboard" element={<DashboardPage />} />
           <Route path="subscriptions" element={<SubscriptionsPage />} />
+          <Route path="subscriptions/:id" element={<SubscriptionDetailPage />} />
           <Route path="offers" element={<OffersPage />} />
           <Route path="paiements" element={<PaiementsPage />} />
           <Route path="documents" element={<DocumentsPage />} />
