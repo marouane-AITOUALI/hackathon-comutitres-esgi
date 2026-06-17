@@ -1,5 +1,5 @@
 import { Alert, Box, Button, Chip, LinearProgress, Paper, Stack, Typography } from '@mui/material'
-import { ArrowRight, BadgeCheck, CalendarClock, CreditCard, FileWarning, Route, Sparkles } from 'lucide-react'
+import { ArrowRight, BadgeCheck, CalendarClock, CreditCard, FileWarning, Route } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { listOffers } from '../services/offers.service'
@@ -110,7 +110,7 @@ export function DashboardPage() {
       >
         <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3} sx={{ justifyContent: 'space-between' }}>
           <Box sx={{ maxWidth: 720 }}>
-            <Chip icon={<Sparkles size={15} />} label="Espace client Comutitres" color="primary" sx={{ mb: 2, fontWeight: 700 }} />
+            <Chip icon={<BadgeCheck size={15} />} label="Espace client Comutitres" color="primary" sx={{ mb: 2, fontWeight: 700 }} />
             <Typography variant="h4" sx={{ fontWeight: 850, mb: 1, color: colors.anthracite }}>
               Pilotez vos titres, vos droits et vos justificatifs en un coup d'oeil.
             </Typography>
@@ -118,12 +118,25 @@ export function DashboardPage() {
               Retrouvez les actions prioritaires pour maintenir vos droits à circuler, suivre les profils porteur/payeur et préparer vos renouvellements.
             </Typography>
           </Box>
-          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignSelf: { lg: 'center' } }}>
-            <Button component={Link} to="/onboarding" variant="contained" endIcon={<ArrowRight size={18} />}>
-              Nouveau parcours
+          <Stack direction={{ xs: 'row', sm: 'row' }} spacing={1.5} sx={{ alignSelf: { lg: 'center' }, flexWrap: 'wrap' }}>
+            <Button
+              aria-label="Démarrer un nouveau parcours"
+              component={Link}
+              to="/onboarding"
+              variant="contained"
+              endIcon={<ArrowRight size={18} />}
+              sx={{ minWidth: { xs: 132, sm: 144 }, whiteSpace: 'nowrap' }}
+            >
+              Démarrer
             </Button>
-            <Button component={Link} to="/subscriptions" variant="outlined">
-              Voir mes dossiers
+            <Button
+              aria-label="Voir mes dossiers"
+              component={Link}
+              to="/subscriptions"
+              variant="outlined"
+              sx={{ minWidth: { xs: 118, sm: 132 }, whiteSpace: 'nowrap' }}
+            >
+              Dossiers
             </Button>
           </Stack>
         </Stack>
@@ -211,13 +224,31 @@ export function DashboardPage() {
             <Typography variant="h6" sx={{ fontWeight: 850, mb: 2 }}>Offres pertinentes</Typography>
             <Stack spacing={1.5}>
               {featuredOffers.map((offer) => (
-                <Paper key={offer.id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'flex-start' }}>
+                <Paper
+                  key={offer.id}
+                  component={Link}
+                  to={`/offers?offer=${offer.id}`}
+                  variant="outlined"
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    color: 'inherit',
+                    display: 'block',
+                    textDecoration: 'none',
+                    transition: 'border-color 0.2s, transform 0.2s',
+                    '&:hover': {
+                      borderColor: colors.blueInteraction,
+                      transform: 'translateY(-1px)',
+                    },
+                  }}
+                >
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                     <Route size={18} color={colors.blueInteraction} />
-                    <Box>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography sx={{ fontWeight: 800 }}>{offer.name}</Typography>
                       <Typography color="text.secondary" variant="body2">{offer.description ?? 'Offre disponible au catalogue.'}</Typography>
                     </Box>
+                    <ArrowRight size={16} color={colors.greyDark} />
                   </Stack>
                 </Paper>
               ))}
