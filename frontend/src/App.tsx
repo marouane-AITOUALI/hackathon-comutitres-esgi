@@ -4,8 +4,10 @@ import { ClientLayout } from './components/ClientLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { DashboardPage } from './pages/DashboardPage'
 import { DocumentsPage } from './pages/DocumentsPage'
+import { FooterInfoPage } from './pages/FooterInfoPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
+import { MobileAppPage } from './pages/MobileAppPage'
 import { OnboardingChatPage } from './pages/OnboardingChatPage'
 import { OffersPage } from './pages/OffersPage'
 import { PaiementsPage } from './pages/PaiementsPage'
@@ -30,12 +32,14 @@ function App() {
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="profil" element={<ProfilePage />} />
           <Route path="support" element={<SupportPage />} />
+          <Route path="mobile-app" element={<MobileAppPage />} />
         </Route>
         <Route path="onboarding" element={<OnboardingChatPage />} />
         <Route path="onboarding/*" element={<Navigate replace to="/onboarding" />} />
       </Route>
       <Route element={<AppLayout />}>
         <Route index element={<HomePage />} />
+        <Route path="infos/:page" element={<FooterInfoPage />} />
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />
     </Routes>

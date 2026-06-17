@@ -23,6 +23,7 @@ function getActiveKey(pathname: string) {
   if (pathname.startsWith('/documents')) return 'documents'
   if (pathname.startsWith('/profil')) return 'profil'
   if (pathname.startsWith('/support')) return 'support'
+  if (pathname.startsWith('/mobile-app')) return 'mobile-app'
   return 'dashboard'
 }
 
