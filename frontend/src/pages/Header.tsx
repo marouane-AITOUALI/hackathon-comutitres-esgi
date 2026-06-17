@@ -20,9 +20,17 @@ interface HeaderProps {
   userName?: string
   greeting?: string
   onMenuToggle?: () => void
+  onLogout?: () => void
+  onProfileClick?: () => void
 }
 
-export function Header({ userName = 'Alice Dupont', greeting = 'Bonjour Alice', onMenuToggle }: HeaderProps) {
+export function Header({
+  userName = 'Alice Dupont',
+  greeting = 'Bonjour Alice',
+  onMenuToggle,
+  onLogout,
+  onProfileClick,
+}: HeaderProps) {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
 
@@ -54,7 +62,9 @@ export function Header({ userName = 'Alice Dupont', greeting = 'Bonjour Alice', 
       position="sticky"
       elevation={0}
       sx={{
-        bgcolor: 'transparent',
+        top: 0,
+        flexShrink: 0,
+        bgcolor: 'background.default',
         borderBottom: 'none',
         color: colors.anthracite,
         zIndex: theme.zIndex.appBar,
@@ -64,8 +74,8 @@ export function Header({ userName = 'Alice Dupont', greeting = 'Bonjour Alice', 
         sx={{
           minHeight: { xs: 64, md: 116 },
           alignItems: { xs: 'center', md: 'flex-start' },
-          pt: { xs: 0, md: '50px' },
-          px: { xs: 2, md: 0.5 },
+          pt: { xs: 0, md: 4 },
+          px: { xs: 2, md: 4 },
           gap: 1,
           justifyContent: 'space-between',
         }}
@@ -243,7 +253,10 @@ export function Header({ userName = 'Alice Dupont', greeting = 'Bonjour Alice', 
                 <MenuList dense>
                   <MenuItem
                     sx={{ gap: 1.5, py: 1.2, px: 2, fontSize: 14, color: colors.anthracite }}
-                    onClick={() => setProfileOpen(false)}
+                    onClick={() => {
+                      setProfileOpen(false)
+                      onProfileClick?.()
+                    }}
                   >
                     <User size={16} color={colors.greyDark} />
                     Profil
@@ -251,10 +264,13 @@ export function Header({ userName = 'Alice Dupont', greeting = 'Bonjour Alice', 
                   <Divider sx={{ my: 0.5 }} />
                   <MenuItem
                     sx={{ gap: 1.5, py: 1.2, px: 2, fontSize: 14, color: colors.redDark }}
-                    onClick={() => setProfileOpen(false)}
+                    onClick={() => {
+                      setProfileOpen(false)
+                      onLogout?.()
+                    }}
                   >
                     <LogOut size={16} color={colors.redDark} />
-                    Déconnexion
+                    Se déconnecter
                   </MenuItem>
                 </MenuList>
               </Paper>
