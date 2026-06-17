@@ -1,14 +1,16 @@
-import { Box, Button, Chip, CircularProgress, IconButton, Stack, TextField, Typography } from '@mui/material'
+import { Box, Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton, Stack, TextField, Typography } from '@mui/material'
 import SendIcon from '@mui/icons-material/Send'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import EditIcon from '@mui/icons-material/Edit'
 import CloseIcon from '@mui/icons-material/Close'
 import { useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { LandmarkStepper } from '../components/onboarding/LandmarkStepper'
-import { createOnboarding, getRecommendation } from '../services/onboarding.service'
+import { clearOnboardingDraft, getRecommendation } from '../services/onboarding.service'
+import { registerWithOnboarding } from '../services/auth.service'
+import { useAuth } from '../hooks/useAuth'
 import type { OfferRecommendation, OnboardingAnswer, OnboardingDraft } from '../types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -32,6 +34,21 @@ interface ChatStep {
 type TextMessage   = { id: number; from: 'bot' | 'user'; kind: 'text'; text: string }
 type ResultMessage = { id: number; from: 'bot'; kind: 'result'; data: OfferRecommendation }
 type Message = TextMessage | ResultMessage
+
+const SUBSCRIPTION_ACCOUNT_TEXT = {
+  title: 'Créer le compte et ouvrir la souscription',
+  description: "Le compte sera créé avec le profil renseigné, puis l'abonnement recommandé sera associé à votre dossier.",
+  firstName: 'Prénom',
+  lastName: 'Nom',
+  email: 'Email du compte',
+  password: 'Mot de passe',
+  passwordHelp: '10 caractères minimum avec une majuscule, une minuscule et un chiffre.',
+  consent: "J'accepte le traitement de mes données pour créer mon compte et gérer ma souscription.",
+  submit: 'Créer mon compte et continuer',
+  loading: 'Création du dossier...',
+  restart: 'Recommencer depuis le début',
+  success: 'Votre compte est créé et votre dossier de souscription est ouvert.',
+} as const
 
 // ─── Steps ───────────────────────────────────────────────────────────────────
 
@@ -309,6 +326,8 @@ function advance(fromIdx: number, draft: OnboardingDraft): { nextIdx: number; dr
 
 export function OnboardingChatPage() {
   const location  = useLocation()
+  const navigate = useNavigate()
+  const { setSession } = useAuth()
   const fromSimpleForm = (location.state as { fromSimpleForm?: boolean } | null)?.fromSimpleForm ?? false
 
   // Core chat state
@@ -326,6 +345,15 @@ export function OnboardingChatPage() {
   const [error,       setError]       = useState('')
   const [loading,     setLoading]     = useState(false)
   const [isDone,      setIsDone]      = useState(false)
+  const [recommendation, setRecommendation] = useState<OfferRecommendation | null>(null)
+  const [creatingSubscription, setCreatingSubscription] = useState(false)
+  const [accountForm, setAccountForm] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    rgpdConsent: false,
+  })
 
   // Restart
   const [restartKey, setRestartKey] = useState(0)
@@ -358,6 +386,9 @@ export function OnboardingChatPage() {
     setShowYesNo(false);setYesNoField('');  setError('')
     setLoading(false); setIsDone(false);    setIsEditMode(false)
     setShowEdit(false);setReturnToIdx(0)
+    setRecommendation(null)
+    setCreatingSubscription(false)
+    setAccountForm({ firstName: '', lastName: '', email: '', password: '', rgpdConsent: false })
     setRestartKey(k => k + 1)
   }
 
@@ -483,9 +514,14 @@ export function OnboardingChatPage() {
     setLoading(true)
     try {
       const answer  = finalDraft as OnboardingAnswer
-      const created = await createOnboarding(answer)
-      sessionStorage.setItem('comutitres_onboarding_session_id', created.session?.id ?? created.id)
       const rec = await getRecommendation(answer)
+      setRecommendation(rec)
+      setAccountForm((current) => ({
+        ...current,
+        firstName: current.firstName || (answer.isBearerPayer ? answer.bearer.firstName : answer.payer?.firstName ?? answer.bearer.firstName),
+        lastName: current.lastName || (answer.isBearerPayer ? answer.bearer.lastName : answer.payer?.lastName ?? answer.bearer.lastName),
+        email: current.email || (!answer.isBearerPayer ? answer.payer?.email ?? '' : ''),
+      }))
       setMessages(prev => [...prev, { id: nextId(), from: 'bot' as const, kind: 'result' as const, data: rec }])
       setIsDone(true)
     } catch (err) {
@@ -496,6 +532,40 @@ export function OnboardingChatPage() {
   }
 
   // ── Derived ─────────────────────────────────────────────────────────────────
+
+  async function handleCreateAccountAndSubscription() {
+    const answer = draft as OnboardingAnswer
+    if (!recommendation) { setError("L'offre recommandée est manquante."); return }
+    if (!accountForm.firstName.trim() || !accountForm.lastName.trim()) { setError('Le prénom et le nom du titulaire du compte sont requis.'); return }
+    if (!accountForm.email.includes('@')) { setError('Adresse e-mail invalide.'); return }
+    if (accountForm.password.length < 10 || !/[a-z]/.test(accountForm.password) || !/[A-Z]/.test(accountForm.password) || !/[0-9]/.test(accountForm.password)) {
+      setError('Le mot de passe doit contenir au moins 10 caractères, une minuscule, une majuscule et un chiffre.')
+      return
+    }
+    if (!accountForm.rgpdConsent) { setError('Le consentement RGPD est requis pour créer le compte.'); return }
+
+    setError('')
+    setCreatingSubscription(true)
+    try {
+      const session = await registerWithOnboarding({
+        ...accountForm,
+        firstName: accountForm.firstName.trim(),
+        lastName: accountForm.lastName.trim(),
+        email: accountForm.email.trim(),
+        onboarding: answer,
+        recommendedOffer: recommendation,
+      })
+      setSession(session.token, session.user)
+      clearOnboardingDraft()
+      if (session.onboardingSession?.id) sessionStorage.setItem('comutitres_onboarding_session_id', session.onboardingSession.id)
+      addBot(SUBSCRIPTION_ACCOUNT_TEXT.success)
+      navigate(session.subscription?.id ? `/subscriptions/${session.subscription.id}` : '/subscriptions')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'La création du compte et de la souscription a échoué.')
+    } finally {
+      setCreatingSubscription(false)
+    }
+  }
 
   const currentSection  = isDone ? 5 : section
   const answeredSteps   = STEPS
@@ -811,10 +881,66 @@ export function OnboardingChatPage() {
 
           {/* ── Done actions ── */}
           {isDone && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, alignItems: 'center', mt: 2, mb: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 2, mb: 1, ml: { xs: 0, sm: 4.5 }, p: 2, bgcolor: '#fff', border: '1px solid rgba(26,86,219,0.12)', borderRadius: 3, boxShadow: '0 4px 20px rgba(26,86,219,0.08)' }}>
+              <Box>
+                <Typography sx={{ fontWeight: 900, fontSize: 16, color: '#1e3a8a' }}>
+                  {SUBSCRIPTION_ACCOUNT_TEXT.title}
+                </Typography>
+                <Typography sx={{ fontSize: 12.5, color: 'text.secondary', mt: 0.5, lineHeight: 1.5 }}>
+                  {SUBSCRIPTION_ACCOUNT_TEXT.description}
+                </Typography>
+              </Box>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
+                <TextField
+                  label={SUBSCRIPTION_ACCOUNT_TEXT.firstName}
+                  size="small"
+                  value={accountForm.firstName}
+                  onChange={(event) => setAccountForm((current) => ({ ...current, firstName: event.target.value }))}
+                  fullWidth
+                />
+                <TextField
+                  label={SUBSCRIPTION_ACCOUNT_TEXT.lastName}
+                  size="small"
+                  value={accountForm.lastName}
+                  onChange={(event) => setAccountForm((current) => ({ ...current, lastName: event.target.value }))}
+                  fullWidth
+                />
+              </Stack>
+              <TextField
+                label={SUBSCRIPTION_ACCOUNT_TEXT.email}
+                type="email"
+                size="small"
+                value={accountForm.email}
+                onChange={(event) => setAccountForm((current) => ({ ...current, email: event.target.value }))}
+                fullWidth
+              />
+              <TextField
+                label={SUBSCRIPTION_ACCOUNT_TEXT.password}
+                type="password"
+                size="small"
+                value={accountForm.password}
+                onChange={(event) => setAccountForm((current) => ({ ...current, password: event.target.value }))}
+                helperText={SUBSCRIPTION_ACCOUNT_TEXT.passwordHelp}
+                fullWidth
+              />
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    checked={accountForm.rgpdConsent}
+                    onChange={(event) => setAccountForm((current) => ({ ...current, rgpdConsent: event.target.checked }))}
+                    size="small"
+                  />
+                }
+                label={
+                  <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
+                    {SUBSCRIPTION_ACCOUNT_TEXT.consent}
+                  </Typography>
+                }
+              />
               <Button
                 variant="contained"
-                onClick={() => addBot("La souscription complète sera disponible dans une prochaine version. Merci pour votre confiance !")}
+                onClick={handleCreateAccountAndSubscription}
+                disabled={creatingSubscription}
                 sx={{
                   borderRadius: 99, textTransform: 'none', fontSize: 14, fontWeight: 800,
                   px: 4, py: 1.25,
@@ -824,14 +950,14 @@ export function OnboardingChatPage() {
                   transition: 'all 0.2s',
                 }}
               >
-                Continuer la souscription →
+                {creatingSubscription ? SUBSCRIPTION_ACCOUNT_TEXT.loading : SUBSCRIPTION_ACCOUNT_TEXT.submit}
               </Button>
               <Button
                 variant="text"
                 onClick={reset}
                 sx={{ textTransform: 'none', fontSize: 12.5, color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
               >
-                Recommencer depuis le début
+                {SUBSCRIPTION_ACCOUNT_TEXT.restart}
               </Button>
             </Box>
           )}

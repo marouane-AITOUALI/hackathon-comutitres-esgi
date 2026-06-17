@@ -25,6 +25,8 @@ export type AuthUser = User
 export interface AuthResponse {
   user: AuthUser
   token: string
+  subscription?: SubscriptionEntity | null
+  onboardingSession?: OnboardingSessionSummary
 }
 
 export interface ApiError {
