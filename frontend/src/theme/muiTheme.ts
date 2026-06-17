@@ -7,7 +7,7 @@ export const muiTheme = createTheme({
     success: { main: colors.greenDark },
     error: { main: colors.redDark },
     text: { primary: colors.anthracite, secondary: colors.greyDark },
-    background: { default: colors.blueLight, paper: colors.white },
+    background: { default: colors.white, paper: colors.white },
     divider: colors.greyMedium,
   },
   shape: { borderRadius: 14 },
