@@ -7,6 +7,9 @@ import { DocumentsPage } from './pages/DocumentsPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
 import { OnboardingChatPage } from './pages/OnboardingChatPage'
+import { OffersPage } from './pages/OffersPage'
+import { PaiementsPage } from './pages/PaiementsPage'
+import { ProfilePage } from './pages/ProfilePage'
 import { RegisterPage } from './pages/RegisterPage'
 import { SubscriptionDetailPage } from './pages/SubscriptionDetailPage'
 import { SubscriptionsPage } from './pages/SubscriptionsPage'
@@ -18,6 +21,16 @@ function App() {
       <Route path="auth/login" element={<LoginPage />} />
       <Route path="auth/register" element={<RegisterPage />} />
       <Route element={<ProtectedRoute />}>
+        <Route element={<ClientLayout />}>
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="subscriptions" element={<SubscriptionsPage />} />
+          <Route path="subscriptions/:id" element={<SubscriptionDetailPage />} />
+          <Route path="offers" element={<OffersPage />} />
+          <Route path="paiements" element={<PaiementsPage />} />
+          <Route path="documents" element={<DocumentsPage />} />
+          <Route path="profil" element={<ProfilePage />} />
+          <Route path="support" element={<SupportPage />} />
+        </Route>
         <Route path="onboarding" element={<OnboardingChatPage />} />
         <Route path="onboarding/*" element={<Navigate replace to="/onboarding" />} />
       </Route>

@@ -484,7 +484,7 @@ export function OnboardingChatPage() {
     try {
       const answer  = finalDraft as OnboardingAnswer
       const created = await createOnboarding(answer)
-      sessionStorage.setItem('comutitres_onboarding_session_id', created.session.id)
+      sessionStorage.setItem('comutitres_onboarding_session_id', created.session?.id ?? created.id)
       const rec = await getRecommendation(answer)
       setMessages(prev => [...prev, { id: nextId(), from: 'bot' as const, kind: 'result' as const, data: rec }])
       setIsDone(true)
@@ -661,7 +661,7 @@ export function OnboardingChatPage() {
                     <Box sx={{ p: 2.5, bgcolor: '#fff' }}>
                       <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
                         <Chip
-                          label={`${Math.round(msg.data.confidence * 100)} % de correspondance`}
+                          label={`${msg.data.confidencePercent} % de correspondance`}
                           size="small"
                           sx={{
                             fontSize: 11, height: 24, fontWeight: 700,
