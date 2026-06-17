@@ -9,6 +9,8 @@ export const colors = {
   greyMedium: '#DDDDDD',
   greyLight: '#F0F0F0',
   greyLight40: '#F9F9F9',
+  appBackground: '#F3F3F3',
+  sidebarBackground: '#FAFAFA',
   white: '#FFFFFF',
   redDark: '#C52625',
   redLight: '#DB5454',
