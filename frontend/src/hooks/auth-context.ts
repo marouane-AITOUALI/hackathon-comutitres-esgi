@@ -4,6 +4,7 @@ import type { AuthUser } from '../types'
 export interface AuthContextValue {
   user: AuthUser | null
   loading: boolean
+  updateUser: (user: AuthUser) => void
   setSession: (token: string, user: AuthUser) => void
   logout: () => void
 }
