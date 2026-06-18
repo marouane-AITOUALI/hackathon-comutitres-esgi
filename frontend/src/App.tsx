@@ -11,6 +11,7 @@ import { MobileAppPage } from './pages/MobileAppPage'
 import { OnboardingChatPage } from './pages/OnboardingChatPage'
 import { OffersPage } from './pages/OffersPage'
 import { PaiementsPage } from './pages/PaiementsPage'
+import { PaymentDetailPage } from './pages/PaymentDetailPage'
 import { PaymentFormPage } from './pages/PaymentFormPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -32,6 +33,7 @@ function App() {
           <Route path="offers" element={<OffersPage />} />
           <Route path="paiements" element={<PaiementsPage />} />
           <Route path="paiements/nouveau" element={<PaymentFormPage />} />
+          <Route path="paiements/:id" element={<PaymentDetailPage />} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="profil" element={<ProfilePage />} />
           <Route path="support" element={<SupportPage />} />
