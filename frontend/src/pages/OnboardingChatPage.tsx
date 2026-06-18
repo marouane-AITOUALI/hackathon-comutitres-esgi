@@ -1,15 +1,12 @@
-import { Box, Button, Checkbox, Chip, CircularProgress, FormControlLabel, IconButton, Stack, TextField, Typography } from '@mui/material'
-import SendIcon from '@mui/icons-material/Send'
+import { Alert, Box, Button, Chip, CircularProgress, Paper, Stack, TextField, Typography } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
-import EditIcon from '@mui/icons-material/Edit'
-import CloseIcon from '@mui/icons-material/Close'
-import { useEffect, useRef, useState } from 'react'
+import CheckIcon from '@mui/icons-material/Check'
+import { useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { LandmarkStepper } from '../components/onboarding/LandmarkStepper'
-import { clearOnboardingDraft, getRecommendation } from '../services/onboarding.service'
-import { registerWithOnboarding } from '../services/auth.service'
+import { getRecommendation } from '../services/onboarding.service'
 import { useAuth } from '../hooks/useAuth'
 import type { OfferRecommendation, OnboardingAnswer, OnboardingDraft } from '../types'
 
@@ -22,7 +19,7 @@ interface StepOption { value: string; label: string; description?: string }
 interface ChatStep {
   section: 1 | 2 | 3 | 4
   field: string
-  label: string          // short label for the edit panel
+  label: string
   type: StepType
   botMessage: (d: OnboardingDraft) => string
   options?: StepOption[]
@@ -31,84 +28,63 @@ interface ChatStep {
   skip?: (d: OnboardingDraft) => boolean
 }
 
-type TextMessage   = { id: number; from: 'bot' | 'user'; kind: 'text'; text: string }
-type ResultMessage = { id: number; from: 'bot'; kind: 'result'; data: OfferRecommendation }
-type Message = TextMessage | ResultMessage
-
-const SUBSCRIPTION_ACCOUNT_TEXT = {
-  title: 'Créer le compte et ouvrir la souscription',
-  description: "Le compte sera créé avec le profil renseigné, puis l'abonnement recommandé sera associé à votre dossier.",
-  firstName: 'Prénom',
-  lastName: 'Nom',
-  email: 'Email du compte',
-  password: 'Mot de passe',
-  passwordHelp: '10 caractères minimum avec une majuscule, une minuscule et un chiffre.',
-  consent: "J'accepte le traitement de mes données pour créer mon compte et gérer ma souscription.",
-  submit: 'Créer mon compte et continuer',
-  loading: 'Création du dossier...',
-  restart: 'Recommencer depuis le début',
-  success: 'Votre compte est créé et votre dossier de souscription est ouvert.',
-} as const
+const SECTION_LABELS: Record<1 | 2 | 3 | 4, string> = {
+  1: 'Pour qui ?',
+  2: 'Profil du porteur',
+  3: 'Profil du payeur',
+  4: 'Vos besoins',
+}
 
 // ─── Steps ───────────────────────────────────────────────────────────────────
 
 const STEPS: ChatStep[] = [
   // Section 1 — Pour qui ?
   {
-    section: 1, field: 'subscriptionFor', label: 'Pour qui ?', type: 'choice',
+    section: 1, field: 'subscriptionFor', label: 'Pour qui souscrivez-vous ?', type: 'choice',
     botMessage: () =>
-      'Première question clé : pour qui souscrivez-vous ce titre de transport ?\n\n'
-      + 'Sur Comutitres, on distingue deux rôles :\n'
+      'Sur Comutitres, on distingue deux rôles :\n'
       + '• Le porteur : la personne qui utilise le titre (enfant, salarié, bénéficiaire…)\n'
       + '• Le payeur : la personne ou structure qui finance l\'abonnement\n\n'
-      + 'Ils peuvent être la même personne ou non. Quelques exemples :\n'
-      + '→ Un parent finance l\'Imagine R de son enfant\n'
-      + '→ Une association paye le TST d\'un demandeur d\'emploi\n'
-      + '→ Un salarié souscrit son propre Navigo Annuel',
+      + 'Ils peuvent être la même personne ou non.',
     options: [
-      { value: 'self',                    label: 'Pour moi-même',                  description: 'Je suis à la fois porteur et payeur de l\'abonnement' },
-      { value: 'child',                   label: 'Pour mon enfant',                description: 'Mon enfant utilise le titre, je le finance (Imagine R, Junior…)' },
-      { value: 'other',                   label: 'Pour une autre personne',        description: 'Porteur et payeur sont deux personnes distinctes' },
-      { value: 'organization_beneficiary',label: 'Via une structure / association', description: 'Une structure (association, employeur…) finance le titre d\'un bénéficiaire' },
+      { value: 'self',                     label: 'Pour moi-même',                   description: 'Je suis à la fois porteur et payeur de l\'abonnement' },
+      { value: 'child',                    label: 'Pour mon enfant',                 description: 'Mon enfant utilise le titre, je le finance (Imagine R, Junior…)' },
+      { value: 'other',                    label: 'Pour une autre personne',         description: 'Porteur et payeur sont deux personnes distinctes' },
+      { value: 'organization_beneficiary', label: 'Via une structure / association', description: 'Une structure (association, employeur…) finance le titre d\'un bénéficiaire' },
     ],
   },
 
   // Section 2 — Profil porteur
   {
     section: 2, field: 'bearer.firstName', label: 'Prénom du porteur', type: 'text',
+    skip: (d) => d.subscriptionFor === 'self' && !!getField(d, 'bearer.firstName'),
     botMessage: (d) => d.subscriptionFor === 'self'
-      ? 'Parfait ! 😊 Parlons de vous — vous êtes à la fois porteur et payeur du titre.\n\nCommençons par votre prénom :'
-      : 'Maintenant, parlons du porteur — la personne qui va utiliser le titre au quotidien.\n\nQuel est son prénom ?',
+      ? 'Vous êtes à la fois porteur et payeur du titre. Commençons par votre prénom.'
+      : 'Quel est le prénom de la personne qui utilisera le titre de transport ?',
     placeholder: 'Prénom…',
   },
   {
     section: 2, field: 'bearer.lastName', label: 'Nom du porteur', type: 'text',
+    skip: (d) => d.subscriptionFor === 'self' && !!getField(d, 'bearer.lastName'),
     botMessage: (d) => `Et le nom de famille de ${d.bearer?.firstName ?? 'votre porteur'} ?`,
     placeholder: 'Nom de famille…',
   },
   {
     section: 2, field: 'bearer.birthDate', label: 'Date de naissance', type: 'date',
-    botMessage: (d) =>
-      `Quelle est la date de naissance de ${d.bearer?.firstName ?? 'votre porteur'} ?\n\n`
-      + 'L\'âge est déterminant pour l\'offre recommandée :\n'
+    botMessage: () =>
+      'L\'âge est déterminant pour l\'offre recommandée :\n'
       + '• Moins de 11 ans → forfait Junior\n'
       + '• 11 à 25 ans (scolaire) → Imagine R Scolaire / Junior\n'
       + '• Études supérieures → Imagine R Étudiant\n'
       + '• En activité → Navigo Annuel\n'
-      + '• 65 ans et plus → Navigo Senior (tarif réduit)\n\n'
-      + 'Cela nous permettra aussi de vérifier les conditions d\'éligibilité.',
+      + '• 65 ans et plus → Navigo Senior (tarif réduit)',
     placeholder: '',
   },
   {
-    section: 2, field: 'bearer.status', label: 'Statut', type: 'choice',
+    section: 2, field: 'bearer.status', label: 'Statut actuel', type: 'choice',
     botMessage: (d) =>
       `Quel est le statut actuel de ${d.bearer?.firstName ?? 'votre porteur'} ?\n\n`
-      + 'Chaque statut ouvre droit à des forfaits différents. Par exemple :\n'
-      + '• Junior / Scolaire → Imagine R (avec possibilité de réduction bourse)\n'
-      + '• Étudiant·e → Imagine R Étudiant\n'
-      + '• Actif·ve → Navigo Annuel (renouvellement automatique chaque année)\n'
-      + '• Senior → Navigo Senior dès 65 ans, ou Améthyste selon département\n'
-      + '• Solidarité → TST (Tarification Solidarité Transport, renouvellement trimestriel)',
+      + 'Chaque statut ouvre droit à des forfaits différents.',
     options: [
       { value: 'junior',     label: 'Junior',      description: 'Moins de 11 ans → forfait Junior' },
       { value: 'school',     label: 'Scolaire',    description: '11 à 25 ans en milieu scolaire → Imagine R Scolaire / Junior' },
@@ -171,25 +147,24 @@ const STEPS: ChatStep[] = [
       + '• Une association peut financer le titre TST d\'un bénéficiaire\n'
       + '• Un employeur peut prendre en charge le Navigo d\'un salarié',
     options: [
-      { value: 'parent',      label: 'Parent',           description: 'Père ou mère du porteur' },
-      { value: 'guardian',    label: 'Tuteur légal',     description: 'Tuteur ou représentant légal' },
-      { value: 'association', label: 'Association',      description: 'Structure associative finançant le titre' },
-      { value: 'employer',    label: 'Employeur',        description: 'Entreprise prenant en charge l\'abonnement' },
-      { value: 'other',       label: 'Autre',            description: 'Autre lien (conjoint, aidant…)' },
+      { value: 'parent',      label: 'Parent',       description: 'Père ou mère du porteur' },
+      { value: 'guardian',    label: 'Tuteur légal', description: 'Tuteur ou représentant légal' },
+      { value: 'association', label: 'Association',  description: 'Structure associative finançant le titre' },
+      { value: 'employer',    label: 'Employeur',    description: 'Entreprise prenant en charge l\'abonnement' },
+      { value: 'other',       label: 'Autre',        description: 'Autre lien (conjoint, aidant…)' },
     ],
     skip: (d) => d.isBearerPayer !== false,
   },
 
   // Section 4 — Besoins
   {
-    section: 4, field: 'frequency', label: 'Fréquence', type: 'choice',
+    section: 4, field: 'frequency', label: 'Fréquence d\'utilisation', type: 'choice',
     botMessage: (d) =>
-      `Excellent ! Parlons maintenant des habitudes de transport de ${d.subscriptionFor === 'self' ? 'vous-même' : (d.bearer?.firstName ?? 'votre porteur')}.\n\n`
+      `Parlons maintenant des habitudes de transport de ${d.subscriptionFor === 'self' ? 'vous-même' : (d.bearer?.firstName ?? 'votre porteur')}.\n\n`
       + 'La fréquence oriente directement vers le bon forfait :\n'
       + '• Quotidienne → Navigo Annuel ou mensuel (le plus économique à l\'année)\n'
       + '• Régulière → Navigo mensuel ou hebdomadaire\n'
-      + '• Occasionnelle → Navigo Liberté+ (paiement à l\'usage, sans engagement)\n\n'
-      + 'À quelle fréquence utilise-t-on les transports en commun ?',
+      + '• Occasionnelle → Navigo Liberté+ (paiement à l\'usage, sans engagement)',
     options: [
       { value: 'daily',      label: 'Quotidienne',   description: 'Tous les jours ou presque (trajets domicile-travail/école)' },
       { value: 'regular',    label: 'Régulière',     description: 'Plusieurs fois par semaine' },
@@ -197,21 +172,20 @@ const STEPS: ChatStep[] = [
     ],
   },
   {
-    section: 4, field: 'planPreference', label: "Type d'abonnement", type: 'choice',
+    section: 4, field: 'planPreference', label: 'Type d\'abonnement', type: 'choice',
     botMessage: () =>
       'Quel type d\'abonnement vous intéresse le plus ?\n\n'
-      + 'Voici les formules proposées par Comutitres :\n'
-      + '• Annuel → le plus économique, renouvellement automatique à date anniversaire\n'
-      + '• Mensuel → flexibilité mois par mois (Navigo mois)\n'
-      + '• Hebdomadaire → idéal pour des besoins ponctuels (Navigo semaine)\n'
-      + '• Liberté+ → paiement à la validation, sans abonnement fixe\n\n'
+      + '• Annuel → le plus économique, renouvellement automatique\n'
+      + '• Mensuel → flexibilité mois par mois\n'
+      + '• Hebdomadaire → idéal pour des besoins ponctuels\n'
+      + '• Liberté+ → paiement à la validation, sans engagement\n\n'
       + 'Note : l\'Imagine R est uniquement annuel (lié à la saison scolaire).',
     options: [
-      { value: 'annual',        label: 'Annuel',          description: 'Navigo Annuel — le plus économique, renouvellement automatique' },
-      { value: 'monthly',       label: 'Mensuel',         description: 'Navigo mois — souplesse mois par mois' },
-      { value: 'weekly',        label: 'Hebdomadaire',    description: 'Navigo semaine — idéal pour des besoins ponctuels' },
-      { value: 'pay_as_you_go', label: 'À l\'usage',      description: 'Navigo Liberté+ — paiement à la validation, sans engagement' },
-      { value: 'unsure',        label: 'Je ne sais pas',  description: 'Aidez-moi à choisir selon mon profil !' },
+      { value: 'annual',        label: 'Annuel',         description: 'Navigo Annuel — le plus économique, renouvellement automatique' },
+      { value: 'monthly',       label: 'Mensuel',        description: 'Navigo mois — souplesse mois par mois' },
+      { value: 'weekly',        label: 'Hebdomadaire',   description: 'Navigo semaine — idéal pour des besoins ponctuels' },
+      { value: 'pay_as_you_go', label: 'À l\'usage',     description: 'Navigo Liberté+ — paiement à la validation, sans engagement' },
+      { value: 'unsure',        label: 'Je ne sais pas', description: 'Aidez-moi à choisir selon mon profil !' },
     ],
   },
   {
@@ -219,18 +193,18 @@ const STEPS: ChatStep[] = [
     botMessage: (d) => {
       const who = d.subscriptionFor === 'self' ? 'votre' : `la situation de ${d.bearer?.firstName ?? 'votre porteur'} —`
       return `Quelle est ${who} situation sociale ou professionnelle ?\n\n`
-        + 'Certaines situations ouvrent droit à des tarifs préférentiels importants :\n'
-        + '• Boursier·e → réduction sur Imagine R (selon département, sur attestation)\n'
+        + 'Certaines situations ouvrent droit à des tarifs préférentiels :\n'
+        + '• Boursier·e → réduction sur Imagine R\n'
         + '• Demandeur·se d\'emploi → possible éligibilité à la TST\n'
-        + '• Bénéficiaire social (RSA, AAH, CAF…) → TST Solidarité (réduction 50%, 75% ou gratuité totale)\n'
-        + '• Senior 65+ → Navigo Senior à tarif réduit, ou Améthyste selon département'
+        + '• Bénéficiaire social (RSA, AAH, CAF…) → TST Solidarité\n'
+        + '• Senior 65+ → Navigo Senior à tarif réduit, ou Améthyste'
     },
     options: [
-      { value: 'student',            label: 'Étudiant·e',               description: 'En enseignement supérieur — Imagine R Étudiant' },
-      { value: 'scholarship',        label: 'Boursier·e',               description: 'Bourse de l\'Éducation Nationale ou du supérieur — réduction Imagine R' },
-      { value: 'job_seeker',         label: 'Demandeur·se d\'emploi',   description: 'Inscrit·e à Pôle Emploi — potentiellement éligible TST' },
-      { value: 'social_beneficiary', label: 'Bénéficiaire social',      description: 'RSA, AAH, CMU-C… → TST (réduction 50%, 75% ou gratuité)' },
-      { value: 'senior',             label: 'Senior (65 ans et +)',      description: 'Navigo Senior ou Améthyste selon le département' },
+      { value: 'student',            label: 'Étudiant·e',                      description: 'En enseignement supérieur — Imagine R Étudiant' },
+      { value: 'scholarship',        label: 'Boursier·e',                      description: 'Bourse de l\'Éducation Nationale ou du supérieur' },
+      { value: 'job_seeker',         label: 'Demandeur·se d\'emploi',          description: 'Inscrit·e à Pôle Emploi — potentiellement éligible TST' },
+      { value: 'social_beneficiary', label: 'Bénéficiaire social',             description: 'RSA, AAH, CMU-C… → TST (réduction 50%, 75% ou gratuité)' },
+      { value: 'senior',             label: 'Senior (65 ans et +)',             description: 'Navigo Senior ou Améthyste selon le département' },
       { value: 'other',              label: 'Autre / Aucune de ces situations', description: 'Tarif standard sans réduction spécifique' },
     ],
   },
@@ -238,51 +212,43 @@ const STEPS: ChatStep[] = [
     section: 4, field: 'support', label: 'Support souhaité', type: 'choice',
     botMessage: () =>
       'Sur quel support souhaitez-vous utiliser le titre de transport ?\n\n'
-      + 'Comutitres propose deux options :\n'
-      + '• Passe Navigo (carte physique) → compatible avec tous les forfaits, durée de vie 10 ans. '
-      + 'L\'Imagine R nécessite un passe Navigo dédié.\n'
-      + '• Téléphone NFC → iPhone ou Android compatible, pratique et sans carte physique. '
-      + 'Disponible pour Navigo Annuel, mensuel, semaine et Liberté+.\n\n'
+      + '• Passe Navigo (carte physique) → compatible tous forfaits, durée de vie 10 ans\n'
+      + '• Téléphone NFC → iPhone ou Android, pratique et sans carte physique\n\n'
       + 'Notez que certains forfaits comme l\'Imagine R imposent le passe physique.',
     options: [
-      { value: 'phone',       label: 'Téléphone (NFC)',   description: 'iPhone ou Android — validez directement avec votre smartphone' },
-      { value: 'navigo_pass', label: 'Passe Navigo',      description: 'Carte physique — compatible tous forfaits, durée de vie 10 ans' },
-      { value: 'unsure',      label: 'Je ne sais pas encore', description: 'Je laisse l\'assistant recommander le support adapté' },
+      { value: 'phone',       label: 'Téléphone (NFC)',        description: 'iPhone ou Android — validez directement avec votre smartphone' },
+      { value: 'navigo_pass', label: 'Passe Navigo',           description: 'Carte physique — compatible tous forfaits, durée de vie 10 ans' },
+      { value: 'unsure',      label: 'Je ne sais pas encore',  description: 'Je laisse l\'assistant recommander le support adapté' },
     ],
   },
   {
     section: 4, field: 'scholarship', label: 'Boursier ?', type: 'yesno',
     botMessage: (d) =>
       `${d.bearer?.firstName ?? 'Le porteur'} est-il·elle boursier·e de l'Éducation Nationale ou de l'Enseignement Supérieur ?\n\n`
-      + 'Si oui, une réduction peut s\'appliquer sur l\'abonnement Imagine R, selon le département de résidence. '
-      + 'Une attestation d\'attribution de bourse sera demandée lors de la souscription pour valider ce droit.',
+      + 'Si oui, une réduction peut s\'appliquer sur l\'abonnement Imagine R selon le département de résidence.',
   },
   {
     section: 4, field: 'solidarity', label: 'Tarif solidarité ?', type: 'yesno',
     botMessage: (d) =>
-      `${d.bearer?.firstName ?? 'Le porteur'} bénéficie-t-il·elle (ou pense bénéficier) de la Tarification Solidarité Transport (TST) d'Île-de-France Mobilités ?\n\n`
+      `${d.bearer?.firstName ?? 'Le porteur'} bénéficie-t-il·elle de la Tarification Solidarité Transport (TST) d'Île-de-France Mobilités ?\n\n`
       + 'La TST est réservée aux personnes en situation de précarité (RSA, AAH, CMU-C, CAF…). Elle offre :\n'
       + '• Réduction 50%\n'
       + '• Solidarité 75%\n'
       + '• Gratuité totale\n\n'
-      + 'Contrairement aux autres forfaits annuels, la TST se renouvelle par période de 3 mois. '
       + 'Des justificatifs sociaux seront demandés pour vérification des droits.',
   },
   {
-    section: 4, field: 'department', label: 'Département', type: 'text',
+    section: 4, field: 'department', label: 'Département de résidence', type: 'text',
     botMessage: (d) =>
-      `Dernière question ! Dans quel département réside ${d.subscriptionFor === 'self' ? 'vous' : (d.bearer?.firstName ?? 'le porteur')} ?\n\n`
-      + 'Cette information est recommandée car certaines aides varient selon le département :\n'
-      + '• Améthyste (seniors et personnes en situation de handicap) → tarifs et conditions différents selon le Conseil Départemental\n'
-      + '• Réductions bourse Imagine R → selon le département de résidence\n'
-      + '• TST → vérification des droits selon la préfecture de résidence\n\n'
+      `Dans quel département réside ${d.subscriptionFor === 'self' ? 'vous' : (d.bearer?.firstName ?? 'le porteur')} ?\n\n`
+      + 'Certaines aides varient selon le département (Améthyste, réductions bourse Imagine R, TST).\n\n'
       + '(Optionnel — mais plus votre département est précis, plus la recommandation sera fiable)',
     placeholder: 'Ex : 75, 92, 93, 94…',
     optional: true,
   },
 ]
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function setField(draft: OnboardingDraft, path: string, value: unknown): OnboardingDraft {
   const [head, ...rest] = path.split('.')
@@ -296,20 +262,6 @@ function getField(draft: OnboardingDraft, path: string): unknown {
     (acc, k) => (acc as Record<string, unknown>)?.[k],
     draft as unknown,
   )
-}
-
-function formatDate(iso: string): string {
-  const [y, m, d] = iso.split('-')
-  return `${d}/${m}/${y}`
-}
-
-function getDisplayValue(step: ChatStep, draft: OnboardingDraft): string {
-  const raw = getField(draft, step.field)
-  if (raw === undefined || raw === null || raw === '') return '—'
-  if (step.type === 'yesno') return raw ? 'Oui' : 'Non'
-  if (step.type === 'date') return formatDate(String(raw))
-  if (step.type === 'choice') return step.options?.find(o => o.value === raw)?.label ?? String(raw)
-  return String(raw)
 }
 
 function advance(fromIdx: number, draft: OnboardingDraft): { nextIdx: number; draft: OnboardingDraft } {
@@ -326,796 +278,589 @@ function advance(fromIdx: number, draft: OnboardingDraft): { nextIdx: number; dr
 
 export function OnboardingChatPage() {
   const location  = useLocation()
-  const navigate = useNavigate()
-  const { setSession } = useAuth()
-  const fromSimpleForm = (location.state as { fromSimpleForm?: boolean } | null)?.fromSimpleForm ?? false
+  const navigate  = useNavigate()
+  const { user }  = useAuth()
 
-  // Core chat state
-  const [messages,    setMessages]    = useState<Message[]>([])
-  const [draft,       setDraft]       = useState<OnboardingDraft>({})
-  const [stepIdx,     setStepIdx]     = useState(0)
-  const [section,     setSection]     = useState(1)
-  const [inputValue,  setInputValue]  = useState('')
-  const [inputType,   setInputType]   = useState<'text' | 'email' | 'date'>('text')
-  const [isTyping,    setIsTyping]    = useState(false)
-  const [showInput,   setShowInput]   = useState(false)
-  const [showChoices, setShowChoices] = useState(false)
-  const [showYesNo,   setShowYesNo]   = useState(false)
-  const [yesNoField,  setYesNoField]  = useState('')
-  const [error,       setError]       = useState('')
-  const [loading,     setLoading]     = useState(false)
-  const [isDone,      setIsDone]      = useState(false)
+  const locationState = location.state as { fromSimpleForm?: boolean; mode?: string } | null
+  const chatMode = locationState?.mode === 'chat' || locationState?.fromSimpleForm === false
+
+  const [draft,          setDraft]          = useState<OnboardingDraft>({})
+  const [stepIdx,        setStepIdx]        = useState(0)
+  const [inputValue,     setInputValue]     = useState('')
+  const [error,          setError]          = useState('')
+  const [loading,        setLoading]        = useState(false)
+  const [isDone,         setIsDone]         = useState(false)
   const [recommendation, setRecommendation] = useState<OfferRecommendation | null>(null)
-  const [creatingSubscription, setCreatingSubscription] = useState(false)
-  const [accountForm, setAccountForm] = useState({
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    rgpdConsent: false,
-  })
 
-  // Restart
-  const [restartKey, setRestartKey] = useState(0)
+  const step           = STEPS[stepIdx] as ChatStep | undefined
+  const currentSection = isDone ? 5 : step?.section ?? 1
 
-  // Edit mode
-  const [showEdit,    setShowEdit]    = useState(false)
-  const [isEditMode,  setIsEditMode]  = useState(false)
-  const [returnToIdx, setReturnToIdx] = useState(0)
-
-  const messagesBoxRef = useRef<HTMLDivElement>(null)
-  const inputRef       = useRef<HTMLInputElement>(null)
-  const idRef          = useRef(0)
-
-  function nextId()            { return ++idRef.current }
-  function addBot(text: string) { setMessages(prev => [...prev, { id: nextId(), from: 'bot', kind: 'text', text }]) }
-  function addUser(text: string){ setMessages(prev => [...prev, { id: nextId(), from: 'user', kind: 'text', text }]) }
-
-  useEffect(() => {
-    const el = messagesBoxRef.current
-    if (el) el.scrollTop = el.scrollHeight
-  }, [messages, isTyping])
-
-  // ── Reset (Tout refaire) ────────────────────────────────────────────────────
+  // ── Reset ──────────────────────────────────────────────────────────────────
 
   function reset() {
-    idRef.current = 0
-    setMessages([]);   setDraft({});        setStepIdx(0)
-    setSection(1);     setInputValue('');   setInputType('text')
-    setIsTyping(false);setShowInput(false); setShowChoices(false)
-    setShowYesNo(false);setYesNoField('');  setError('')
-    setLoading(false); setIsDone(false);    setIsEditMode(false)
-    setShowEdit(false);setReturnToIdx(0)
-    setRecommendation(null)
-    setCreatingSubscription(false)
-    setAccountForm({ firstName: '', lastName: '', email: '', password: '', rgpdConsent: false })
-    setRestartKey(k => k + 1)
+    setDraft({}); setStepIdx(0); setInputValue(''); setError('')
+    setLoading(false); setIsDone(false); setRecommendation(null)
   }
 
-  // ── Trigger a step's question + UI ─────────────────────────────────────────
-
-  function triggerStep(idx: number, d: OnboardingDraft) {
-    if (idx >= STEPS.length) { handleSubmit(d); return }
-    const step = STEPS[idx]
-    setSection(step.section)
-    addBot(step.botMessage(d))
-    if (step.type === 'choice') {
-      setShowChoices(true)
-    } else if (step.type === 'yesno') {
-      setShowYesNo(true); setYesNoField(step.field)
-    } else {
-      setInputType(step.type === 'email' ? 'email' : step.type === 'date' ? 'date' : 'text')
-      setShowInput(true)
-      setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 50)
-    }
-  }
-
-  function botThen(fn: () => void) {
-    setIsTyping(true)
-    setTimeout(() => { setIsTyping(false); fn() }, 850)
-  }
-
-  // ── Initialization ──────────────────────────────────────────────────────────
-
-  useEffect(() => {
-    const intro = fromSimpleForm
-      ? "Votre compte est bien créé ✅ Maintenant c'est moi qui vous assiste !\n\nJe vais vous poser quelques questions pour identifier, parmi tous les forfaits Comutitres (Navigo Annuel, Imagine R, TST, Améthyste…), celui qui correspond le mieux à votre situation. Comptez environ 2 minutes."
-      : "Bienvenue dans votre parcours Comutitres 👋\n\nJe suis votre assistant personnel. Mon rôle : vous orienter vers le forfait Île-de-France Mobilités le plus adapté à votre profil, parmi les offres disponibles — Navigo Annuel, Imagine R, Liberté+, TST Solidarité, Améthyste et bien d'autres.\n\nC'est parti, ça prend environ 2 minutes !"
-
-    setIsTyping(true)
-    const t1 = setTimeout(() => {
-      setIsTyping(false)
-      addBot(intro)
-      const t2 = setTimeout(() => botThen(() => triggerStep(0, {})), 400)
-      return () => clearTimeout(t2)
-    }, 1000)
-    return () => clearTimeout(t1)
-  }, [restartKey]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // ── Edit mode ───────────────────────────────────────────────────────────────
-
-  function handleEditStep(targetIdx: number) {
-    setShowEdit(false)
-    setIsEditMode(true)
-    setReturnToIdx(stepIdx)
-    setStepIdx(targetIdx)
-    const step = STEPS[targetIdx]
-    botThen(() => {
-      addBot(`Bien sûr ! Modifions : « ${step.label} »`)
-      if (step.type === 'choice') {
-        setShowChoices(true)
-      } else if (step.type === 'yesno') {
-        setShowYesNo(true); setYesNoField(step.field)
-      } else {
-        setInputType(step.type === 'email' ? 'email' : step.type === 'date' ? 'date' : 'text')
-        setShowInput(true)
-        setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 50)
-      }
-    })
-  }
-
-  function finishEdit() {
-    setIsEditMode(false)
-    setStepIdx(returnToIdx)
-    botThen(() => addBot("Réponse mise à jour ! 👍 Je reprends là où on en était."))
-  }
-
-  // ── Answer handlers ─────────────────────────────────────────────────────────
-
-  function handleChoice(option: StepOption) {
-    setShowChoices(false)
-    const step = STEPS[stepIdx]
-    let newDraft = setField(draft, step.field, option.value)
-    if (step.field === 'subscriptionFor' && option.value === 'self') newDraft = { ...newDraft, isBearerPayer: true }
-    setDraft(newDraft)
-    addUser(option.label)
-    if (isEditMode) { finishEdit(); return }
-    const { nextIdx, draft: advDraft } = advance(stepIdx, newDraft)
-    setDraft(advDraft); setStepIdx(nextIdx)
-    botThen(() => triggerStep(nextIdx, advDraft))
-  }
-
-  function handleYesNo(yes: boolean) {
-    setShowYesNo(false)
-    const newDraft = setField(draft, yesNoField, yes)
-    setDraft(newDraft)
-    addUser(yes ? 'Oui ✅' : 'Non')
-    if (isEditMode) { finishEdit(); return }
-    const { nextIdx, draft: advDraft } = advance(stepIdx, newDraft)
-    setDraft(advDraft); setStepIdx(nextIdx)
-    botThen(() => triggerStep(nextIdx, advDraft))
-  }
-
-  function handleSend() {
-    const value = inputValue.trim()
-    const step  = STEPS[stepIdx]
-    if (!value && !step.optional) { setError('Ce champ est requis.'); return }
-    if (step.type === 'email' && value && !value.includes('@')) { setError('Adresse e-mail invalide.'); return }
-    setError(''); setShowInput(false)
-    const display  = step.type === 'date' && value ? formatDate(value) : value || '(passé)'
-    const newDraft = value ? setField(draft, step.field, value) : draft
-    setDraft(newDraft); addUser(display); setInputValue('')
-    if (isEditMode) { finishEdit(); return }
-    const { nextIdx, draft: advDraft } = advance(stepIdx, newDraft)
-    setDraft(advDraft); setStepIdx(nextIdx)
-    botThen(() => triggerStep(nextIdx, advDraft))
-  }
-
-  // ── Submit ──────────────────────────────────────────────────────────────────
+  // ── Submit (get recommendation) ───────────────────────────────────────────
 
   async function handleSubmit(finalDraft: OnboardingDraft) {
-    setSection(5)
-    addBot(
-      "Merci pour toutes ces informations 🙏\n\n"
-      + "J'analyse votre profil pour identifier l'offre Comutitres la plus adaptée parmi : "
-      + "Navigo Annuel, Navigo Senior, Imagine R, Navigo Liberté+, TST Solidarité et Améthyste. "
-      + "Un instant..."
-    )
     setLoading(true)
     try {
-      const answer  = finalDraft as OnboardingAnswer
-      const rec = await getRecommendation(answer)
+      const answer = finalDraft as OnboardingAnswer
+      const rec    = await getRecommendation(answer)
       setRecommendation(rec)
-      setAccountForm((current) => ({
-        ...current,
-        firstName: current.firstName || (answer.isBearerPayer ? answer.bearer.firstName : answer.payer?.firstName ?? answer.bearer.firstName),
-        lastName: current.lastName || (answer.isBearerPayer ? answer.bearer.lastName : answer.payer?.lastName ?? answer.bearer.lastName),
-        email: current.email || (!answer.isBearerPayer ? answer.payer?.email ?? '' : ''),
-      }))
-      setMessages(prev => [...prev, { id: nextId(), from: 'bot' as const, kind: 'result' as const, data: rec }])
       setIsDone(true)
     } catch (err) {
-      addBot(err instanceof Error ? `Oups ! ${err.message}` : 'Désolé, une erreur inattendue est survenue.')
+      setError(err instanceof Error ? `Oups ! ${err.message}` : 'Désolé, une erreur inattendue est survenue.')
     } finally {
       setLoading(false)
     }
   }
 
-  // ── Derived ─────────────────────────────────────────────────────────────────
+  // ── Navigation helpers ─────────────────────────────────────────────────────
 
-  async function handleCreateAccountAndSubscription() {
-    const answer = draft as OnboardingAnswer
-    if (!recommendation) { setError("L'offre recommandée est manquante."); return }
-    if (!accountForm.firstName.trim() || !accountForm.lastName.trim()) { setError('Le prénom et le nom du titulaire du compte sont requis.'); return }
-    if (!accountForm.email.includes('@')) { setError('Adresse e-mail invalide.'); return }
-    if (accountForm.password.length < 10 || !/[a-z]/.test(accountForm.password) || !/[A-Z]/.test(accountForm.password) || !/[0-9]/.test(accountForm.password)) {
-      setError('Le mot de passe doit contenir au moins 10 caractères, une minuscule, une majuscule et un chiffre.')
-      return
-    }
-    if (!accountForm.rgpdConsent) { setError('Le consentement RGPD est requis pour créer le compte.'); return }
-
+  function applyAnswer(field: string, value: unknown, extraDraft?: Partial<OnboardingDraft>) {
+    let newDraft = setField(draft, field, value)
+    if (extraDraft) newDraft = { ...newDraft, ...extraDraft }
+    const { nextIdx, draft: advDraft } = advance(stepIdx, newDraft)
+    setDraft(advDraft)
+    setStepIdx(nextIdx)
+    setInputValue('')
     setError('')
-    setCreatingSubscription(true)
-    try {
-      const session = await registerWithOnboarding({
-        ...accountForm,
-        firstName: accountForm.firstName.trim(),
-        lastName: accountForm.lastName.trim(),
-        email: accountForm.email.trim(),
-        onboarding: answer,
-        recommendedOffer: recommendation,
-      })
-      setSession(session.token, session.user)
-      clearOnboardingDraft()
-      if (session.onboardingSession?.id) sessionStorage.setItem('comutitres_onboarding_session_id', session.onboardingSession.id)
-      addBot(SUBSCRIPTION_ACCOUNT_TEXT.success)
-      navigate(session.subscription?.id ? `/subscriptions/${session.subscription.id}` : '/subscriptions')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'La création du compte et de la souscription a échoué.')
-    } finally {
-      setCreatingSubscription(false)
-    }
+    if (nextIdx >= STEPS.length) handleSubmit(advDraft)
   }
 
-  const currentSection  = isDone ? 5 : section
-  const answeredSteps   = STEPS
-    .map((step, i) => ({ step, i }))
-    .filter(({ step, i }) => i < (isEditMode ? returnToIdx : stepIdx) && !step.skip?.(draft))
+  function handleChoice(option: StepOption) {
+    if (!step) return
+    if (step.field === 'subscriptionFor') {
+      let newDraft: OnboardingDraft = { subscriptionFor: option.value as OnboardingDraft['subscriptionFor'] }
+      if (option.value === 'self') {
+        newDraft = { ...newDraft, isBearerPayer: true }
+        if (user) {
+          newDraft = setField(setField(newDraft, 'bearer.firstName', user.firstName), 'bearer.lastName', user.lastName)
+        }
+      }
+      const { nextIdx, draft: advDraft } = advance(stepIdx, newDraft)
+      setDraft(advDraft)
+      setStepIdx(nextIdx)
+      setError('')
+      if (nextIdx >= STEPS.length) handleSubmit(advDraft)
+      return
+    }
+    applyAnswer(step.field, option.value)
+  }
+
+  function handleYesNo(yes: boolean) {
+    if (!step) return
+    applyAnswer(step.field, yes)
+  }
+
+  function handleNext() {
+    if (!step) return
+    const value = inputValue.trim()
+    if (!value && !step.optional) { setError('Ce champ est requis.'); return }
+    if (step.type === 'email' && value && !value.includes('@')) { setError('Adresse e-mail invalide.'); return }
+    applyAnswer(step.field, value || undefined)
+  }
+
+  function handleBack() {
+    let idx = stepIdx - 1
+    while (idx >= 0 && STEPS[idx].skip?.(draft)) idx--
+    if (idx < 0) return
+    const prevStep = STEPS[idx]
+    const val      = getField(draft, prevStep.field)
+    setStepIdx(idx)
+    setInputValue(
+      (prevStep.type === 'text' || prevStep.type === 'email' || prevStep.type === 'date') && val != null
+        ? String(val)
+        : ''
+    )
+    setError('')
+  }
+
+  const selectedValue = step ? getField(draft, step.field) : undefined
+  const canGoBack     = stepIdx > 0
 
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: '#fff' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: '#f5f7ff' }}>
       <Header />
 
-      <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', px: { xs: 1.5, sm: 3, md: 4 }, pt: { xs: 2, md: 3 }, pb: { xs: 3, md: 4 }, gap: { xs: 2, md: 3 } }}>
+      <Box sx={{
+        flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+        px: { xs: 2, sm: 3, md: 4 },
+        pt: { xs: 2, md: 3 },
+        pb: { xs: 3, md: 4 },
+        gap: 3,
+      }}>
 
-        {/* ── Stepper card ── */}
+        {/* ── LandmarkStepper ── */}
         <Box sx={{
           width: '100%', maxWidth: 860,
-          bgcolor: '#fff',
-          borderRadius: 3,
+          bgcolor: '#fff', borderRadius: 3,
           boxShadow: '0 2px 12px rgba(26,86,219,0.07)',
           border: '1px solid rgba(26,86,219,0.07)',
-          px: { xs: 2, md: 5 },
-          py: { xs: 1, md: 1.5 },
+          px: { xs: 2, md: 5 }, py: { xs: 1, md: 1.5 },
         }}>
           <LandmarkStepper section={currentSection} />
         </Box>
 
-        {/* ── Chat card ── */}
-        <Box sx={{
-          width: '100%', maxWidth: 700,
-          height: { xs: 520, sm: 580, md: 620 },
-          borderRadius: { xs: 3, md: 4 },
-          boxShadow: '0 8px 48px rgba(26,86,219,0.13), 0 1px 4px rgba(0,0,0,0.06)',
-          display: 'flex', flexDirection: 'column',
-          overflow: 'hidden', position: 'relative',
-          border: '1px solid rgba(26,86,219,0.08)',
-        }}>
-
-        {/* ── Header ── */}
-        <Box sx={{
-          px: 2.5, py: 1.75, flexShrink: 0,
-          background: 'linear-gradient(135deg, #1a56db 0%, #2563eb 60%, #1d72e8 100%)',
-          display: 'flex', alignItems: 'center', gap: 1.5,
-        }}>
-          {/* Avatar */}
-          <Box sx={{
-            width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
-            background: 'rgba(255,255,255,0.18)',
-            border: '2px solid rgba(255,255,255,0.35)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontWeight: 900, fontSize: 17, color: '#fff',
-            boxShadow: '0 2px 12px rgba(0,0,0,0.15)',
-          }}>C</Box>
-
-          <Box sx={{ flex: 1 }}>
-            <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: 14, lineHeight: 1.2, letterSpacing: 0.1 }}>
-              Assistant Comutitres
+        {/* ── Loading screen ── */}
+        {loading && (
+          <Paper sx={{ width: '100%', maxWidth: 680, borderRadius: 4, p: { xs: 4, md: 6 }, textAlign: 'center', boxShadow: '0 8px 48px rgba(26,86,219,0.13)' }}>
+            <CircularProgress sx={{ color: '#1a56db' }} />
+            <Typography sx={{ mt: 2.5, fontWeight: 700, color: '#1e3a8a', fontSize: 15 }}>
+              Analyse de votre profil en cours…
             </Typography>
-            <Stack direction="row" spacing={0.6} sx={{ alignItems: 'center', mt: 0.4 }}>
-              <Box sx={{
-                width: 7, height: 7, borderRadius: '50%',
-                bgcolor: loading ? '#fbbf24' : '#4ade80',
-                boxShadow: loading ? '0 0 6px #fbbf24' : '0 0 6px #4ade80',
-                animation: 'pulse 2s infinite',
-                '@keyframes pulse': { '0%,100%': { opacity: 1 }, '50%': { opacity: 0.6 } },
-              }} />
-              <Typography sx={{ color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: 500 }}>
-                {loading ? 'Analyse en cours…' : 'En ligne'}
-              </Typography>
-            </Stack>
-          </Box>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+              Identification de l'offre Comutitres la plus adaptée à votre situation.
+            </Typography>
+          </Paper>
+        )}
 
-          {/* Section badge */}
-          <Box sx={{
-            px: 1.25, py: 0.4, borderRadius: 99,
-            bgcolor: 'rgba(255,255,255,0.15)',
-            border: '1px solid rgba(255,255,255,0.25)',
+        {/* ── Form wizard ── */}
+        {!loading && !isDone && step && !chatMode && (
+          <Paper sx={{
+            width: '100%', maxWidth: 680,
+            borderRadius: 4, overflow: 'hidden',
+            boxShadow: '0 8px 48px rgba(26,86,219,0.13)',
+            border: '1px solid rgba(26,86,219,0.08)',
           }}>
-            <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: 11, fontWeight: 600 }}>
-              {isDone ? '✓ Terminé' : `Étape ${Math.min(currentSection, 4)} / 4`}
-            </Typography>
-          </Box>
+            <Box sx={{ p: { xs: 3, md: 4 } }}>
+              {/* Section label + counter */}
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Chip
+                  label={SECTION_LABELS[step.section]}
+                  size="small"
+                  sx={{ bgcolor: '#EEF4FF', color: '#1a56db', fontWeight: 700, fontSize: 11, border: 'none' }}
+                />
+                <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 500 }}>
+                  {stepIdx + 1} / {STEPS.length}
+                </Typography>
+              </Stack>
 
-          {/* Modifier */}
-          {answeredSteps.length > 0 && !isDone && (
-            <IconButton size="small" title="Modifier une réponse" onClick={() => setShowEdit(v => !v)}
-              sx={{ color: 'rgba(255,255,255,0.75)', '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.14)' }, borderRadius: 2 }}>
-              <EditIcon sx={{ fontSize: 17 }} />
-            </IconButton>
-          )}
-          {/* Tout refaire */}
-          <IconButton size="small" title="Tout refaire" onClick={reset}
-            sx={{ color: 'rgba(255,255,255,0.75)', '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.14)' }, borderRadius: 2 }}>
-            <RefreshIcon sx={{ fontSize: 17 }} />
-          </IconButton>
-        </Box>
+              {/* Question */}
+              <Typography variant="h6" sx={{ fontWeight: 800, mb: 3, color: '#1e3a8a', lineHeight: 1.3 }}>
+                {step.label}
+              </Typography>
 
-        {/* Progress bar */}
-        <Box sx={{ height: 4, bgcolor: 'rgba(26,86,219,0.08)', flexShrink: 0, position: 'relative' }}>
-          <Box sx={{
-            position: 'absolute', left: 0, top: 0, bottom: 0,
-            background: 'linear-gradient(90deg, #3b82f6, #1a56db)',
-            width: isDone ? '100%' : `${Math.min(((currentSection - 1) / 4) * 100, 100)}%`,
-            transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)',
-            borderRadius: '0 99px 99px 0',
-          }} />
-        </Box>
-
-        {/* ── Messages ── */}
-        <Box ref={messagesBoxRef} sx={{
-          flex: 1, overflowY: 'auto', px: 2, py: 2.5,
-          display: 'flex', flexDirection: 'column', gap: 2,
-          background: 'linear-gradient(180deg, #f7f9ff 0%, #f0f4ff 100%)',
-          '&::-webkit-scrollbar': { width: 4 },
-          '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(26,86,219,0.15)', borderRadius: 99 },
-        }}>
-
-          {messages.map((msg) => (
-            <Box key={msg.id} sx={{ animation: 'fadeSlideIn 0.28s ease both', '@keyframes fadeSlideIn': { from: { opacity: 0, transform: 'translateY(10px)' }, to: { opacity: 1, transform: 'translateY(0)' } } }}>
-              {msg.kind === 'text' && (
-                <Box sx={{ display: 'flex', justifyContent: msg.from === 'user' ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 1 }}>
-                  {msg.from === 'bot' && <BotAvatar />}
-                  <Box sx={{
-                    maxWidth: '80%', px: 2, py: 1.25,
-                    borderRadius: msg.from === 'user' ? '20px 20px 5px 20px' : '5px 20px 20px 20px',
-                    background: msg.from === 'user'
-                      ? 'linear-gradient(135deg, #2563eb 0%, #1a56db 100%)'
-                      : '#fff',
-                    boxShadow: msg.from === 'user'
-                      ? '0 4px 14px rgba(37,99,235,0.35)'
-                      : '0 2px 12px rgba(0,0,0,0.06)',
-                    border: msg.from === 'bot' ? '1px solid rgba(26,86,219,0.07)' : 'none',
-                  }}>
-                    <Typography sx={{
-                      fontSize: 13.5, lineHeight: 1.65, whiteSpace: 'pre-line',
-                      color: msg.from === 'user' ? '#fff' : 'text.primary',
-                      letterSpacing: 0.1,
-                    }}>
-                      {msg.text}
-                    </Typography>
-                  </Box>
-                </Box>
+              {/* ── Text / email / date ── */}
+              {(step.type === 'text' || step.type === 'email' || step.type === 'date') && (
+                <TextField
+                  type={step.type}
+                  value={inputValue}
+                  onChange={e => { setInputValue(e.target.value); setError('') }}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleNext() } }}
+                  placeholder={step.placeholder ?? ''}
+                  fullWidth
+                  autoFocus
+                  size="small"
+                  sx={{ mb: 1.5 }}
+                />
               )}
 
-              {msg.kind === 'result' && (
-                <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
-                  <BotAvatar sx={{ mt: 0.5 }} />
-                  <Box sx={{
-                    flex: 1, borderRadius: '6px 20px 20px 20px',
-                    boxShadow: '0 4px 24px rgba(26,86,219,0.12)',
-                    overflow: 'hidden', border: '1px solid rgba(26,86,219,0.1)',
-                  }}>
-                    {/* Result header */}
-                    <Box sx={{
-                      px: 2.5, py: 1.75,
-                      background: 'linear-gradient(135deg, #1a56db 0%, #0ea5e9 100%)',
-                    }}>
-                      <Typography sx={{ color: '#fff', fontWeight: 800, fontSize: 14, letterSpacing: 0.2 }}>
-                        🎉 Votre recommandation personnalisée
-                      </Typography>
-                    </Box>
-                    {/* Result body */}
-                    <Box sx={{ p: 2.5, bgcolor: '#fff' }}>
-                      <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
-                        <Chip
-                          label={`${msg.data.confidencePercent} % de correspondance`}
-                          size="small"
-                          sx={{
-                            fontSize: 11, height: 24, fontWeight: 700,
-                            bgcolor: '#dcfce7', color: '#166534',
-                            border: '1px solid #bbf7d0',
-                          }}
-                        />
-                      </Stack>
-                      <Typography sx={{ fontWeight: 900, fontSize: 20, color: '#1a56db', mb: 0.5, letterSpacing: -0.3 }}>
-                        {msg.data.offerName}
-                      </Typography>
-                      <Typography sx={{ fontSize: 13.5, color: 'text.secondary', lineHeight: 1.7, mb: 2 }}>
-                        {msg.data.reasons.join(' ')}
-                      </Typography>
-                      {msg.data.requiredDocuments.length > 0 && (
-                        <Box sx={{ mb: 1.5, p: 1.5, bgcolor: '#f0f6ff', borderRadius: 2, border: '1px solid #dbeafe' }}>
-                          <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: '#1e40af', mb: 0.75, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                            Documents requis
+              {/* ── Choice ── */}
+              {step.type === 'choice' && (
+                <Stack spacing={1} sx={{ mb: 2 }}>
+                  {step.options?.map(opt => (
+                    <Box
+                      key={opt.value}
+                      onClick={() => handleChoice(opt)}
+                      sx={{
+                        px: 2, py: 1.5,
+                        bgcolor: selectedValue === opt.value ? '#EEF4FF' : '#fff',
+                        border: '1.5px solid',
+                        borderColor: selectedValue === opt.value ? '#1a56db' : 'rgba(26,86,219,0.15)',
+                        borderRadius: 2.5,
+                        cursor: 'pointer',
+                        transition: 'all 0.18s',
+                        display: 'flex', alignItems: 'center', gap: 1.5,
+                        '&:hover': { bgcolor: '#f0f6ff', borderColor: '#1a56db' },
+                      }}
+                    >
+                      <Box sx={{ flex: 1 }}>
+                        <Typography sx={{ fontSize: 14, fontWeight: 700, color: '#1e3a8a', lineHeight: 1.3 }}>
+                          {opt.label}
+                        </Typography>
+                        {opt.description && (
+                          <Typography sx={{ fontSize: 12.5, color: 'text.secondary', mt: 0.3 }}>
+                            {opt.description}
                           </Typography>
-                          {msg.data.requiredDocuments.map((doc) => (
-                            <Stack key={doc} direction="row" spacing={0.75} sx={{ alignItems: 'flex-start', mb: 0.4 }}>
-                              <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: '#3b82f6', mt: 0.7, flexShrink: 0 }} />
-                              <Typography sx={{ fontSize: 12.5, color: '#1e3a8a' }}>{doc}</Typography>
-                            </Stack>
-                          ))}
-                        </Box>
-                      )}
-                      {msg.data.warnings.map((w) => (
-                        <Box key={w} sx={{
-                          display: 'flex', gap: 1, alignItems: 'flex-start',
-                          bgcolor: '#fffbeb', border: '1px solid #fde68a',
-                          borderLeft: '4px solid #f59e0b',
-                          px: 1.5, py: 1, borderRadius: '0 8px 8px 0', mb: 0.75,
-                        }}>
-                          <Typography sx={{ fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>⚠️ {w}</Typography>
-                        </Box>
-                      ))}
+                        )}
+                      </Box>
+                      {selectedValue === opt.value
+                        ? <CheckIcon sx={{ fontSize: 18, color: '#1a56db', flexShrink: 0 }} />
+                        : <Box sx={{ width: 18, height: 18, flexShrink: 0 }} />
+                      }
                     </Box>
-                  </Box>
-                </Box>
+                  ))}
+                </Stack>
               )}
-            </Box>
-          ))}
 
-          {/* Typing / loading */}
-          {(isTyping || loading) && (
-            <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
-              <BotAvatar />
-              <Box sx={{
-                px: 2, py: 1.25, borderRadius: '5px 16px 16px 16px',
-                bgcolor: '#fff', boxShadow: '0 2px 12px rgba(0,0,0,0.07)',
-                border: '1px solid rgba(26,86,219,0.07)',
-                display: 'flex', gap: '6px', alignItems: 'center',
-              }}>
-                {loading
-                  ? <CircularProgress size={14} sx={{ color: 'primary.main' }} />
-                  : [0, 0.2, 0.4].map((delay, i) => (
-                    <Box key={i} sx={{
-                      width: 7, height: 7, borderRadius: '50%',
-                      background: 'linear-gradient(135deg, #3b82f6, #1a56db)',
-                      animation: 'bounce 1.2s infinite',
-                      animationDelay: `${delay}s`,
-                      '@keyframes bounce': { '0%,60%,100%': { transform: 'translateY(0)' }, '30%': { transform: 'translateY(-6px)' } },
-                    }} />
-                  ))
-                }
-              </Box>
-            </Box>
-          )}
+              {/* ── Yes / No ── */}
+              {step.type === 'yesno' && (
+                <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+                  <Button
+                    variant="outlined"
+                    onClick={() => handleYesNo(false)}
+                    fullWidth
+                    sx={{
+                      py: 1.5, borderRadius: 2.5, fontWeight: 600,
+                      textTransform: 'none', fontSize: 14,
+                      borderColor: selectedValue === false ? '#1a56db' : 'rgba(26,86,219,0.3)',
+                      bgcolor: selectedValue === false ? '#EEF4FF' : 'transparent',
+                    }}
+                  >Non</Button>
+                  <Button
+                    variant={selectedValue === true ? 'contained' : 'outlined'}
+                    onClick={() => handleYesNo(true)}
+                    fullWidth
+                    sx={{
+                      py: 1.5, borderRadius: 2.5, fontWeight: 700,
+                      textTransform: 'none', fontSize: 14,
+                      background: selectedValue === true ? 'linear-gradient(135deg, #2563eb, #1a56db)' : 'transparent',
+                      borderColor: selectedValue === true ? 'transparent' : 'rgba(26,86,219,0.3)',
+                      '&:hover': selectedValue === true ? { background: 'linear-gradient(135deg, #1d4ed8, #1a4fcc)' } : {},
+                    }}
+                  >Oui ✓</Button>
+                </Stack>
+              )}
 
-          {/* ── Choice buttons ── */}
-          {showChoices && !isTyping && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mt: 0.5, ml: 4.5 }}>
-              {STEPS[stepIdx]?.options?.map((opt, idx) => (
-                <Box
-                  key={opt.value}
-                  onClick={() => handleChoice(opt)}
+              {error && <Alert severity="error" sx={{ mb: 2, fontSize: 13 }}>{error}</Alert>}
+
+              {/* ── Navigation ── */}
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                <Button
+                  onClick={handleBack}
+                  disabled={!canGoBack}
+                  variant="text"
                   sx={{
-                    px: 2, py: 1.25,
-                    bgcolor: '#fff',
-                    borderRadius: '12px 12px 12px 4px',
-                    border: '1.5px solid rgba(26,86,219,0.15)',
-                    borderLeft: '3px solid transparent',
-                    cursor: 'pointer',
-                    transition: 'all 0.18s cubic-bezier(0.4,0,0.2,1)',
-                    boxShadow: '0 1px 6px rgba(0,0,0,0.05)',
-                    animation: 'fadeSlideIn 0.25s ease both',
-                    animationDelay: `${idx * 0.06}s`,
-                    display: 'flex', alignItems: 'center', gap: 1.5,
-                    '&:hover': {
-                      bgcolor: '#eff6ff',
-                      borderColor: '#1a56db',
-                      borderLeftColor: '#1a56db',
-                      transform: 'translateX(4px)',
-                      boxShadow: '0 4px 16px rgba(26,86,219,0.12)',
-                    },
+                    textTransform: 'none', color: 'text.secondary', fontSize: 13,
+                    visibility: canGoBack ? 'visible' : 'hidden',
+                    '&:hover': { color: 'text.primary', bgcolor: 'transparent' },
                   }}
                 >
-                  <Box sx={{ flex: 1 }}>
-                    <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: '#1e3a8a', lineHeight: 1.3 }}>
-                      {opt.label}
-                    </Typography>
-                    {opt.description && (
-                      <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.3, lineHeight: 1.4 }}>
-                        {opt.description}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Box sx={{
-                    width: 24, height: 24, borderRadius: '50%', flexShrink: 0,
-                    bgcolor: 'rgba(26,86,219,0.07)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 13, color: '#1a56db', fontWeight: 700,
-                  }}>›</Box>
-                </Box>
-              ))}
-            </Box>
-          )}
+                  ← Retour
+                </Button>
 
-          {/* ── Yes / No ── */}
-          {showYesNo && !isTyping && (
-            <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'flex-end', mt: 0.5 }}>
+                {(step.type === 'text' || step.type === 'email' || step.type === 'date') && (
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    {step.optional && (
+                      <Button
+                        variant="text"
+                        onClick={() => { setInputValue(''); handleNext() }}
+                        sx={{ textTransform: 'none', color: 'text.secondary', fontSize: 13 }}
+                      >
+                        Passer
+                      </Button>
+                    )}
+                    <Button
+                      variant="contained"
+                      onClick={handleNext}
+                      sx={{
+                        borderRadius: 50, px: 3.5, py: 1.1,
+                        textTransform: 'none', fontWeight: 700, fontSize: 14,
+                        background: 'linear-gradient(135deg, #2563eb, #1a56db)',
+                        boxShadow: '0 4px 14px rgba(26,86,219,0.35)',
+                        '&:hover': { background: 'linear-gradient(135deg, #1d4ed8, #1a4fcc)' },
+                      }}
+                    >
+                      Suivant →
+                    </Button>
+                  </Stack>
+                )}
+
+                {(step.type === 'choice' || step.type === 'yesno') && (
+                  <Button
+                    onClick={reset}
+                    size="small"
+                    startIcon={<RefreshIcon sx={{ fontSize: 14 }} />}
+                    sx={{ textTransform: 'none', color: 'text.secondary', fontSize: 12 }}
+                  >
+                    Recommencer
+                  </Button>
+                )}
+              </Stack>
+
+              {/* Plus tard */}
+              <Box sx={{ textAlign: 'center', mt: 2 }}>
+                <Button
+                  onClick={() => navigate('/profil')}
+                  variant="text"
+                  size="small"
+                  sx={{ textTransform: 'none', color: 'text.disabled', fontSize: 12, '&:hover': { color: 'text.secondary', bgcolor: 'transparent' } }}
+                >
+                  Faire ça plus tard
+                </Button>
+              </Box>
+            </Box>
+          </Paper>
+        )}
+
+        {/* ── Chat mode ── */}
+        {!loading && !isDone && step && chatMode && (
+          <Box sx={{
+            width: '100%', maxWidth: 680,
+            borderRadius: 4, overflow: 'hidden',
+            boxShadow: '0 8px 48px rgba(26,86,219,0.13)',
+            border: '1px solid rgba(26,86,219,0.08)',
+          }}>
+            {/* Chat header */}
+            <Box sx={{
+              px: 2.5, py: 1.75, flexShrink: 0,
+              background: 'linear-gradient(135deg, #1a56db 0%, #2563eb 60%)',
+              display: 'flex', alignItems: 'center', gap: 1.5,
+            }}>
+              <Box sx={{
+                width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
+                background: 'rgba(255,255,255,0.18)',
+                border: '2px solid rgba(255,255,255,0.35)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontWeight: 900, fontSize: 15, color: '#fff',
+              }}>C</Box>
+              <Box sx={{ flex: 1 }}>
+                <Typography sx={{ color: '#fff', fontWeight: 700, fontSize: 13.5, lineHeight: 1.2 }}>
+                  Assistant Comutitres
+                </Typography>
+                <Stack direction="row" spacing={0.6} sx={{ alignItems: 'center', mt: 0.3 }}>
+                  <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#4ade80', boxShadow: '0 0 5px #4ade80' }} />
+                  <Typography sx={{ color: 'rgba(255,255,255,0.8)', fontSize: 11 }}>En ligne</Typography>
+                </Stack>
+              </Box>
+              <Box sx={{ px: 1.25, py: 0.4, borderRadius: 99, bgcolor: 'rgba(255,255,255,0.15)', border: '1px solid rgba(255,255,255,0.25)' }}>
+                <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: 11, fontWeight: 600 }}>
+                  Étape {Math.min(currentSection, 4)} / 4
+                </Typography>
+              </Box>
               <Button
-                onClick={() => handleYesNo(false)}
-                variant="outlined"
+                onClick={() => navigate('/profil')}
+                size="small"
                 sx={{
-                  borderRadius: 99, textTransform: 'none', fontSize: 13.5, fontWeight: 600,
-                  px: 2.5, py: 0.9,
-                  borderColor: 'rgba(26,86,219,0.3)',
-                  color: '#374151',
-                  '&:hover': { borderColor: '#1a56db', bgcolor: '#f0f6ff' },
+                  textTransform: 'none', fontSize: 12, fontWeight: 500,
+                  color: 'rgba(255,255,255,0.7)',
+                  '&:hover': { color: '#fff', bgcolor: 'rgba(255,255,255,0.1)' },
                 }}
-              >Non</Button>
+              >
+                Plus tard
+              </Button>
+            </Box>
+
+            {/* Chat body */}
+            <Box sx={{ background: 'linear-gradient(180deg, #f7f9ff 0%, #f0f4ff 100%)', p: 3 }}>
+              {/* Bot question bubble */}
+              <Box sx={{ display: 'flex', gap: 1.5, mb: 3 }}>
+                <Box sx={{
+                  width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                  background: 'linear-gradient(135deg, #2563eb, #1a56db)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 900, fontSize: 11, color: '#fff',
+                }}>C</Box>
+                <Box sx={{
+                  bgcolor: '#fff', px: 2, py: 1.5,
+                  borderRadius: '5px 20px 20px 20px',
+                  boxShadow: '0 2px 12px rgba(0,0,0,0.06)',
+                  border: '1px solid rgba(26,86,219,0.07)',
+                  maxWidth: '82%',
+                }}>
+                  <Typography sx={{ fontWeight: 700, color: '#1e3a8a', fontSize: 14, lineHeight: 1.35, mb: 0.5 }}>
+                    {step.label}
+                  </Typography>
+                  <Typography sx={{ fontSize: 13, color: 'text.secondary', lineHeight: 1.65, whiteSpace: 'pre-line' }}>
+                    {step.botMessage(draft)}
+                  </Typography>
+                </Box>
+              </Box>
+
+              {/* ── Text / email / date ── */}
+              {(step.type === 'text' || step.type === 'email' || step.type === 'date') && (
+                <Box sx={{ ml: 4.5, mb: 2 }}>
+                  <TextField
+                    type={step.type}
+                    value={inputValue}
+                    onChange={e => { setInputValue(e.target.value); setError('') }}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); handleNext() } }}
+                    placeholder={step.placeholder ?? ''}
+                    fullWidth autoFocus size="small"
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3, bgcolor: '#fff' } }}
+                  />
+                </Box>
+              )}
+
+              {/* ── Choice ── */}
+              {step.type === 'choice' && (
+                <Stack spacing={1} sx={{ mb: 2, ml: 4.5 }}>
+                  {step.options?.map(opt => (
+                    <Box
+                      key={opt.value}
+                      onClick={() => handleChoice(opt)}
+                      sx={{
+                        px: 2, py: 1.25,
+                        bgcolor: '#fff',
+                        borderRadius: '12px 12px 12px 4px',
+                        border: '1.5px solid rgba(26,86,219,0.15)',
+                        cursor: 'pointer',
+                        transition: 'all 0.18s',
+                        display: 'flex', alignItems: 'center', gap: 1.5,
+                        '&:hover': { bgcolor: '#eff6ff', borderColor: '#1a56db', transform: 'translateX(4px)' },
+                      }}
+                    >
+                      <Box sx={{ flex: 1 }}>
+                        <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: '#1e3a8a' }}>{opt.label}</Typography>
+                        {opt.description && (
+                          <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.25 }}>{opt.description}</Typography>
+                        )}
+                      </Box>
+                      <Box sx={{ color: '#1a56db', fontWeight: 700, fontSize: 18, flexShrink: 0 }}>›</Box>
+                    </Box>
+                  ))}
+                </Stack>
+              )}
+
+              {/* ── Yes / No ── */}
+              {step.type === 'yesno' && (
+                <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+                  <Button variant="outlined" onClick={() => handleYesNo(false)} fullWidth
+                    sx={{ py: 1.25, borderRadius: 99, fontWeight: 600, textTransform: 'none', fontSize: 14 }}>
+                    Non
+                  </Button>
+                  <Button variant="contained" onClick={() => handleYesNo(true)} fullWidth
+                    sx={{
+                      py: 1.25, borderRadius: 99, fontWeight: 700, textTransform: 'none', fontSize: 14,
+                      background: 'linear-gradient(135deg, #2563eb, #1a56db)',
+                      '&:hover': { background: 'linear-gradient(135deg, #1d4ed8, #1a4fcc)' },
+                    }}>
+                    Oui ✓
+                  </Button>
+                </Stack>
+              )}
+
+              {error && <Alert severity="error" sx={{ mb: 2, fontSize: 13 }}>{error}</Alert>}
+
+              {/* Navigation */}
+              <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
+                <Button
+                  onClick={handleBack}
+                  variant="text"
+                  disabled={!canGoBack}
+                  sx={{ textTransform: 'none', color: 'text.secondary', fontSize: 13, visibility: canGoBack ? 'visible' : 'hidden' }}
+                >
+                  ← Retour
+                </Button>
+
+                {(step.type === 'text' || step.type === 'email' || step.type === 'date') && (
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    {step.optional && (
+                      <Button variant="text" onClick={() => { setInputValue(''); handleNext() }}
+                        sx={{ textTransform: 'none', color: 'text.secondary', fontSize: 13 }}>
+                        Passer
+                      </Button>
+                    )}
+                    <Button variant="contained" onClick={handleNext}
+                      sx={{
+                        borderRadius: 99, px: 3, py: 1, textTransform: 'none', fontWeight: 700, fontSize: 14,
+                        background: 'linear-gradient(135deg, #2563eb, #1a56db)',
+                        boxShadow: '0 4px 14px rgba(26,86,219,0.35)',
+                        '&:hover': { background: 'linear-gradient(135deg, #1d4ed8, #1a4fcc)' },
+                      }}>
+                      Suivant →
+                    </Button>
+                  </Stack>
+                )}
+              </Stack>
+            </Box>
+          </Box>
+        )}
+
+        {/* ── Result ── */}
+        {!loading && isDone && recommendation && (
+          <Stack spacing={3} sx={{ width: '100%', maxWidth: 680 }}>
+            {/* Recommendation card */}
+            <Paper sx={{ borderRadius: 4, overflow: 'hidden', boxShadow: '0 8px 48px rgba(26,86,219,0.13)' }}>
+              <Box sx={{ px: 3, py: 2, background: 'linear-gradient(135deg, #1a56db 0%, #0ea5e9 100%)' }}>
+                <Typography sx={{ color: '#fff', fontWeight: 800, fontSize: 15 }}>
+                  🎉 Votre recommandation personnalisée
+                </Typography>
+              </Box>
+              <Box sx={{ p: 3 }}>
+                <Stack direction="row" spacing={1} sx={{ mb: 1.5 }}>
+                  <Chip
+                    label={`${recommendation.confidencePercent} % de correspondance`}
+                    size="small"
+                    sx={{ fontSize: 11, height: 24, fontWeight: 700, bgcolor: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' }}
+                  />
+                </Stack>
+                <Typography sx={{ fontWeight: 900, fontSize: 22, color: '#1a56db', mb: 0.5, letterSpacing: -0.3 }}>
+                  {recommendation.offerName}
+                </Typography>
+                <Typography sx={{ fontSize: 13.5, color: 'text.secondary', lineHeight: 1.7, mb: 2 }}>
+                  {recommendation.reasons.join(' ')}
+                </Typography>
+
+                {recommendation.requiredDocuments.length > 0 && (
+                  <Box sx={{ mb: 1.5, p: 1.5, bgcolor: '#f0f6ff', borderRadius: 2, border: '1px solid #dbeafe' }}>
+                    <Typography sx={{ fontSize: 11.5, fontWeight: 700, color: '#1e40af', mb: 0.75, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Documents requis
+                    </Typography>
+                    {recommendation.requiredDocuments.map(doc => (
+                      <Stack key={doc} direction="row" spacing={0.75} sx={{ alignItems: 'flex-start', mb: 0.4 }}>
+                        <Box sx={{ width: 5, height: 5, borderRadius: '50%', bgcolor: '#3b82f6', mt: 0.7, flexShrink: 0 }} />
+                        <Typography sx={{ fontSize: 12.5, color: '#1e3a8a' }}>{doc}</Typography>
+                      </Stack>
+                    ))}
+                  </Box>
+                )}
+
+                {recommendation.warnings.map(w => (
+                  <Box key={w} sx={{
+                    display: 'flex', gap: 1, alignItems: 'flex-start',
+                    bgcolor: '#fffbeb', border: '1px solid #fde68a',
+                    borderLeft: '4px solid #f59e0b',
+                    px: 1.5, py: 1, borderRadius: '0 8px 8px 0', mb: 0.75,
+                  }}>
+                    <Typography sx={{ fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>⚠️ {w}</Typography>
+                  </Box>
+                ))}
+              </Box>
+            </Paper>
+
+            {/* Action buttons */}
+            <Stack spacing={1.5}>
               <Button
-                onClick={() => handleYesNo(true)}
-                variant="contained"
+                variant="contained" fullWidth
+                onClick={() => navigate('/subscriptions')}
                 sx={{
-                  borderRadius: 99, textTransform: 'none', fontSize: 13.5, fontWeight: 700,
-                  px: 2.5, py: 0.9,
+                  borderRadius: 50, py: 1.25, fontWeight: 700, fontSize: 14, textTransform: 'none',
                   background: 'linear-gradient(135deg, #2563eb, #1a56db)',
                   boxShadow: '0 4px 14px rgba(26,86,219,0.35)',
-                  '&:hover': { background: 'linear-gradient(135deg, #1d4ed8, #1a4fcc)', boxShadow: '0 6px 18px rgba(26,86,219,0.4)' },
-                }}
-              >Oui ✓</Button>
-            </Stack>
-          )}
-
-          {/* ── Done actions ── */}
-          {isDone && (
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, mt: 2, mb: 1, ml: { xs: 0, sm: 4.5 }, p: 2, bgcolor: '#fff', border: '1px solid rgba(26,86,219,0.12)', borderRadius: 3, boxShadow: '0 4px 20px rgba(26,86,219,0.08)' }}>
-              <Box>
-                <Typography sx={{ fontWeight: 900, fontSize: 16, color: '#1e3a8a' }}>
-                  {SUBSCRIPTION_ACCOUNT_TEXT.title}
-                </Typography>
-                <Typography sx={{ fontSize: 12.5, color: 'text.secondary', mt: 0.5, lineHeight: 1.5 }}>
-                  {SUBSCRIPTION_ACCOUNT_TEXT.description}
-                </Typography>
-              </Box>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25}>
-                <TextField
-                  label={SUBSCRIPTION_ACCOUNT_TEXT.firstName}
-                  size="small"
-                  value={accountForm.firstName}
-                  onChange={(event) => setAccountForm((current) => ({ ...current, firstName: event.target.value }))}
-                  fullWidth
-                />
-                <TextField
-                  label={SUBSCRIPTION_ACCOUNT_TEXT.lastName}
-                  size="small"
-                  value={accountForm.lastName}
-                  onChange={(event) => setAccountForm((current) => ({ ...current, lastName: event.target.value }))}
-                  fullWidth
-                />
-              </Stack>
-              <TextField
-                label={SUBSCRIPTION_ACCOUNT_TEXT.email}
-                type="email"
-                size="small"
-                value={accountForm.email}
-                onChange={(event) => setAccountForm((current) => ({ ...current, email: event.target.value }))}
-                fullWidth
-              />
-              <TextField
-                label={SUBSCRIPTION_ACCOUNT_TEXT.password}
-                type="password"
-                size="small"
-                value={accountForm.password}
-                onChange={(event) => setAccountForm((current) => ({ ...current, password: event.target.value }))}
-                helperText={SUBSCRIPTION_ACCOUNT_TEXT.passwordHelp}
-                fullWidth
-              />
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={accountForm.rgpdConsent}
-                    onChange={(event) => setAccountForm((current) => ({ ...current, rgpdConsent: event.target.checked }))}
-                    size="small"
-                  />
-                }
-                label={
-                  <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }}>
-                    {SUBSCRIPTION_ACCOUNT_TEXT.consent}
-                  </Typography>
-                }
-              />
-              <Button
-                variant="contained"
-                onClick={handleCreateAccountAndSubscription}
-                disabled={creatingSubscription}
-                sx={{
-                  borderRadius: 99, textTransform: 'none', fontSize: 14, fontWeight: 800,
-                  px: 4, py: 1.25,
-                  background: 'linear-gradient(135deg, #2563eb, #1a56db)',
-                  boxShadow: '0 6px 20px rgba(26,86,219,0.4)',
-                  '&:hover': { background: 'linear-gradient(135deg, #1d4ed8, #1a4fcc)', transform: 'translateY(-1px)', boxShadow: '0 8px 24px rgba(26,86,219,0.45)' },
-                  transition: 'all 0.2s',
+                  '&:hover': { background: 'linear-gradient(135deg, #1d4ed8, #1a4fcc)' },
                 }}
               >
-                {creatingSubscription ? SUBSCRIPTION_ACCOUNT_TEXT.loading : SUBSCRIPTION_ACCOUNT_TEXT.submit}
+                Voir mes dossiers →
               </Button>
               <Button
-                variant="text"
+                variant="outlined" fullWidth
+                onClick={() => navigate('/dashboard')}
+                sx={{ borderRadius: 50, py: 1.25, fontWeight: 700, fontSize: 14, textTransform: 'none' }}
+              >
+                Retourner au tableau de bord
+              </Button>
+              <Button
                 onClick={reset}
-                sx={{ textTransform: 'none', fontSize: 12.5, color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}
+                size="small"
+                startIcon={<RefreshIcon sx={{ fontSize: 14 }} />}
+                sx={{ textTransform: 'none', color: 'text.secondary', fontSize: 12, alignSelf: 'center' }}
               >
-                {SUBSCRIPTION_ACCOUNT_TEXT.restart}
+                Recommencer
               </Button>
-            </Box>
-          )}
-
-        </Box>
-
-        {/* ── Error ── */}
-        {error && (
-          <Box sx={{
-            px: 2.5, py: 1,
-            bgcolor: '#fef2f2', flexShrink: 0,
-            borderTop: '1px solid #fecaca',
-            display: 'flex', alignItems: 'center', gap: 1,
-          }}>
-            <Typography sx={{ fontSize: 12.5, color: '#dc2626' }}>⚠ {error}</Typography>
-          </Box>
+            </Stack>
+          </Stack>
         )}
-
-        {/* ── Text input ── */}
-        {showInput && (
-          <Box sx={{
-            px: 2, py: 1.5, flexShrink: 0,
-            background: 'rgba(255,255,255,0.92)',
-            backdropFilter: 'blur(12px)',
-            borderTop: '1px solid rgba(26,86,219,0.08)',
-            boxShadow: '0 -4px 24px rgba(26,86,219,0.06)',
-            display: 'flex', gap: 1, alignItems: 'center',
-          }}>
-            <TextField
-              inputRef={inputRef}
-              value={inputValue}
-              onChange={(e) => { setInputValue(e.target.value); setError('') }}
-              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSend() } }}
-              placeholder={STEPS[stepIdx]?.placeholder ?? 'Votre réponse…'}
-              type={inputType}
-              size="small" fullWidth autoComplete="off"
-              sx={{
-                '& .MuiOutlinedInput-root': {
-                  borderRadius: 99, fontSize: 13.5,
-                  bgcolor: '#f5f8ff',
-                  '& fieldset': { borderColor: 'rgba(26,86,219,0.2)' },
-                  '&:hover fieldset': { borderColor: 'rgba(26,86,219,0.4)' },
-                  '&.Mui-focused fieldset': { borderColor: '#1a56db', borderWidth: 1.5 },
-                },
-              }}
-            />
-            {STEPS[stepIdx]?.optional && (
-              <Button onClick={() => { setInputValue(''); handleSend() }} variant="text" size="small"
-                sx={{ textTransform: 'none', fontSize: 12, flexShrink: 0, color: 'text.secondary', '&:hover': { color: 'primary.main', bgcolor: 'transparent' } }}>
-                Passer
-              </Button>
-            )}
-            <IconButton
-              onClick={handleSend}
-              disabled={(!inputValue.trim() && !STEPS[stepIdx]?.optional) || loading}
-              sx={{
-                background: 'linear-gradient(135deg, #2563eb, #1a56db)',
-                color: '#fff', width: 40, height: 40, flexShrink: 0,
-                boxShadow: '0 4px 12px rgba(26,86,219,0.35)',
-                transition: 'all 0.2s',
-                '&:hover': { transform: 'scale(1.08)', boxShadow: '0 6px 16px rgba(26,86,219,0.45)' },
-                '&.Mui-disabled': { background: '#e5e7eb', boxShadow: 'none' },
-              }}
-            >
-              <SendIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-          </Box>
-        )}
-
-        {/* ── Edit panel ── */}
-        {showEdit && (
-          <Box sx={{
-            position: 'absolute', left: 0, right: 0, bottom: 0,
-            background: 'rgba(255,255,255,0.97)',
-            backdropFilter: 'blur(16px)',
-            borderTop: '1px solid rgba(26,86,219,0.1)',
-            maxHeight: '72%', display: 'flex', flexDirection: 'column',
-            boxShadow: '0 -8px 40px rgba(26,86,219,0.12)',
-            borderRadius: '16px 16px 0 0',
-            animation: 'slideUp 0.25s cubic-bezier(0.4,0,0.2,1)',
-            '@keyframes slideUp': { from: { transform: 'translateY(100%)' }, to: { transform: 'translateY(0)' } },
-          }}>
-            {/* Handle */}
-            <Box sx={{ display: 'flex', justifyContent: 'center', pt: 1 }}>
-              <Box sx={{ width: 36, height: 4, borderRadius: 99, bgcolor: 'rgba(0,0,0,0.1)' }} />
-            </Box>
-            {/* Panel header */}
-            <Box sx={{ px: 2.5, py: 1.25, display: 'flex', alignItems: 'center', borderBottom: '1px solid rgba(26,86,219,0.07)', flexShrink: 0 }}>
-              <Box sx={{ flex: 1 }}>
-                <Typography sx={{ fontWeight: 800, fontSize: 14, color: '#1e3a8a' }}>Modifier une réponse</Typography>
-                <Typography sx={{ fontSize: 12, color: 'text.secondary', mt: 0.2 }}>Cliquez sur une réponse pour la corriger</Typography>
-              </Box>
-              <IconButton size="small" onClick={() => setShowEdit(false)}
-                sx={{ bgcolor: '#f3f4f6', '&:hover': { bgcolor: '#e5e7eb' } }}>
-                <CloseIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Box>
-            {/* List */}
-            <Box sx={{ overflowY: 'auto', px: 1.5, py: 1.25,
-              '&::-webkit-scrollbar': { width: 4 },
-              '&::-webkit-scrollbar-thumb': { bgcolor: 'rgba(26,86,219,0.15)', borderRadius: 99 },
-            }}>
-              {answeredSteps.length === 0 && (
-                <Typography sx={{ fontSize: 13, color: 'text.secondary', px: 1.5, py: 2 }}>Aucune réponse à modifier pour l'instant.</Typography>
-              )}
-              {answeredSteps.map(({ step, i }) => (
-                <Box
-                  key={i}
-                  onClick={() => handleEditStep(i)}
-                  sx={{
-                    display: 'flex', alignItems: 'center', gap: 1.5,
-                    px: 1.5, py: 1.25, borderRadius: 2.5, cursor: 'pointer',
-                    transition: 'all 0.15s',
-                    '&:hover': { bgcolor: '#eff6ff', transform: 'translateX(2px)' },
-                  }}
-                >
-                  <Box sx={{
-                    width: 36, height: 36, borderRadius: 2, flexShrink: 0,
-                    bgcolor: '#eff6ff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <EditIcon sx={{ fontSize: 16, color: '#1a56db' }} />
-                  </Box>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Typography sx={{ fontSize: 11.5, color: 'text.secondary', mb: 0.15, fontWeight: 500 }}>{step.label}</Typography>
-                    <Typography sx={{ fontSize: 13.5, fontWeight: 700, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {getDisplayValue(step, draft)}
-                    </Typography>
-                  </Box>
-                  <Typography sx={{ fontSize: 18, color: 'rgba(26,86,219,0.35)', flexShrink: 0 }}>›</Typography>
-                </Box>
-              ))}
-            </Box>
-          </Box>
-        )}
-
-        </Box>
 
       </Box>
 
       <Footer />
-    </Box>
-  )
-}
-
-// ─── Bot avatar ───────────────────────────────────────────────────────────────
-
-function BotAvatar({ sx }: { sx?: object }) {
-  return (
-    <Box sx={{
-      width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-      background: 'linear-gradient(135deg, #2563eb 0%, #1a56db 100%)',
-      border: '2px solid rgba(255,255,255,0.8)',
-      boxShadow: '0 2px 8px rgba(26,86,219,0.3)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontWeight: 900, fontSize: 11, color: '#fff',
-      ...sx,
-    }}>
-      C
     </Box>
   )
 }
