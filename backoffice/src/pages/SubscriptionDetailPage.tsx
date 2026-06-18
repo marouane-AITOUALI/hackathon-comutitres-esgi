@@ -67,6 +67,7 @@ function fallbackNextActions(item: AdminSubscriptionItem): SubscriptionNextActio
   if (item.documents.some((document) => document.status === 'pending' || document.status === 'needs_manual_review')) actions.push({ code: 'review_documents', priority: 'high', label: 'Verifier les justificatifs', detail: 'Un document attend une revue backoffice.' })
   if (item.documents.some((document) => document.status === 'rejected')) actions.push({ code: 'rejected_document', priority: 'medium', label: 'Informer le client', detail: 'Un justificatif a ete refuse.' })
   if (item.payments.some((payment) => payment.status === 'rejected' || payment.status === 'cancelled')) actions.push({ code: 'regularize_payment', priority: 'high', label: 'Regulariser le paiement', detail: 'Un paiement bloque le dossier.' })
+  if (item.terminationRequests.some((request) => request.status === 'requested')) actions.push({ code: 'review_termination', priority: 'high', label: 'Étudier la résiliation', detail: 'Une demande client attend une vérification des conditions et de la date d’effet.' })
   if (item.subscription.status === 'pending_validation') actions.push({ code: 'validate_subscription', priority: 'medium', label: 'Valider le dossier', detail: 'Le dossier attend une decision backoffice.' })
   if (actions.length === 0) actions.push({ code: 'no_action', priority: 'low', label: 'Aucune action prioritaire', detail: 'Le prototype ne detecte aucun blocage.' })
   return actions
@@ -284,6 +285,23 @@ export function SubscriptionDetailPage() {
           ))}
         </Stack>
       </Paper>
+
+      {item.terminationRequests.some((request) => request.status === 'requested') && (
+        <Paper sx={{ borderRadius: 4, p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>Demande de résiliation</Typography>
+          <Stack spacing={1.5}>
+            {item.terminationRequests.filter((request) => request.status === 'requested').map((request) => (
+              <Alert key={request.id} severity="warning">
+                <Typography sx={{ fontWeight: 850 }}>À étudier avant le {formatDate(request.effectiveAt)}</Typography>
+                <Typography variant="body2">Motif client : {request.reason ?? 'Non précisé'}</Typography>
+                {request.metadata?.requiresManualReview === true && (
+                  <Typography variant="body2">Imagine R : contrôle manuel des conditions obligatoire avant toute fin de droits.</Typography>
+                )}
+              </Alert>
+            ))}
+          </Stack>
+        </Paper>
+      )}
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 4 }}>

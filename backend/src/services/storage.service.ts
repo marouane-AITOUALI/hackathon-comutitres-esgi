@@ -8,6 +8,8 @@ export const DOCUMENTS_BUCKET = 'subscription-documents'
 const subscriptionDocumentTypes = ['identity', 'proof_of_address', 'eligibility', 'school_certificate', 'tax_notice', 'other'] as const
 
 const signedUrlTtlSeconds = 60 * 15
+const signedUrlCacheTtlMs = 60 * 12 * 1000
+const signedUrlCache = new Map<string, { url: string; expiresAt: number }>()
 export const DOCUMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024
 export const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024
 
@@ -173,12 +175,18 @@ export async function uploadSubscriptionDocumentFile(
 export async function createPrivateSignedUrl(bucket: string | null | undefined, path: string | null | undefined) {
   if (!bucket || !path) return null
   if (!hasStorageConfiguration()) return null
+  const cacheKey = `${bucket}:${path}`
+  const cached = signedUrlCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) return cached.url
+  if (cached) signedUrlCache.delete(cacheKey)
+
   const { data, error } = await requireStorageClient().storage.from(bucket).createSignedUrl(path, signedUrlTtlSeconds)
   if (error) {
     const message = error.message.toLowerCase()
     if (message.includes('not found') || message.includes('introuvable')) return null
     throw new AppError(502, "L'URL securisee du fichier n'a pas pu etre generee.", error.message)
   }
+  signedUrlCache.set(cacheKey, { url: data.signedUrl, expiresAt: Date.now() + signedUrlCacheTtlMs })
   return data.signedUrl
 }
 
@@ -225,4 +233,5 @@ export async function removePrivateObject(bucket: string | null | undefined, pat
   if (!hasStorageConfiguration()) return
   const { error } = await requireStorageClient().storage.from(bucket).remove([path])
   if (error) throw new AppError(502, "L'ancien fichier n'a pas pu etre supprime.", error.message)
+  signedUrlCache.delete(`${bucket}:${path}`)
 }

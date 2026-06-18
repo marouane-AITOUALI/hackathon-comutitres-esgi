@@ -64,6 +64,16 @@ export interface AdminSubscriptionItem {
   } | null
   documents: AdminDocument[]
   payments: AdminPayment[]
+  terminationRequests: Array<{
+    id: string
+    status: 'requested' | 'cancelled' | 'processed' | 'rejected'
+    reason: string | null
+    effectiveAt: string
+    processedAt: string | null
+    metadata: Record<string, unknown>
+    createdAt: string
+    updatedAt: string
+  }>
   workflow?: {
     state: 'documents_required' | 'payment_required' | 'ready_to_submit' | 'under_review' | 'needs_action' | 'approved' | 'rejected' | 'cancelled' | 'suspended'
     blockingReasons: string[]

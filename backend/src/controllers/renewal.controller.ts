@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express'
-import { acceptSubscriptionRenewal, getSubscriptionRenewal, refuseSubscriptionRenewal, suspendSubscriptionRenewal } from '../services/renewal.service.js'
+import { acceptSubscriptionRenewal, cancelSubscriptionRenewal, getSubscriptionRenewal, refuseSubscriptionRenewal, suspendSubscriptionRenewal } from '../services/renewal.service.js'
 import { AppError } from '../utils/app-error.js'
 import { renewalDecisionSchema, renewalSubscriptionParamsSchema } from '../validation/renewal.schemas.js'
 
@@ -29,4 +29,10 @@ export const suspendRenewal: RequestHandler = async (req, res) => {
   const { id } = renewalSubscriptionParamsSchema.parse(req.params)
   const body = renewalDecisionSchema.parse(req.body)
   res.json(await suspendSubscriptionRenewal(authUserId(req), id, body))
+}
+
+export const cancelRenewal: RequestHandler = async (req, res) => {
+  const { id } = renewalSubscriptionParamsSchema.parse(req.params)
+  const body = renewalDecisionSchema.parse(req.body)
+  res.json(await cancelSubscriptionRenewal(authUserId(req), id, body))
 }

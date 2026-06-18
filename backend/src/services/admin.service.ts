@@ -1,6 +1,6 @@
 import { asc, desc, eq, inArray } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
-import { documents, offers, onboardingSessions, payments, profiles, subscriptions, users } from '../db/schema.js'
+import { documents, offers, onboardingSessions, payments, profiles, subscriptions, terminationRequests, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import { notifyDocumentStatusChanged, notifySubscriptionStatusChanged } from './notifications.service.js'
 import { createPrivateSignedUrl, encodeStorageDocumentId, listSubscriptionDocumentObjects } from './storage.service.js'
@@ -148,14 +148,22 @@ async function enrichSubscription(subscription: SubscriptionRow) {
   const effectiveSubscription = subscription.submittedAt && !['accepted', 'rejected', 'cancelled', 'suspended'].includes(subscription.status)
     ? { ...subscription, status: workflow.desiredStatus }
     : subscription
-  const [user] = await database.select(publicUserSelection).from(users).where(eq(users.id, subscription.userId)).limit(1)
-  const [offer] = subscription.offerId ? await database.select(offerSelection).from(offers).where(eq(offers.id, subscription.offerId)).limit(1) : []
-  const [bearerProfile] = subscription.bearerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.bearerProfileId)).limit(1) : []
-  const [payerProfile] = subscription.payerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : []
-  const [onboardingSession] = subscription.onboardingSessionId ? await database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : []
-  const subscriptionDocuments = await database.select(documentSelection).from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt))
+  const [userRows, offerRows, bearerRows, payerRows, onboardingRows, subscriptionDocuments, subscriptionPayments, subscriptionTerminations] = await Promise.all([
+    database.select(publicUserSelection).from(users).where(eq(users.id, subscription.userId)).limit(1),
+    subscription.offerId ? database.select(offerSelection).from(offers).where(eq(offers.id, subscription.offerId)).limit(1) : [],
+    subscription.bearerProfileId ? database.select().from(profiles).where(eq(profiles.id, subscription.bearerProfileId)).limit(1) : [],
+    subscription.payerProfileId ? database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : [],
+    subscription.onboardingSessionId ? database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : [],
+    database.select(documentSelection).from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt)),
+    database.select(paymentSelection).from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt)),
+    database.select().from(terminationRequests).where(eq(terminationRequests.subscriptionId, subscription.id)).orderBy(desc(terminationRequests.createdAt)),
+  ])
+  const [user] = userRows
+  const [offer] = offerRows
+  const [bearerProfile] = bearerRows
+  const [payerProfile] = payerRows
+  const [onboardingSession] = onboardingRows
   const storageOnlyDocuments = await loadStorageOnlyDocuments(subscription, subscriptionDocuments)
-  const subscriptionPayments = await database.select(paymentSelection).from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt))
 
   return {
     subscription: effectiveSubscription,
@@ -171,6 +179,7 @@ async function enrichSubscription(subscription: SubscriptionRow) {
     } : null,
     documents: await withSignedDocuments([...subscriptionDocuments, ...storageOnlyDocuments].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())),
     payments: subscriptionPayments,
+    terminationRequests: subscriptionTerminations,
     workflow,
   }
 }
@@ -230,6 +239,7 @@ async function enrichSubscriptionList(subscriptionRows: SubscriptionRow[]) {
       } : null,
       documents: documentsBySubscriptionId.get(subscription.id) ?? [],
       payments: paymentsBySubscriptionId.get(subscription.id) ?? [],
+      terminationRequests: [],
     }
   })
 }

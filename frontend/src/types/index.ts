@@ -286,7 +286,7 @@ export interface RenewalEvent {
   id: string
   userId: string
   subscriptionId: string
-  action: 'accepted' | 'refused' | 'suspended'
+  action: 'accepted' | 'refused' | 'suspended' | 'requested' | 'cancelled'
   reason?: string | null
   effectiveAt: string
   metadata?: Record<string, unknown>
@@ -298,15 +298,49 @@ export interface RenewalSummary {
   subscription: Pick<SubscriptionEntity, 'id' | 'userId' | 'offerId' | 'status' | 'createdAt' | 'updatedAt'>
   offer: Pick<OfferSummary, 'id' | 'code' | 'name'> | null
   renewal: {
+    annual: boolean
     canRenew: boolean
+    canCancelRequest: boolean
+    requestStatus: 'none' | 'requested' | 'cancelled'
+    activeRequestId: string | null
     nextRenewalDate: string
+    renewalWindowStartsAt: string
     periodDays: number
-    recommendedAction: 'regularize_payment' | 'accept_or_refuse'
+    recommendedAction: 'regularize_payment' | 'request_or_cancel'
     reasons: string[]
     warnings: string[]
   }
   payments: Array<Pick<PaymentSummary, 'id' | 'type' | 'status' | 'amountCents' | 'currency' | 'createdAt' | 'updatedAt'>>
   events: RenewalEvent[]
+}
+
+export interface TerminationRequest {
+  id: string
+  userId: string
+  subscriptionId: string
+  status: 'requested' | 'cancelled' | 'processed' | 'rejected'
+  reason?: string | null
+  effectiveAt: string
+  processedAt?: string | null
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TerminationSummary {
+  subscriptionId: string
+  offer: { code: string; name: string } | null
+  termination: {
+    canRequest: boolean
+    canCancelRequest: boolean
+    requestStatus: TerminationRequest['status'] | 'none'
+    effectiveAt: string | null
+    currentMonthDue: boolean
+    refundReviewRequired: boolean
+    requiresManualReview: boolean
+    message: string
+  }
+  request: TerminationRequest | null
 }
 
 export interface OffersResponse {

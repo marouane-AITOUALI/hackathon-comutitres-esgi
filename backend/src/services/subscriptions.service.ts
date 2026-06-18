@@ -87,22 +87,30 @@ async function findOwnOnboardingSession(userId: string, id: string) {
   return session
 }
 
-async function enrich(subscription: SubscriptionRow) {
+async function enrich(subscription: SubscriptionRow, options: { includeSignedUrls?: boolean } = {}) {
   const database = requireDb()
   const workflow = await reconcileSubscriptionWorkflow(subscription.id)
   const effectiveSubscription = subscription.submittedAt && !['accepted', 'rejected', 'cancelled', 'suspended'].includes(subscription.status)
     ? { ...subscription, status: workflow.desiredStatus }
     : subscription
-  const [offer] = subscription.offerId ? await database.select().from(offers).where(eq(offers.id, subscription.offerId)).limit(1) : []
-  const [bearerProfile] = subscription.bearerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.bearerProfileId)).limit(1) : []
-  const [payerProfile] = subscription.payerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : []
-  const [onboardingSession] = subscription.onboardingSessionId ? await database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : []
-  const subscriptionDocuments = await database.select().from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt))
-  const subscriptionPayments = await database.select().from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt))
-  const documentsWithSignedUrls = await Promise.all(subscriptionDocuments.map(async (document) => ({
-    ...document,
-    signedUrl: await createPrivateSignedUrl(document.storageBucket, document.storagePath),
-  })))
+  const [offerRows, bearerRows, payerRows, onboardingRows, subscriptionDocuments, subscriptionPayments] = await Promise.all([
+    subscription.offerId ? database.select().from(offers).where(eq(offers.id, subscription.offerId)).limit(1) : [],
+    subscription.bearerProfileId ? database.select().from(profiles).where(eq(profiles.id, subscription.bearerProfileId)).limit(1) : [],
+    subscription.payerProfileId ? database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : [],
+    subscription.onboardingSessionId ? database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : [],
+    database.select().from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt)),
+    database.select().from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt)),
+  ])
+  const [offer] = offerRows
+  const [bearerProfile] = bearerRows
+  const [payerProfile] = payerRows
+  const [onboardingSession] = onboardingRows
+  const documentsWithSignedUrls = options.includeSignedUrls === false
+    ? subscriptionDocuments.map((document) => ({ ...document, signedUrl: null }))
+    : await Promise.all(subscriptionDocuments.map(async (document) => ({
+      ...document,
+      signedUrl: await createPrivateSignedUrl(document.storageBucket, document.storagePath),
+    })))
 
   return {
     subscription: effectiveSubscription,
@@ -158,7 +166,7 @@ export async function listSubscriptions(userId: string) {
     .where(eq(subscriptions.userId, userId))
     .orderBy(desc(subscriptions.updatedAt))
 
-  return Promise.all(rows.map(enrich))
+  return Promise.all(rows.map((row) => enrich(row, { includeSignedUrls: false })))
 }
 
 export async function getSubscription(userId: string, id: string) {

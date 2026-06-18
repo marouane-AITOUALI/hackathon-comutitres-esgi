@@ -24,5 +24,7 @@ services:
         sync: false
       - key: JWT_EXPIRES_IN
         value: 7d
+      - key: METRICS_TOKEN
+        sync: false
       - key: CORS_ORIGIN
         sync: false

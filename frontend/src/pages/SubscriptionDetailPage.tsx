@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   AlertCircle,
@@ -15,16 +15,17 @@ import {
   RotateCcw,
   Send,
   ShieldCheck,
+  ShieldX,
   X,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import { createDocument, resubmitDocument } from '../services/documents.service'
 import { createDirectPayment, createMandatePayment, simulatePayment } from '../services/payments.service'
-import { acceptSubscriptionRenewal, cancelSubscription, getSubscriptionById, getSubscriptionRenewal, refuseSubscriptionRenewal, submitSubscription, suspendSubscriptionRenewal } from '../services/subscriptions.service'
+import { acceptSubscriptionRenewal, cancelSubscription, cancelSubscriptionRenewal, cancelSubscriptionTermination, getSubscriptionById, getSubscriptionRenewal, getSubscriptionTermination, requestSubscriptionTermination, submitSubscription } from '../services/subscriptions.service'
 import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
 import { colors } from '../theme/colors'
-import type { DocumentSummary, DocumentType, PaymentSimulation, RenewalSummary, SubscriptionStatus, SubscriptionSummary } from '../types'
+import type { DocumentSummary, DocumentType, PaymentSimulation, RenewalSummary, SubscriptionStatus, SubscriptionSummary, TerminationSummary } from '../types'
 import { useSubscriptionRealtime } from '../hooks/useSubscriptionRealtime'
 import { subscriptionStatusLabels } from '../utils/statusLabels'
 
@@ -112,6 +113,18 @@ function uniqueDocumentTypes(types: DocumentType[]) {
   return types.filter((type, index, list) => list.indexOf(type) === index)
 }
 
+function terminationMonthOptions(count = 13) {
+  const formatter = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' })
+  const now = new Date()
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() + index, 1)
+    return {
+      value: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+      label: formatter.format(date),
+    }
+  })
+}
+
 function workflowPresentation(item: SubscriptionSummary) {
   switch (item.workflow.state) {
     case 'documents_required':
@@ -151,6 +164,11 @@ export function SubscriptionDetailPage() {
   const [renewal, setRenewal] = useState<RenewalSummary | null>(null)
   const [renewalReason, setRenewalReason] = useState('')
   const [renewing, setRenewing] = useState(false)
+  const [termination, setTermination] = useState<TerminationSummary | null>(null)
+  const [terminationReason, setTerminationReason] = useState('')
+  const [terminationMonth, setTerminationMonth] = useState(terminationMonthOptions(1)[0]?.value ?? '')
+  const [terminationDialogOpen, setTerminationDialogOpen] = useState(false)
+  const [terminating, setTerminating] = useState(false)
   const [cardNumber, setCardNumber] = useState('')
   const [cardExpiry, setCardExpiry] = useState('')
   const [cardCvv, setCardCvv] = useState('')
@@ -165,12 +183,14 @@ export function SubscriptionDetailPage() {
 
   async function refresh() {
     if (!id) return
-    const [subscription, renewalResponse] = await Promise.all([
+    const [subscription, renewalResponse, terminationResponse] = await Promise.all([
       getSubscriptionById(id),
       getSubscriptionRenewal(id).catch(() => null),
+      getSubscriptionTermination(id).catch(() => null),
     ])
     setItem(subscription)
     setRenewal(renewalResponse)
+    setTermination(terminationResponse)
   }
 
   useSubscriptionRealtime((detail) => {
@@ -185,13 +205,15 @@ export function SubscriptionDetailPage() {
 
     async function loadInitial() {
       try {
-        const [subscription, renewalResponse] = await Promise.all([
+        const [subscription, renewalResponse, terminationResponse] = await Promise.all([
           getSubscriptionById(subscriptionId),
           getSubscriptionRenewal(subscriptionId).catch(() => null),
+          getSubscriptionTermination(subscriptionId).catch(() => null),
         ])
         if (mounted) {
           setItem(subscription)
           setRenewal(renewalResponse)
+          setTermination(terminationResponse)
         }
       } catch (caught) {
         if (mounted) setError(caught instanceof Error ? caught.message : 'Dossier indisponible.')
@@ -253,7 +275,7 @@ export function SubscriptionDetailPage() {
         date: event.createdAt,
         title: `Renouvellement ${event.action}`,
         detail: event.reason ?? 'Decision de renouvellement enregistree',
-        status: event.action === 'accepted' ? 'accepted' : event.action === 'suspended' ? 'suspended' : 'cancelled',
+        status: event.action === 'accepted' || event.action === 'requested' ? 'accepted' : event.action === 'suspended' ? 'suspended' : 'cancelled',
       })),
       {
         id: `subscription-updated-${item.subscription.id}`,
@@ -352,18 +374,16 @@ export function SubscriptionDetailPage() {
     }
   }
 
-  async function decideRenewal(action: 'accept' | 'refuse' | 'suspend') {
+  async function requestRenewal() {
     if (!id) return
     setRenewing(true)
     setError('')
     setSuccess('')
     try {
-      if (action === 'accept') await acceptSubscriptionRenewal(id, renewalReason || 'Renouvellement demande depuis l espace client.')
-      if (action === 'refuse') await refuseSubscriptionRenewal(id, renewalReason || 'Renouvellement refuse depuis l espace client.')
-      if (action === 'suspend') await suspendSubscriptionRenewal(id, renewalReason || 'Suspension demandee depuis l espace client.')
+      await acceptSubscriptionRenewal(id, renewalReason || "Demande de renouvellement depuis l'espace client.")
       await refresh()
       setRenewalReason('')
-      setSuccess(action === 'accept' ? 'Renouvellement lance.' : action === 'refuse' ? 'Renouvellement refuse.' : 'Abonnement suspendu.')
+      setSuccess('Votre demande de renouvellement est enregistrée. Votre forfait actuel reste actif.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Action de renouvellement impossible.')
     } finally {
@@ -398,6 +418,61 @@ export function SubscriptionDetailPage() {
       setError(caught instanceof Error ? caught.message : 'Envoi du dossier impossible.')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function cancelRenewalRequest() {
+    if (!id) return
+    setRenewing(true)
+    setError('')
+    setSuccess('')
+    try {
+      await cancelSubscriptionRenewal(id, renewalReason || "Annulation de la demande depuis l'espace client.")
+      await refresh()
+      setRenewalReason('')
+      setSuccess('La demande de renouvellement est annulée. Votre forfait actuel reste actif.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "La demande de renouvellement n'a pas pu être annulée.")
+    } finally {
+      setRenewing(false)
+    }
+  }
+
+  async function submitTerminationRequest() {
+    if (!id) return
+    if (terminationReason.trim().length < 3) {
+      setError('Précisez en quelques mots la raison de votre résiliation.')
+      return
+    }
+    setTerminating(true)
+    setError('')
+    setSuccess('')
+    try {
+      setTermination(await requestSubscriptionTermination(id, { reason: terminationReason.trim(), effectiveMonth: terminationMonth }))
+      setTerminationDialogOpen(false)
+      setTerminationReason('')
+      setSuccess("Votre demande de résiliation est enregistrée. L'abonnement reste actif jusqu'à la date indiquée.")
+      await refresh()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'La résiliation est impossible.')
+    } finally {
+      setTerminating(false)
+    }
+  }
+
+  async function cancelTerminationRequest() {
+    if (!id) return
+    setTerminating(true)
+    setError('')
+    setSuccess('')
+    try {
+      setTermination(await cancelSubscriptionTermination(id, "Annulation depuis l'espace client."))
+      setSuccess("La demande de résiliation est annulée. L'abonnement reste actif.")
+      await refresh()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "La demande de résiliation n'a pas pu être annulée.")
+    } finally {
+      setTerminating(false)
     }
   }
 
@@ -527,28 +602,74 @@ export function SubscriptionDetailPage() {
             <Paper variant="outlined" sx={{ borderRadius: 2, p: 2.5 }}>
               <Typography sx={{ fontWeight: 850, mb: 1 }}>Actions possibles</Typography>
               {item.subscription.status === 'accepted' && renewal ? (
-                <Stack spacing={1.5}>
-                  <Alert severity={renewal.renewal.canRenew ? 'info' : 'warning'}>
-                    Prochaine date estimee : {formatDateTime(renewal.renewal.nextRenewalDate)}
-                  </Alert>
-                  {renewal.renewal.warnings.map((warning) => <Alert key={warning} severity="warning">{warning}</Alert>)}
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography sx={{ fontWeight: 850 }}>Préparer la prochaine année</Typography>
+                    <Typography color="text.secondary" variant="body2">
+                      La demande est ouverte trois mois avant l’échéance. Elle ne remplace et n’annule jamais votre forfait actuel.
+                    </Typography>
+                  </Box>
+                  <Paper variant="outlined" sx={{ borderRadius: 2, p: 1.75 }}>
+                    <Typography color="text.secondary" variant="caption">Prochaine échéance</Typography>
+                    <Typography sx={{ fontWeight: 800 }}>{formatDateTime(renewal.renewal.nextRenewalDate)}</Typography>
+                    <Typography color="text.secondary" variant="body2">
+                      Demande possible dès le {formatDateTime(renewal.renewal.renewalWindowStartsAt)}
+                    </Typography>
+                  </Paper>
+                  {renewal.renewal.requestStatus === 'requested' ? (
+                    <Alert severity="success">
+                      Votre demande de renouvellement est enregistrée. Le forfait actuel continue normalement.
+                    </Alert>
+                  ) : renewal.renewal.warnings.map((warning) => <Alert key={warning} severity="info">{warning}</Alert>)}
                   <TextField
-                    label="Motif ou precision"
+                    label={renewal.renewal.canCancelRequest ? "Motif d'annulation (facultatif)" : 'Précision (facultative)'}
+                    minRows={2}
+                    multiline
                     onChange={(event) => setRenewalReason(event.target.value)}
                     size="small"
                     value={renewalReason}
                   />
-                  <Stack direction={{ xs: 'column', sm: 'row', lg: 'column' }} spacing={1}>
-                    <Button disabled={renewing || !renewal.renewal.canRenew} onClick={() => void decideRenewal('accept')} startIcon={<RotateCcw size={17} />} variant="contained">
-                      Renouveler
+                  {renewal.renewal.canCancelRequest ? (
+                    <Button color="warning" disabled={renewing} onClick={() => void cancelRenewalRequest()} variant="outlined">
+                      Annuler ma demande de renouvellement
                     </Button>
-                    <Button color="warning" disabled={renewing || !renewal.renewal.canRenew} onClick={() => void decideRenewal('suspend')} variant="outlined">
-                      Suspendre
+                  ) : (
+                    <Button disabled={renewing || !renewal.renewal.canRenew} onClick={() => void requestRenewal()} startIcon={<RotateCcw size={17} />} variant="contained">
+                      Demander le renouvellement
                     </Button>
-                    <Button color="error" disabled={renewing || !renewal.renewal.canRenew} onClick={() => void decideRenewal('refuse')} variant="outlined">
-                      Refuser
-                    </Button>
-                  </Stack>
+                  )}
+
+                  {termination && (
+                    <>
+                      <Divider />
+                      <Box>
+                        <Typography sx={{ fontWeight: 850 }}>Arrêter définitivement l’abonnement</Typography>
+                        <Typography color="text.secondary" variant="body2">
+                          La résiliation est différente de l’annulation d’un renouvellement.
+                          {termination.termination.requiresManualReview
+                            ? ' Pour Imagine R, la demande doit être étudiée avant toute fin de droits.'
+                            : ' Elle met fin au forfait en cours à la date effective.'}
+                        </Typography>
+                      </Box>
+                      {termination.termination.canCancelRequest ? (
+                        <Stack spacing={1.25}>
+                          <Alert severity="warning">
+                            Résiliation demandée pour le {termination.termination.effectiveAt ? formatDateTime(termination.termination.effectiveAt) : 'fin du mois'}.
+                            Le forfait reste actif jusque-là.
+                          </Alert>
+                          <Button color="warning" disabled={terminating} onClick={() => void cancelTerminationRequest()} variant="outlined">
+                            Annuler ma demande de résiliation
+                          </Button>
+                        </Stack>
+                      ) : termination.termination.canRequest ? (
+                        <Button color="error" disabled={terminating} onClick={() => setTerminationDialogOpen(true)} startIcon={<ShieldX size={17} />} variant="outlined">
+                          Résilier mon abonnement
+                        </Button>
+                      ) : (
+                        <Alert severity="info">{termination.termination.message}</Alert>
+                      )}
+                    </>
+                  )}
                 </Stack>
               ) : item.workflow.canCancel ? (
                 <Stack spacing={1.5}>
@@ -1013,6 +1134,48 @@ export function SubscriptionDetailPage() {
           </Alert>
         )}
       </Paper>
+
+      <Dialog fullWidth maxWidth="sm" onClose={() => !terminating && setTerminationDialogOpen(false)} open={terminationDialogOpen}>
+        <DialogTitle sx={{ fontWeight: 900 }}>Résilier mon abonnement annuel</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Alert severity="error">
+              {termination?.termination.requiresManualReview
+                ? 'Votre demande sera étudiée selon son motif et les conditions Imagine R. Vos droits restent actifs tant que Comutitres ne l’a pas validée.'
+                : 'Cette action est définitive à sa date d’effet. Pour une interruption temporaire, contactez le support afin d’étudier une suspension.'}
+            </Alert>
+            <Typography>
+              Le mois en cours reste dû. En cas de paiement annuel comptant, un éventuel trop-perçu sera vérifié puis remboursé selon votre dossier.
+            </Typography>
+            <TextField
+              fullWidth
+              label="Mois de fin souhaité"
+              onChange={(event) => setTerminationMonth(event.target.value)}
+              select
+              value={terminationMonth}
+            >
+              {terminationMonthOptions().map((month) => (
+                <MenuItem key={month.value} value={month.value}>{month.label}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              autoFocus
+              fullWidth
+              label="Pourquoi souhaitez-vous résilier ?"
+              minRows={3}
+              multiline
+              onChange={(event) => setTerminationReason(event.target.value)}
+              value={terminationReason}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 1 }}>
+          <Button disabled={terminating} onClick={() => setTerminationDialogOpen(false)}>Conserver mon abonnement</Button>
+          <Button color="error" disabled={terminating || terminationReason.trim().length < 3} onClick={() => void submitTerminationRequest()} variant="contained">
+            Confirmer la résiliation
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   )
 }

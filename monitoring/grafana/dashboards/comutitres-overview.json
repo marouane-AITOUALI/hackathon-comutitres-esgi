@@ -1,0 +1,54 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Requêtes / seconde",
+      "targets": [{ "expr": "sum(rate(comutitres_http_requests_total[5m]))", "legendFormat": "requêtes/s" }],
+      "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Latence p95",
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(comutitres_http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "p95" }],
+      "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Erreurs serveur / seconde",
+      "targets": [{ "expr": "sum(rate(comutitres_http_requests_total{status_code=~\"5..\"}[5m]))", "legendFormat": "5xx/s" }],
+      "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 }
+    },
+    {
+      "type": "stat",
+      "title": "Mémoire RSS",
+      "fieldConfig": { "defaults": { "unit": "bytes" } },
+      "targets": [{ "expr": "comutitres_node_process_resident_memory_bytes", "legendFormat": "RSS" }],
+      "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Latence p95 par route",
+      "fieldConfig": { "defaults": { "unit": "s" } },
+      "targets": [{ "expr": "histogram_quantile(0.95, sum(rate(comutitres_http_request_duration_seconds_bucket[5m])) by (le, route))", "legendFormat": "{{route}}" }],
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Trafic par route",
+      "targets": [{ "expr": "sum(rate(comutitres_http_requests_total[5m])) by (route)", "legendFormat": "{{route}}" }],
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 8 }
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 41,
+  "tags": ["comutitres", "backend"],
+  "templating": { "list": [] },
+  "time": { "from": "now-1h", "to": "now" },
+  "timezone": "browser",
+  "title": "Comutitres — Vue d’ensemble",
+  "uid": "comutitres-overview",
+  "version": 1
+}
