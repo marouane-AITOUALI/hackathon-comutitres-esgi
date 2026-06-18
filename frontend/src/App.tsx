@@ -1,5 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAccessibility } from './accessibility/useAccessibility'
+import { DocumentTranslationBridge } from './i18n/DocumentTranslationBridge'
 import { AppLayout } from './components/AppLayout'
 import { ClientLayout } from './components/ClientLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -24,6 +25,7 @@ function App() {
 
   return (
     <>
+      <DocumentTranslationBridge />
       <a className="skip-link" href="#main-content">
         {language === 'fr' ? 'Aller au contenu principal' : 'Skip to main content'}
       </a>
