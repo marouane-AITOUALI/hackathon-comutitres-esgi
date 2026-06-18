@@ -1,7 +1,8 @@
 import { Box } from '@mui/material'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { FloatingSupportChat } from './FloatingSupportChat'
+import { useAccessibility } from '../accessibility/useAccessibility'
 import { useAuth } from '../hooks/useAuth'
 import { Header } from '../pages/Header'
 import { Sidebar } from '../pages/Sidebar'
@@ -27,12 +28,18 @@ function getActiveKey(pathname: string) {
 }
 
 export function ClientLayout() {
+  const { language, setReducedMotion, setTextSize } = useAccessibility()
   const { logout, user } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const activeKey = useMemo(() => getActiveKey(location.pathname), [location.pathname])
+
+  useEffect(() => {
+    if (user?.accessibilityPreference === 'large_text') setTextSize('large')
+    if (user?.accessibilityPreference === 'reduced_motion') setReducedMotion(true)
+  }, [setReducedMotion, setTextSize, user?.accessibilityPreference])
 
   const handleLogout = () => {
     logout()
@@ -54,14 +61,14 @@ export function ClientLayout() {
       <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, height: '100vh', overflow: 'hidden' }}>
         <Header
           avatarUrl={user?.avatarUrl}
-          greeting={`Bonjour ${user?.firstName ?? 'Alice'}`}
+          greeting={`${language === 'fr' ? 'Bonjour' : 'Hello'} ${user?.firstName ?? 'Alice'}`}
           userName={user ? `${user.firstName} ${user.lastName}` : 'Alice Dupont'}
           onMenuToggle={() => setMobileOpen(true)}
           onLogout={handleLogout}
           onProfileClick={() => navigate('/profil')}
         />
 
-        <Box component="main" sx={{ flex: 1, minHeight: 0, p: { xs: 2, md: 4 }, overflowX: 'hidden', overflowY: 'auto' }}>
+        <Box id="main-content" component="main" tabIndex={-1} sx={{ flex: 1, minHeight: 0, p: { xs: 2, md: 4 }, overflowX: 'hidden', overflowY: 'auto' }}>
           <Outlet />
         </Box>
         {activeKey !== 'support' ? <FloatingSupportChat /> : null}

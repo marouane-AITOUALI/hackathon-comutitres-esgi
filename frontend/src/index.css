@@ -17,16 +17,72 @@ html {
   scroll-behavior: smooth;
 }
 
+html[data-text-size="large"] {
+  font-size: 112.5%;
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
 }
 
+html[data-underline-links="true"] a {
+  text-decoration: underline !important;
+  text-underline-offset: 0.2em;
+}
+
+html[data-high-contrast="true"] {
+  filter: contrast(1.18);
+}
+
+html[data-high-contrast="true"] :focus-visible {
+  outline-color: #000;
+  outline-width: 4px;
+}
+
+html[data-reduced-motion="true"] {
+  scroll-behavior: auto;
+}
+
+html[data-reduced-motion="true"] *,
+html[data-reduced-motion="true"] *::before,
+html[data-reduced-motion="true"] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
   }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 9999;
+  padding: 10px 16px;
+  border-radius: 10px;
+  color: #fff;
+  background: #0050aa;
+  transform: translateY(-150%);
+  transition: transform 0.2s ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
 }
 
 :focus-visible {
