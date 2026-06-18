@@ -1,13 +1,17 @@
 import {
   AppBar,
   Avatar,
+  Badge,
   Box,
+  Button,
   Collapse,
   Divider,
   IconButton,
   MenuItem,
   MenuList,
   Paper,
+  Popover,
+  Stack,
   Toolbar,
   Typography,
   useMediaQuery,
@@ -16,6 +20,7 @@ import {
 import { Bell, ChevronDown, LogOut, Menu, Search, User } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { colors } from '../theme/colors'
+import { useNotifications } from '../hooks/useNotifications'
 
 interface HeaderProps {
   userName?: string
@@ -24,6 +29,7 @@ interface HeaderProps {
   onMenuToggle?: () => void
   onLogout?: () => void
   onProfileClick?: () => void
+  onNotificationClick?: (subscriptionId: string | null) => void
 }
 
 export function Header({
@@ -33,6 +39,7 @@ export function Header({
   onMenuToggle,
   onLogout,
   onProfileClick,
+  onNotificationClick,
 }: HeaderProps) {
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
@@ -40,7 +47,9 @@ export function Header({
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const [profileOpen, setProfileOpen] = useState(false)
+  const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null)
   const profileRef = useRef<HTMLDivElement>(null)
+  const { connected, markAllRead, markRead, notifications, unreadCount } = useNotifications()
 
   const handleSearchBlur = () => {
     if (!searchValue) setSearchOpen(false)
@@ -161,20 +170,93 @@ export function Header({
           </Box>
 
           {/* Bell */}
-          <IconButton
-            size="small"
-            sx={{
-              width: 40,
-              height: 40,
-              border: `1.5px solid ${colors.greyMedium}`,
-              borderRadius: 99,
-              bgcolor: colors.white,
-              color: colors.greyDark,
-              '&:hover': { bgcolor: colors.greyLight },
-            }}
+          <Badge badgeContent={unreadCount} color="error" max={99}>
+            <IconButton
+              aria-label={`${unreadCount} notification(s) non lue(s)`}
+              onClick={(event) => setNotificationAnchor(event.currentTarget)}
+              size="small"
+              sx={{
+                width: 40,
+                height: 40,
+                border: `1.5px solid ${colors.greyMedium}`,
+                borderRadius: 99,
+                bgcolor: colors.white,
+                color: colors.greyDark,
+                '&:hover': { bgcolor: colors.greyLight },
+              }}
+            >
+              <Bell size={18} />
+            </IconButton>
+          </Badge>
+          <Popover
+            anchorEl={notificationAnchor}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            onClose={() => setNotificationAnchor(null)}
+            open={Boolean(notificationAnchor)}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
           >
-            <Bell size={18} />
-          </IconButton>
+            <Box sx={{ width: { xs: 320, sm: 390 }, maxWidth: 'calc(100vw - 24px)', maxHeight: 480, overflowY: 'auto' }}>
+              <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', p: 2, borderBottom: `1px solid ${colors.greyMedium}` }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 800 }}>Notifications</Typography>
+                  <Typography color="text.secondary" variant="caption">
+                    {connected ? 'Temps réel actif' : 'Reconnexion en cours'}
+                  </Typography>
+                </Box>
+                {unreadCount > 0 && (
+                  <Button onClick={() => void markAllRead()} size="small">
+                    Tout lire
+                  </Button>
+                )}
+              </Stack>
+              {notifications.length === 0 ? (
+                <Typography color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
+                  Aucune notification pour le moment.
+                </Typography>
+              ) : (
+                notifications.slice(0, 50).map((notification) => (
+                  <Box
+                    component="button"
+                    key={notification.id}
+                    onClick={() => {
+                      if (!notification.readAt) void markRead(notification.id)
+                      setNotificationAnchor(null)
+                      onNotificationClick?.(notification.subscriptionId)
+                    }}
+                    sx={{
+                      bgcolor: notification.readAt ? colors.white : colors.blueLight,
+                      border: 0,
+                      borderBottom: `1px solid ${colors.greyMedium}`,
+                      color: colors.anthracite,
+                      cursor: 'pointer',
+                      display: 'block',
+                      font: 'inherit',
+                      p: 2,
+                      textAlign: 'left',
+                      width: '100%',
+                      '&:hover': { bgcolor: colors.greyLight40 },
+                    }}
+                    type="button"
+                  >
+                    <Stack direction="row" spacing={1.25}>
+                      <Box sx={{ bgcolor: notification.readAt ? colors.greyMedium : colors.blueInteraction, borderRadius: 99, height: 8, mt: 0.75, width: 8, flexShrink: 0 }} />
+                      <Box>
+                        <Typography sx={{ fontWeight: notification.readAt ? 650 : 800, fontSize: 14 }}>
+                          {notification.title}
+                        </Typography>
+                        <Typography color="text.secondary" variant="body2">
+                          {notification.message}
+                        </Typography>
+                        <Typography color="text.secondary" variant="caption">
+                          {new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(notification.createdAt))}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                  </Box>
+                ))
+              )}
+            </Box>
+          </Popover>
 
           {/* Profile dropdown */}
           <Box ref={profileRef} sx={{ position: 'relative' }} onKeyDown={handleProfileMenuKeyDown}>

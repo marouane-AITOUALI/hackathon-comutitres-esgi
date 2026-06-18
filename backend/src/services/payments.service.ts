@@ -3,6 +3,7 @@ import { requireDb } from '../db/client.js'
 import { offers, payments, subscriptions } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import type { DirectPaymentInput, MandatePaymentInput, PaymentSimulationInput, RegularizePaymentInput } from '../validation/payment.schemas.js'
+import { notifySubscriptionStatusChanged } from './notifications.service.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
 type PaymentRow = typeof payments.$inferSelect
@@ -87,10 +88,26 @@ function paymentResponse(payment: PaymentRow) {
 }
 
 async function markSubscriptionAfterPayment(subscriptionId: string, accepted: boolean) {
-  await requireDb()
+  const [current] = await requireDb()
+    .select(subscriptionSelection)
+    .from(subscriptions)
+    .where(eq(subscriptions.id, subscriptionId))
+    .limit(1)
+  if (!current) throw new AppError(404, 'Souscription introuvable.')
+
+  const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: accepted ? 'pending_validation' : 'pending_payment', updatedAt: new Date() })
     .where(eq(subscriptions.id, subscriptionId))
+    .returning(subscriptionSelection)
+
+  if (!updated) throw new AppError(500, "Le statut de la souscription n'a pas pu être mis à jour.")
+  await notifySubscriptionStatusChanged({
+    userId: updated.userId,
+    subscriptionId: updated.id,
+    previousStatus: current.status,
+    status: updated.status,
+  })
 }
 
 export async function simulatePayment(userId: string, input: PaymentSimulationInput) {

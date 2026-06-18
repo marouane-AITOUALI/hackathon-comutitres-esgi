@@ -25,6 +25,7 @@ import { CardPaymentFields } from '../components/payment/CardPaymentFields'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
 import { colors } from '../theme/colors'
 import type { DocumentSummary, DocumentType, SubscriptionStatus, SubscriptionSummary } from '../types'
+import { useSubscriptionRealtime } from '../hooks/useSubscriptionRealtime'
 
 const statusLabel: Record<SubscriptionStatus, string> = {
   draft: 'Brouillon',
@@ -152,6 +153,11 @@ export function SubscriptionDetailPage() {
     if (!id) return
     setItem(await getSubscriptionById(id))
   }
+
+  useSubscriptionRealtime((detail) => {
+    if (detail.subscriptionId !== id) return
+    void refresh().catch((caught) => setError(caught instanceof Error ? caught.message : 'Actualisation du dossier impossible.'))
+  })
 
   useEffect(() => {
     if (!id) return

@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App'
 import { AuthProvider } from './hooks/AuthProvider'
+import { NotificationsProvider } from './hooks/NotificationsProvider'
 import { AppThemeProvider } from './styles/AppThemeProvider'
 
 createRoot(document.getElementById('root')!).render(
@@ -11,7 +12,9 @@ createRoot(document.getElementById('root')!).render(
     <AppThemeProvider>
       <AuthProvider>
         <BrowserRouter>
-          <App />
+          <NotificationsProvider>
+            <App />
+          </NotificationsProvider>
         </BrowserRouter>
       </AuthProvider>
     </AppThemeProvider>

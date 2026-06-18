@@ -3,6 +3,7 @@ import { requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import { createPrivateSignedUrl } from './storage.service.js'
+import { notifySubscriptionStatusChanged } from './notifications.service.js'
 import type { CreateSubscriptionInput, UpdateSubscriptionInput } from '../validation/subscription.schemas.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
@@ -245,11 +246,17 @@ export async function submitSubscription(userId: string, id: string) {
     .returning(subscriptionSelection)
 
   if (!updated) throw new AppError(500, "La souscription n'a pas pu etre soumise.")
+  await notifySubscriptionStatusChanged({
+    userId: updated.userId,
+    subscriptionId: updated.id,
+    previousStatus: current.status,
+    status: updated.status,
+  })
   return enrich(updated)
 }
 
 export async function cancelSubscription(userId: string, id: string) {
-  await findOwnSubscription(userId, id)
+  const current = await findOwnSubscription(userId, id)
   const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: 'cancelled', updatedAt: new Date() })
@@ -257,11 +264,17 @@ export async function cancelSubscription(userId: string, id: string) {
     .returning(subscriptionSelection)
 
   if (!updated) throw new AppError(500, "La souscription n'a pas pu etre annulee.")
+  await notifySubscriptionStatusChanged({
+    userId: updated.userId,
+    subscriptionId: updated.id,
+    previousStatus: current.status,
+    status: updated.status,
+  })
   return enrich(updated)
 }
 
 export async function suspendSubscription(userId: string, id: string) {
-  await findOwnSubscription(userId, id)
+  const current = await findOwnSubscription(userId, id)
   const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: 'suspended', updatedAt: new Date() })
@@ -269,5 +282,11 @@ export async function suspendSubscription(userId: string, id: string) {
     .returning(subscriptionSelection)
 
   if (!updated) throw new AppError(500, "La souscription n'a pas pu etre suspendue.")
+  await notifySubscriptionStatusChanged({
+    userId: updated.userId,
+    subscriptionId: updated.id,
+    previousStatus: current.status,
+    status: updated.status,
+  })
   return enrich(updated)
 }

@@ -3,6 +3,7 @@ import { requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import { createPrivateSignedUrl } from './storage.service.js'
+import { notifySubscriptionStatusChanged } from './notifications.service.js'
 import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput } from '../validation/admin.schemas.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
@@ -276,7 +277,7 @@ export async function getAdminSubscription(id: string) {
 }
 
 export async function updateAdminSubscriptionStatus(id: string, input: AdminUpdateSubscriptionStatusInput) {
-  await findSubscription(id)
+  const current = await findSubscription(id)
   const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: input.status, updatedAt: new Date() })
@@ -284,6 +285,12 @@ export async function updateAdminSubscriptionStatus(id: string, input: AdminUpda
     .returning(subscriptionSelection)
 
   if (!updated) throw new AppError(500, "Le statut de la souscription n'a pas pu etre mis a jour.")
+  await notifySubscriptionStatusChanged({
+    userId: updated.userId,
+    subscriptionId: updated.id,
+    previousStatus: current.status,
+    status: updated.status,
+  })
   return enrichSubscription(updated)
 }
 

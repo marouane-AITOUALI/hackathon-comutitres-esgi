@@ -192,6 +192,19 @@ export interface PaymentSummary {
   updatedAt: string
 }
 
+export interface UserNotification {
+  id: string
+  userId: string
+  subscriptionId: string | null
+  type: string
+  title: string
+  message: string
+  data: Record<string, unknown>
+  readAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface SubscriptionSummary {
   subscription: SubscriptionEntity
   offer: OfferSummary | null

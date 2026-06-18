@@ -184,12 +184,30 @@ export const renewalEvents = pgTable('renewal_events', {
   index('renewal_events_action_idx').on(table.action),
 ])
 
+export const notifications = pgTable('notifications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  subscriptionId: uuid('subscription_id').references(() => subscriptions.id, { onDelete: 'cascade' }),
+  type: text('type').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  data: jsonb('data').$type<Record<string, unknown>>().default({}).notNull(),
+  readAt: timestamp('read_at', { withTimezone: true }),
+  ...timestamps,
+}, (table) => [
+  index('notifications_user_id_idx').on(table.userId),
+  index('notifications_subscription_id_idx').on(table.subscriptionId),
+  index('notifications_read_at_idx').on(table.readAt),
+  index('notifications_created_at_idx').on(table.createdAt),
+])
+
 export const usersRelations = relations(users, ({ many, one }) => ({
   profiles: many(profiles),
   onboardingSessions: many(onboardingSessions),
   subscriptions: many(subscriptions),
   payments: many(payments),
   renewalEvents: many(renewalEvents),
+  notifications: many(notifications),
   avatar: one(userAvatars, { fields: [users.id], references: [userAvatars.ownerId] }),
 }))
 export const userAvatarsRelations = relations(userAvatars, ({ one }) => ({ owner: one(users, { fields: [userAvatars.ownerId], references: [users.id] }) }))
@@ -206,4 +224,8 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
 export const renewalEventsRelations = relations(renewalEvents, ({ one }) => ({
   user: one(users, { fields: [renewalEvents.userId], references: [users.id] }),
   subscription: one(subscriptions, { fields: [renewalEvents.subscriptionId], references: [subscriptions.id] }),
+}))
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  user: one(users, { fields: [notifications.userId], references: [users.id] }),
+  subscription: one(subscriptions, { fields: [notifications.subscriptionId], references: [subscriptions.id] }),
 }))
