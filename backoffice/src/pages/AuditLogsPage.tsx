@@ -25,7 +25,7 @@ export function AuditLogsPage() {
   }, [])
 
   const filtered = useMemo(() => logs.filter((log) => {
-    const text = `${log.action} ${log.summary} ${log.entityId}`.toLowerCase()
+    const text = `${log.action} ${log.summary}`.toLowerCase()
     return (!entityType || log.entityType === entityType) && (!search || text.includes(search.toLowerCase()))
   }), [entityType, logs, search])
 
@@ -37,7 +37,7 @@ export function AuditLogsPage() {
 
       <Paper sx={{ borderRadius: 4, p: 3 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-          <TextField fullWidth label="Rechercher action, resume ou reference" onChange={(event) => setSearch(event.target.value)} value={search} />
+          <TextField fullWidth label="Rechercher action ou resume" onChange={(event) => setSearch(event.target.value)} value={search} />
           <TextField label="Entite" onChange={(event) => setEntityType(event.target.value)} select sx={{ minWidth: 220 }} value={entityType}>
             {entityTypes.map((item) => <MenuItem key={item || 'all'} value={item}>{item || 'Toutes les entites'}</MenuItem>)}
           </TextField>
@@ -48,14 +48,13 @@ export function AuditLogsPage() {
         <TableContainer>
           <Table aria-label="Audit logs">
             <TableHead>
-              <TableRow><TableCell>Date</TableCell><TableCell>Entite</TableCell><TableCell>Reference</TableCell><TableCell>Action</TableCell><TableCell>Resume</TableCell></TableRow>
+              <TableRow><TableCell>Date</TableCell><TableCell>Entite</TableCell><TableCell>Action</TableCell><TableCell>Resume</TableCell></TableRow>
             </TableHead>
             <TableBody>
               {filtered.map((log) => (
                 <TableRow key={log.id}>
                   <TableCell>{new Date(log.createdAt).toLocaleString('fr-FR')}</TableCell>
                   <TableCell><StatusBadge status={log.entityType} label={log.entityType} /></TableCell>
-                  <TableCell>{log.entityId.slice(0, 8)}</TableCell>
                   <TableCell>{log.action}</TableCell>
                   <TableCell>{log.summary}</TableCell>
                 </TableRow>

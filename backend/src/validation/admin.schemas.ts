@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 const subscriptionStatuses = ['draft', 'pending_documents', 'pending_payment', 'pending_validation', 'accepted', 'rejected', 'cancelled', 'suspended'] as const
+const userRoles = ['user', 'admin'] as const
 const offerCode = z.string().trim().min(2).max(80).transform((value) => value.toUpperCase())
 const optionalText = z.string().trim().min(1).max(500).optional()
 
@@ -10,6 +11,7 @@ export const adminIdParamsSchema = z.object({
 
 export const adminListSubscriptionsQuerySchema = z.object({
   status: z.enum(subscriptionStatuses).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
 }).default({})
 
 export const adminUpdateSubscriptionStatusSchema = z.object({
@@ -24,6 +26,10 @@ export const adminReviewDocumentSchema = z.object({
   if (!value.accepted && !value.rejectionReason) {
     context.addIssue({ code: 'custom', path: ['rejectionReason'], message: 'Un motif est requis en cas de refus.' })
   }
+})
+
+export const adminUpdateUserRoleSchema = z.object({
+  role: z.enum(userRoles),
 })
 
 export const adminCreateOfferSchema = z.object({
@@ -43,5 +49,6 @@ export const adminUpdateOfferSchema = adminCreateOfferSchema.partial().refine(
 export type AdminListSubscriptionsQuery = z.infer<typeof adminListSubscriptionsQuerySchema>
 export type AdminUpdateSubscriptionStatusInput = z.infer<typeof adminUpdateSubscriptionStatusSchema>
 export type AdminReviewDocumentInput = z.infer<typeof adminReviewDocumentSchema>
+export type AdminUpdateUserRoleInput = z.infer<typeof adminUpdateUserRoleSchema>
 export type AdminCreateOfferInput = z.infer<typeof adminCreateOfferSchema>
 export type AdminUpdateOfferInput = z.infer<typeof adminUpdateOfferSchema>

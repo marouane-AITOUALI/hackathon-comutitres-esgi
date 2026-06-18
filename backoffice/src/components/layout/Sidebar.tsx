@@ -1,81 +1,169 @@
-import { Box, Button, Divider, Drawer, Stack, Typography } from '@mui/material'
-import { NavLink } from 'react-router-dom'
+import { Box, Button, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Typography, useMediaQuery, useTheme } from '@mui/material'
+import { BellRing, ClipboardList, FileText, FolderOpen, LayoutDashboard, MessageSquare, Package, Users } from 'lucide-react'
+import { NavLink, useLocation } from 'react-router-dom'
+import logoUrl from '../../assets/comutitres_v_blanc.svg'
 import { colors } from '../../theme/colors'
 
-const navItems = [
-  { label: 'Dashboard', to: '/dashboard', marker: 'D' },
-  { label: 'Souscriptions', to: '/subscriptions', marker: 'S' },
-  { label: 'Documents', to: '/documents', marker: 'J' },
-  { label: 'Alertes support', to: '/support-alerts', marker: 'A' },
-  { label: 'Utilisateurs', to: '/users', marker: 'U' },
-  { label: 'Offres', to: '/offers', marker: 'O' },
-  { label: 'Communications', to: '/communications', marker: 'C' },
-  { label: 'Audit logs', to: '/audit-logs', marker: 'L' },
-]
+const width = 303
+const desktopMargin = 25
 
-const width = 280
+const navItems = [
+  { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
+  { label: 'Souscriptions', to: '/subscriptions', icon: ClipboardList },
+  { label: 'Documents', to: '/documents', icon: FolderOpen },
+  { label: 'Alertes support', to: '/support-alerts', icon: BellRing },
+  { label: 'Utilisateurs', to: '/users', icon: Users },
+  { label: 'Offres', to: '/offers', icon: Package },
+  { label: 'Communications', to: '/communications', icon: MessageSquare },
+  { label: "Journal d'activite", to: '/audit-logs', icon: FileText },
+] as const
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const location = useLocation()
+
   return (
-    <Stack sx={{ bgcolor: colors.sidebarBackground, height: '100%', p: 2.5 }}>
-      <Box sx={{ px: 1, py: 1 }}>
-        <Typography sx={{ color: colors.blueFocus, fontWeight: 900, letterSpacing: -0.4 }} variant="h5">
-          comutitres
-        </Typography>
-        <Typography color="text.secondary" variant="body2">Backoffice</Typography>
-      </Box>
-      <Divider sx={{ my: 2 }} />
-      <Stack component="nav" spacing={0.75}>
-        {navItems.map((item) => (
-          <Button
-            key={item.to}
-            component={NavLink}
-            to={item.to}
-            onClick={onNavigate}
-            sx={{
-              borderRadius: 3,
-              color: colors.greyDark,
-              justifyContent: 'flex-start',
-              px: 1.5,
-              py: 1.25,
-              '&.active': {
-                bgcolor: colors.blueMedium,
-                color: colors.blueFocus,
-              },
-            }}
-          >
-            <Box sx={{ bgcolor: 'currentColor', borderRadius: 2, height: 28, mr: 1.5, opacity: 0.15, width: 28 }} />
-            <Typography sx={{ fontWeight: 800, textTransform: 'none' }}>{item.label}</Typography>
-          </Button>
-        ))}
-      </Stack>
-      <Box sx={{ flexGrow: 1 }} />
-      <Box sx={{ bgcolor: colors.white, borderRadius: 4, p: 2 }}>
-        <Typography sx={{ fontWeight: 800 }}>Prototype hackathon</Typography>
-        <Typography color="text.secondary" variant="body2">
-          Pilotage des dossiers, documents et alertes avant validation.
+    <Box
+      sx={{
+        bgcolor: colors.sidebarBackground,
+        borderRadius: { xs: 0, md: '16px' },
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        overflowY: 'auto',
+        px: { xs: 2, md: '21px' },
+        py: { xs: 3, md: 3.5 },
+        width,
+      }}
+    >
+      <Box sx={{ mb: { xs: 2, md: 2.5 }, pl: { xs: 1, md: 6.75 } }}>
+        <Box component="img" src={logoUrl} alt="Comutitres" sx={{ display: 'block', height: 'auto', width: 126 }} />
+        <Typography color="text.secondary" sx={{ fontSize: 13, fontWeight: 700, mt: 1 }}>
+          Backoffice
         </Typography>
       </Box>
-    </Stack>
+
+      <List component="nav" disablePadding sx={{ flex: 1 }}>
+        {navItems.map((item) => {
+          const Icon = item.icon
+          const active = item.to === '/subscriptions'
+            ? location.pathname.startsWith('/subscriptions')
+            : location.pathname === item.to
+
+          return (
+            <ListItemButton
+              key={item.to}
+              component={NavLink}
+              onClick={onNavigate}
+              to={item.to}
+              sx={{
+                bgcolor: active ? colors.white : 'transparent',
+                borderRadius: '16px',
+                color: active ? colors.blueIleDeFrance : colors.greyDark,
+                mb: 1,
+                minHeight: 43,
+                px: 3.5,
+                py: 1.25,
+                transition: 'background 0.15s ease, color 0.15s ease, transform 0.15s ease',
+                '&:hover': {
+                  bgcolor: colors.white,
+                  color: active ? colors.blueIleDeFrance : colors.blueInteraction,
+                  transform: 'translateX(3px)',
+                },
+                '&.active': {
+                  bgcolor: colors.white,
+                  color: colors.blueIleDeFrance,
+                },
+              }}
+            >
+              <ListItemIcon sx={{ color: 'inherit', minWidth: 32 }}>
+                <Icon aria-hidden size={18} strokeWidth={2.2} />
+              </ListItemIcon>
+              <ListItemText
+                primary={item.label}
+                sx={{
+                  '& .MuiListItemText-primary': {
+                    fontSize: 15,
+                    fontWeight: active ? 800 : 600,
+                  },
+                }}
+              />
+            </ListItemButton>
+          )
+        })}
+      </List>
+
+      <Box
+        sx={{
+          bgcolor: colors.white,
+          borderRadius: '16px',
+          flexShrink: 0,
+          mt: 'auto',
+          p: 2.5,
+          textAlign: 'left',
+        }}
+      >
+        <Typography sx={{ color: colors.anthracite, fontSize: 16, fontWeight: 800, lineHeight: 1.25, mb: 0.5 }}>
+          Espace admin
+        </Typography>
+        <Typography sx={{ color: colors.greyDark, fontSize: 14, lineHeight: 1.35, mb: 2 }}>
+          Suivi rapide des dossiers et alertes.
+        </Typography>
+        <Button
+          component={NavLink}
+          fullWidth
+          to="/support-alerts"
+          variant="contained"
+          sx={{
+            bgcolor: colors.blueIleDeFrance,
+            borderRadius: '14px',
+            boxShadow: 'none',
+            color: colors.white,
+            fontSize: 13,
+            fontWeight: 700,
+            minHeight: 42,
+            '&:hover': { bgcolor: colors.blueInteraction, boxShadow: 'none' },
+          }}
+        >
+          Voir les alertes
+        </Button>
+      </Box>
+    </Box>
   )
 }
 
 export function Sidebar({ mobileOpen, onMobileClose }: { mobileOpen: boolean; onMobileClose: () => void }) {
-  return (
-    <>
-      <Box component="aside" sx={{ display: { xs: 'none', md: 'block' }, flexShrink: 0, width }}>
-        <Box sx={{ height: '100vh', position: 'sticky', top: 0 }}>
-          <SidebarContent />
-        </Box>
-      </Box>
+  const theme = useTheme()
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'))
+
+  if (isMobile) {
+    return (
       <Drawer
-        open={mobileOpen}
-        onClose={onMobileClose}
+        anchor="left"
         ModalProps={{ keepMounted: true }}
-        sx={{ display: { xs: 'block', md: 'none' }, '& .MuiDrawer-paper': { width } }}
+        onClose={onMobileClose}
+        open={mobileOpen}
+        sx={{ '& .MuiDrawer-paper': { bgcolor: colors.sidebarBackground, boxSizing: 'border-box', width } }}
       >
         <SidebarContent onNavigate={onMobileClose} />
       </Drawer>
-    </>
+    )
+  }
+
+  return (
+    <Box
+      component="aside"
+      sx={{
+        flexShrink: 0,
+        height: `calc(100vh - ${desktopMargin * 2}px)`,
+        ml: `${desktopMargin}px`,
+        my: `${desktopMargin}px`,
+        overflow: 'auto',
+        position: 'sticky',
+        top: `${desktopMargin}px`,
+        width,
+      }}
+    >
+      <SidebarContent />
+    </Box>
   )
 }

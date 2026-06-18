@@ -1,4 +1,4 @@
-import { Button, Paper, Stack, Typography } from '@mui/material'
+import { Paper, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 
 interface EmptyStateProps {
@@ -13,7 +13,7 @@ export function EmptyState({ title, description, action }: EmptyStateProps) {
       <Stack spacing={1.5} sx={{ alignItems: 'center' }}>
         <Typography variant="h6" sx={{ fontWeight: 800 }}>{title}</Typography>
         {description && <Typography color="text.secondary" sx={{ maxWidth: 520 }}>{description}</Typography>}
-        {action && <Button component="span" sx={{ mt: 1 }}>{action}</Button>}
+        {action && <Stack sx={{ mt: 1 }}>{action}</Stack>}
       </Stack>
     </Paper>
   )

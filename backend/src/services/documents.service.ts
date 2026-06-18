@@ -4,7 +4,7 @@ import { requireDb } from '../db/client.js'
 import { AppError } from '../utils/app-error.js'
 import { analyzeDocumentWithRules, checkDocumentFraud } from './document-analysis.service.js'
 import { notifyDocumentStatusChanged, notifyDocumentSubmitted } from './notifications.service.js'
-import { createPrivateSignedUrl, removePrivateObject, uploadSubscriptionDocumentFile } from './storage.service.js'
+import { createPrivateSignedUrl, decodeStorageDocumentId, DOCUMENTS_BUCKET, removePrivateObject, parseSubscriptionDocumentStoragePath, uploadSubscriptionDocumentFile } from './storage.service.js'
 import type { CreateDocumentInput, ManualReviewInput, ResubmitDocumentInput, UpdateDocumentStatusInput } from '../validation/document.schemas.js'
 
 type DocumentRow = typeof documents.$inferSelect
@@ -44,6 +44,8 @@ async function findSubscriptionForAccess(userId: string, role: string, subscript
 }
 
 async function findDocumentForAccess(userId: string, role: string, id: string) {
+  if (id.startsWith('storage_')) throw new AppError(404, 'Document introuvable.')
+
   const [row] = await requireDb()
     .select({ document: documentSelection, subscriptionUserId: subscriptions.userId })
     .from(documents)
@@ -53,6 +55,37 @@ async function findDocumentForAccess(userId: string, role: string, id: string) {
 
   if (!row || (role !== 'admin' && row.subscriptionUserId !== userId)) throw new AppError(404, 'Document introuvable.')
   return row.document
+}
+
+async function findStorageDocumentForAccess(userId: string, role: string, id: string) {
+  const path = decodeStorageDocumentId(id)
+  const parsed = path ? parseSubscriptionDocumentStoragePath(path) : null
+  if (!parsed) throw new AppError(404, 'Document introuvable.')
+
+  const subscription = await findSubscriptionForAccess(userId, role, parsed.subscriptionId)
+  if (subscription.userId !== parsed.userId) throw new AppError(404, 'Document introuvable.')
+
+  return {
+    id,
+    subscriptionId: parsed.subscriptionId,
+    ownerId: parsed.userId,
+    type: parsed.type,
+    fileUrl: path,
+    storageBucket: DOCUMENTS_BUCKET,
+    storagePath: path,
+    originalFilename: parsed.filename,
+    mimeType: null,
+    sizeBytes: null,
+    status: 'pending',
+    analysisResult: {
+      provider: 'storage-fallback',
+      warnings: ['Fichier present dans Supabase Storage sans ligne document associee.'],
+    },
+    analyzedAt: null,
+    rejectionReason: null,
+    createdAt: null,
+    updatedAt: null,
+  }
 }
 
 async function publicDocument(document: DocumentRow) {
@@ -132,6 +165,14 @@ export async function getDocument(userId: string, role: string, id: string) {
 }
 
 export async function getDocumentSignedUrl(userId: string, role: string, id: string) {
+  if (id.startsWith('storage_')) {
+    const document = await findStorageDocumentForAccess(userId, role, id)
+    return {
+      documentId: document.id,
+      signedUrl: await createPrivateSignedUrl(document.storageBucket, document.storagePath),
+    }
+  }
+
   const document = await findDocumentForAccess(userId, role, id)
   return {
     documentId: document.id,
@@ -140,6 +181,12 @@ export async function getDocumentSignedUrl(userId: string, role: string, id: str
 }
 
 export async function deleteDocument(userId: string, role: string, id: string) {
+  if (id.startsWith('storage_')) {
+    const document = await findStorageDocumentForAccess(userId, role, id)
+    await removePrivateObject(document.storageBucket, document.storagePath)
+    return { deleted: true, id }
+  }
+
   const document = await findDocumentForAccess(userId, role, id)
   await requireDb().delete(documents).where(eq(documents.id, id))
   await removePrivateObject(document.storageBucket, document.storagePath)

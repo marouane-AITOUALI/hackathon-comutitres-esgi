@@ -1,8 +1,8 @@
 import type { RequestHandler } from 'express'
-import { createAdminOffer, getAdminStats, getAdminSubscription, getAuditLogs, getSupportAlerts, listAdminOffers, listAdminSubscriptions, listAdminUsers, listPendingDocuments, reviewAdminDocument, updateAdminOffer, updateAdminSubscriptionStatus } from '../services/admin.service.js'
+import { createAdminOffer, getAdminStats, getAdminSubscription, getAuditLogs, getSupportAlerts, listAdminOffers, listAdminSubscriptions, listAdminUsers, listPendingDocuments, reviewAdminDocument, updateAdminOffer, updateAdminSubscriptionStatus, updateAdminUserRole } from '../services/admin.service.js'
 import { createCommunication, listCommunications } from '../services/notifications.service.js'
 import { AppError } from '../utils/app-error.js'
-import { adminCreateOfferSchema, adminIdParamsSchema, adminListSubscriptionsQuerySchema, adminReviewDocumentSchema, adminUpdateOfferSchema, adminUpdateSubscriptionStatusSchema } from '../validation/admin.schemas.js'
+import { adminCreateOfferSchema, adminIdParamsSchema, adminListSubscriptionsQuerySchema, adminReviewDocumentSchema, adminUpdateOfferSchema, adminUpdateSubscriptionStatusSchema, adminUpdateUserRoleSchema } from '../validation/admin.schemas.js'
 import { createCommunicationSchema } from '../validation/notification.schemas.js'
 
 export const stats: RequestHandler = async (_req, res) => {
@@ -37,6 +37,13 @@ export const patchDocumentReview: RequestHandler = async (req, res) => {
 
 export const users: RequestHandler = async (_req, res) => {
   res.json({ users: await listAdminUsers() })
+}
+
+export const patchUserRole: RequestHandler = async (req, res) => {
+  if (!req.auth) throw new AppError(401, 'Authentification requise.')
+  const { id } = adminIdParamsSchema.parse(req.params)
+  const body = adminUpdateUserRoleSchema.parse(req.body)
+  res.json({ user: await updateAdminUserRole(id, body, req.auth.sub) })
 }
 
 export const offers: RequestHandler = async (_req, res) => {
