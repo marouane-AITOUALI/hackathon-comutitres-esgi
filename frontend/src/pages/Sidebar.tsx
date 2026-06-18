@@ -1,17 +1,9 @@
 import { Box, Button, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Typography, useMediaQuery, useTheme } from '@mui/material'
 import { LayoutDashboard, BookOpen, CreditCard, FolderOpen, User, HelpCircle } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { useAccessibility } from '../accessibility/useAccessibility'
 import logoUrl from '../assets/comutitres_v_blanc.svg'
 import { colors } from '../theme/colors'
-
-const NAV_ITEMS = [
-  { label: 'Dashboard', icon: <LayoutDashboard size={18} />, key: 'dashboard' },
-  { label: 'Abonnements', icon: <BookOpen size={18} />, key: 'abonnements' },
-  { label: 'Paiements', icon: <CreditCard size={18} />, key: 'paiements' },
-  { label: 'Documents', icon: <FolderOpen size={18} />, key: 'documents' },
-  { label: 'Profil', icon: <User size={18} />, key: 'profil' },
-  { label: 'Support', icon: <HelpCircle size={18} />, key: 'support' },
-]
 
 const SIDEBAR_WIDTH = 303
 const SIDEBAR_DESKTOP_MARGIN = 25
@@ -33,7 +25,16 @@ interface SidebarProps {
 }
 
 function SidebarContent({ activeKey = 'dashboard', onNavigate }: Pick<SidebarProps, 'activeKey' | 'onNavigate'>) {
+  const { language } = useAccessibility()
   const navigate = useNavigate()
+  const navItems = [
+    { label: language === 'fr' ? 'Tableau de bord' : 'Dashboard', icon: <LayoutDashboard size={18} />, key: 'dashboard' },
+    { label: language === 'fr' ? 'Abonnements' : 'Subscriptions', icon: <BookOpen size={18} />, key: 'abonnements' },
+    { label: language === 'fr' ? 'Paiements' : 'Payments', icon: <CreditCard size={18} />, key: 'paiements' },
+    { label: 'Documents', icon: <FolderOpen size={18} />, key: 'documents' },
+    { label: language === 'fr' ? 'Profil' : 'Profile', icon: <User size={18} />, key: 'profil' },
+    { label: 'Support', icon: <HelpCircle size={18} />, key: 'support' },
+  ]
 
   const handleDownload = () => {
     window.open('/mobile-app', '_blank', 'noopener,noreferrer')
@@ -66,7 +67,7 @@ function SidebarContent({ activeKey = 'dashboard', onNavigate }: Pick<SidebarPro
 
       {/* Nav */}
       <List disablePadding sx={{ flex: 1, mt: 0 }}>
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const active = item.key === activeKey
           return (
             <ListItemButton
@@ -125,15 +126,15 @@ function SidebarContent({ activeKey = 'dashboard', onNavigate }: Pick<SidebarPro
         }}
       >
         <Typography variant="body2" sx={{ color: '#111111', fontWeight: 400, mb: 0.5, fontSize: 16, lineHeight: 1.25 }}>
-          Get the app
+          {language === 'fr' ? 'L’application mobile' : 'Get the app'}
         </Typography>
         <Typography variant="body2" sx={{ color: '#111111', mb: 2, fontSize: 16, lineHeight: 1.25 }}>
-          Accès rapide mobile
+          {language === 'fr' ? 'Accès rapide mobile' : 'Quick mobile access'}
         </Typography>
         <Button
           fullWidth
           variant="contained"
-          aria-label="Télécharger l'application"
+          aria-label={language === 'fr' ? "Télécharger l'application" : 'Download the app'}
           onClick={handleDownload}
           sx={{
             bgcolor: colors.blueIleDeFrance,
@@ -146,7 +147,7 @@ function SidebarContent({ activeKey = 'dashboard', onNavigate }: Pick<SidebarPro
             boxShadow: 'none',
           }}
         >
-          Télécharger
+          {language === 'fr' ? 'Télécharger' : 'Download'}
         </Button>
       </Box>
     </Box>

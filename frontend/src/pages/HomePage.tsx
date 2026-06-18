@@ -23,6 +23,7 @@ import {
 import { Link } from 'react-router-dom'
 import { Footer } from '../components/Footer'
 import { Header } from '../components/Header'
+import { useAccessibility } from '../accessibility/useAccessibility'
 import { useAuth } from '../hooks/useAuth'
 import heroDay from '../assets/jour.png'
 import ctaNight from '../assets/nuit.png'
@@ -32,80 +33,90 @@ const BRAND_BLUE = '#1972d2'
 const DARK_TEXT = '#1a2b3c'
 
 const forfaits = [
-  { title: 'Imagine R', desc: 'Pour les étudiants et apprentis', color: '#7c3aed', bg: '#ede9fe', icon: 'graduation' },
-  { title: 'Navigo', desc: 'Pour tous vos déplacements', color: '#2563eb', bg: '#dbeafe', icon: 'card' },
-  { title: 'TST', desc: 'Tarification Solidarité Transport', color: '#ea580c', bg: '#ffedd5', icon: 'people' },
-  { title: 'Améthyste', desc: 'Pour les seniors et certains publics', color: '#db2777', bg: '#fce7f3', icon: 'heart' },
-  { title: 'Navigo Liberté+', desc: 'Paiement à l’usage sans engagement', color: '#0d9488', bg: '#ccfbf1', icon: 'ticket' },
+  { title: 'Imagine R', fr: 'Pour les étudiants et apprentis', en: 'For students and apprentices', color: '#7c3aed', bg: '#ede9fe', icon: 'graduation' },
+  { title: 'Navigo', fr: 'Pour tous vos déplacements', en: 'For all your daily journeys', color: '#2563eb', bg: '#dbeafe', icon: 'card' },
+  { title: 'TST', fr: 'Tarification Solidarité Transport', en: 'Reduced fares based on social eligibility', color: '#ea580c', bg: '#ffedd5', icon: 'people' },
+  { title: 'Améthyste', fr: 'Pour les seniors et certains publics', en: 'For seniors and eligible passengers', color: '#db2777', bg: '#fce7f3', icon: 'heart' },
+  { title: 'Navigo Liberté+', fr: 'Paiement à l’usage sans engagement', en: 'Pay as you travel with no commitment', color: '#0d9488', bg: '#ccfbf1', icon: 'ticket' },
 ]
 
 const accessibility = [
-  { title: 'Français', desc: 'Interface en français', icon: 'chat' },
-  { title: 'English', desc: 'Version anglaise disponible', icon: 'globe' },
-  { title: 'Senior', desc: 'Taille de texte adaptée', icon: 'person' },
-  { title: 'Handicap', desc: 'Conforme aux normes d’accessibilité', icon: 'wheelchair' },
-  { title: 'Mobile First', desc: 'Optimisé mobile et tablette', icon: 'phone' },
+  { frTitle: 'Français', enTitle: 'French', fr: 'Interface disponible en français', en: 'French interface available', icon: 'chat' },
+  { frTitle: 'English', enTitle: 'English', fr: 'Version anglaise disponible', en: 'English interface available', icon: 'globe' },
+  { frTitle: 'Senior', enTitle: 'Larger text', fr: 'Taille de texte adaptée', en: 'Adjustable and larger text', icon: 'person' },
+  { frTitle: 'Handicap', enTitle: 'Accessibility', fr: 'Navigation clavier et préférences adaptées', en: 'Keyboard navigation and accessible preferences', icon: 'wheelchair' },
+  { frTitle: 'Mobile First', enTitle: 'Mobile first', fr: 'Optimisé mobile et tablette', en: 'Optimised for mobile and tablet', icon: 'phone' },
 ]
 
 const journeySteps = [
   {
     number: '01',
-    title: 'Décris ton besoin',
-    desc: 'Profil, fréquence des trajets, porteur, payeur et situation particulière.',
+    frTitle: 'Décris ton besoin',
+    enTitle: 'Tell us what you need',
+    fr: 'Profil, fréquence des trajets, porteur, payeur et situation particulière.',
+    en: 'Profile, travel frequency, pass holder, payer and personal circumstances.',
     icon: SearchCheck,
   },
   {
     number: '02',
-    title: 'Reçois une recommandation',
-    desc: 'Le questionnaire compare les offres et explique pourquoi un forfait te correspond.',
+    frTitle: 'Reçois une recommandation',
+    enTitle: 'Get a recommendation',
+    fr: 'Le questionnaire compare les offres et explique pourquoi un forfait te correspond.',
+    en: 'The questionnaire compares offers and explains which pass best matches your needs.',
     icon: BadgeCheck,
   },
   {
     number: '03',
-    title: 'Ajoute tes justificatifs',
-    desc: 'La plateforme demande uniquement les documents utiles et suit leur validation.',
+    frTitle: 'Ajoute tes justificatifs',
+    enTitle: 'Upload your documents',
+    fr: 'La plateforme demande uniquement les documents utiles et suit leur validation.',
+    en: 'The platform requests only the required documents and tracks their validation.',
     icon: FileCheck2,
   },
   {
     number: '04',
-    title: 'Finalise et suis ton dossier',
-    desc: 'Paiement, réception du titre, état de la demande et support restent au même endroit.',
+    frTitle: 'Finalise et suis ton dossier',
+    enTitle: 'Complete and track your request',
+    fr: 'Paiement, réception du titre, état de la demande et support restent au même endroit.',
+    en: 'Payment, pass delivery, request status and support all remain in one place.',
     icon: CreditCard,
   },
 ]
 
 const aidCards = [
   {
-    title: 'Imagine R et bourse',
-    desc: 'Des réductions peuvent s’appliquer aux élèves et étudiants boursiers selon leur situation et leur département.',
-    note: 'Attestation de scolarité ou de bourse à prévoir.',
+    frTitle: 'Imagine R et bourse',
+    enTitle: 'Imagine R and scholarships',
+    fr: 'Des réductions peuvent s’appliquer aux élèves et étudiants boursiers selon leur situation et leur département.',
+    en: 'Discounts may apply to pupils and students receiving a scholarship, depending on their circumstances and department.',
+    frNote: 'Attestation de scolarité ou de bourse à prévoir.',
+    enNote: 'A school or scholarship certificate may be required.',
     icon: GraduationCap,
     color: '#7c3aed',
     bg: '#f3e8ff',
   },
   {
-    title: 'Tarification Solidarité',
-    desc: 'Selon les droits sociaux, la TST peut ouvrir accès à une réduction de 50 %, Solidarité 75 % ou à la gratuité.',
-    note: 'Les droits et justificatifs sont vérifiés régulièrement.',
+    frTitle: 'Tarification Solidarité',
+    enTitle: 'Solidarity pricing',
+    fr: 'Selon les droits sociaux, la TST peut ouvrir accès à une réduction de 50 %, Solidarité 75 % ou à la gratuité.',
+    en: 'Depending on social eligibility, TST may provide a 50% discount, 75% solidarity discount or free travel.',
+    frNote: 'Les droits et justificatifs sont vérifiés régulièrement.',
+    enNote: 'Eligibility and supporting documents are checked regularly.',
     icon: HeartHandshake,
     color: '#ea580c',
     bg: '#ffedd5',
   },
   {
-    title: 'Senior et Améthyste',
-    desc: 'Les personnes de 65 ans et plus ou en situation de handicap peuvent bénéficier d’offres adaptées.',
-    note: 'Les conditions varient selon le département.',
+    frTitle: 'Senior et Améthyste',
+    enTitle: 'Senior and Améthyste',
+    fr: 'Les personnes de 65 ans et plus ou en situation de handicap peuvent bénéficier d’offres adaptées.',
+    en: 'People aged 65 and over or passengers with disabilities may qualify for adapted offers.',
+    frNote: 'Les conditions varient selon le département.',
+    enNote: 'Conditions vary depending on the department.',
     icon: MapPin,
     color: '#db2777',
     bg: '#fce7f3',
   },
-]
-
-const supportCases = [
-  'J’ai perdu ma carte',
-  'Mon paiement a été refusé',
-  'Je veux résilier',
-  'Je souhaite modifier mon adresse',
 ]
 
 function ForfaitIcon({ type, color }: { type: string; color: string }) {
@@ -169,11 +180,16 @@ function AccessIcon({ type }: { type: string }) {
 }
 
 export function HomePage() {
+  const { language } = useAccessibility()
   const { user } = useAuth()
   const ctaTo = user ? '/onboarding' : '/auth/register'
+  const isFrench = language === 'fr'
+  const supportCases = isFrench
+    ? ['J’ai perdu ma carte', 'Mon paiement a été refusé', 'Je veux résilier', 'Je souhaite modifier mon adresse']
+    : ['I lost my travel card', 'My payment was declined', 'I want to cancel', 'I need to change my address']
 
   return (
-    <Box sx={{ bgcolor: '#fff', overflowX: 'hidden' }}>
+    <Box id="main-content" component="main" tabIndex={-1} sx={{ bgcolor: '#fff', overflowX: 'hidden' }}>
       <Box
         sx={{
           position: 'relative',
@@ -218,7 +234,7 @@ export function HomePage() {
               borderRadius: 999,
             }}
           >
-            10k+ abonnés en Île-de-France
+            {isFrench ? '10k+ abonnés en Île-de-France' : '10k+ subscribers across Île-de-France'}
           </Box>
 
           <Typography
@@ -231,13 +247,15 @@ export function HomePage() {
               maxWidth: 820,
             }}
           >
-            Ton forfait Navigo,
+            {isFrench ? 'Ton forfait Navigo,' : 'Your Navigo pass,'}
             <br />
-            sans te prendre la tête.
+            {isFrench ? 'sans te prendre la tête.' : 'made simple.'}
           </Typography>
 
           <Typography sx={{ color: '#475569', fontSize: { xs: 15, md: 17 }, maxWidth: 620 }}>
-            Navigo, Imagine R, TST ou Améthyste : trouve le forfait qui te correspond en 2 minutes.
+            {isFrench
+              ? 'Navigo, Imagine R, TST ou Améthyste : trouve le forfait qui te correspond en 2 minutes.'
+              : 'Navigo, Imagine R, TST or Améthyste: find the right pass for you in 2 minutes.'}
           </Typography>
 
           <Stack
@@ -286,7 +304,7 @@ export function HomePage() {
             }}
           >
             <TextField
-              placeholder="Ton profil…"
+              placeholder={isFrench ? 'Ton profil…' : 'Your profile…'}
               variant="standard"
               fullWidth
               slotProps={{
@@ -344,7 +362,7 @@ export function HomePage() {
                 '&:hover': { bgcolor: '#1565c0' },
               }}
             >
-              Trouver mon forfait
+              {isFrench ? 'Trouver mon forfait' : 'Find my travel pass'}
               <ArrowRight size={18} aria-hidden="true" />
             </Button>
           </Stack>
@@ -363,13 +381,15 @@ export function HomePage() {
         <Box sx={{ maxWidth: 1180, mx: 'auto' }}>
           <Stack spacing={1.5} sx={{ alignItems: 'center', textAlign: 'center', mb: { xs: 5, md: 7 } }}>
             <Typography sx={{ color: BRAND_BLUE, fontWeight: 800, fontSize: 12, letterSpacing: 1.2 }}>
-              COMMENT ÇA MARCHE
+              {isFrench ? 'COMMENT ÇA MARCHE' : 'HOW IT WORKS'}
             </Typography>
             <Typography component="h2" sx={{ fontWeight: 900, fontSize: { xs: 28, md: 38 }, color: DARK_TEXT }}>
-              Un seul parcours, du choix au suivi
+              {isFrench ? 'Un seul parcours, du choix au suivi' : 'One journey, from choice to tracking'}
             </Typography>
             <Typography sx={{ color: '#64748b', maxWidth: 660, lineHeight: 1.7 }}>
-              Plus besoin de chercher où souscrire, quels documents fournir ou comment suivre ta demande.
+              {isFrench
+                ? 'Plus besoin de chercher où souscrire, quels documents fournir ou comment suivre ta demande.'
+                : 'No more searching for where to subscribe, which documents to provide or how to track your request.'}
             </Typography>
           </Stack>
 
@@ -413,10 +433,10 @@ export function HomePage() {
                     <StepIcon size={25} strokeWidth={2} />
                   </Box>
                   <Typography sx={{ fontWeight: 850, color: DARK_TEXT, fontSize: 17, mb: 1 }}>
-                    {step.title}
+                    {isFrench ? step.frTitle : step.enTitle}
                   </Typography>
                   <Typography sx={{ color: '#64748b', fontSize: 14, lineHeight: 1.65 }}>
-                    {step.desc}
+                    {isFrench ? step.fr : step.en}
                   </Typography>
                 </Box>
               )
@@ -429,10 +449,10 @@ export function HomePage() {
         <Stack direction={{ xs: 'column', lg: 'row' }} spacing={{ xs: 4, lg: 6 }} sx={{ maxWidth: 1280, mx: 'auto' }}>
           <Box sx={{ flex: '0 0 auto', maxWidth: 320 }}>
             <Typography sx={{ color: BRAND_BLUE, fontWeight: 800, fontSize: 12, letterSpacing: 1.2, mb: 1.5 }}>
-              NOS FORFAITS
+              {isFrench ? 'NOS FORFAITS' : 'OUR TRAVEL PASSES'}
             </Typography>
             <Typography component="h2" sx={{ fontWeight: 900, fontSize: { xs: 28, md: 34 }, lineHeight: 1.15, color: DARK_TEXT, mb: 3 }}>
-              Des solutions adaptées à chaque situation
+              {isFrench ? 'Des solutions adaptées à chaque situation' : 'A solution for every situation'}
             </Typography>
             <Button
               component={Link}
@@ -447,7 +467,7 @@ export function HomePage() {
                 '&:hover': { borderColor: '#1565c0', bgcolor: 'rgba(25,114,210,0.04)' },
               }}
             >
-              Comparer les forfaits
+              {isFrench ? 'Comparer les forfaits' : 'Compare travel passes'}
               <ArrowRight size={18} aria-hidden="true" />
             </Button>
           </Box>
@@ -512,7 +532,7 @@ export function HomePage() {
                   <ForfaitIcon type={f.icon} color={f.color} />
                 </Box>
                 <Typography sx={{ fontWeight: 800, fontSize: 16, color: DARK_TEXT, mb: 0.75 }}>{f.title}</Typography>
-                <Typography sx={{ fontSize: 13, color: '#64748b', lineHeight: 1.5 }}>{f.desc}</Typography>
+                <Typography sx={{ fontSize: 13, color: '#64748b', lineHeight: 1.5 }}>{isFrench ? f.fr : f.en}</Typography>
               </Box>
             ))}
           </Box>
@@ -526,13 +546,15 @@ export function HomePage() {
         <Box sx={{ maxWidth: 1180, mx: 'auto' }}>
           <Stack spacing={1.5} sx={{ alignItems: 'center', textAlign: 'center', mb: { xs: 5, md: 7 } }}>
             <Typography sx={{ color: BRAND_BLUE, fontWeight: 800, fontSize: 12, letterSpacing: 1.2 }}>
-              TARIFS & AIDES
+              {isFrench ? 'TARIFS & AIDES' : 'PRICES & SUPPORT'}
             </Typography>
             <Typography component="h2" sx={{ fontWeight: 900, fontSize: { xs: 28, md: 38 }, color: DARK_TEXT }}>
-              Les aides qui peuvent changer ton tarif
+              {isFrench ? 'Les aides qui peuvent changer ton tarif' : 'Support that may reduce your fare'}
             </Typography>
             <Typography sx={{ color: '#64748b', maxWidth: 700, lineHeight: 1.7 }}>
-              Le parcours identifie les dispositifs possibles, puis te demande les justificatifs nécessaires pour confirmer tes droits.
+              {isFrench
+                ? 'Le parcours identifie les dispositifs possibles, puis te demande les justificatifs nécessaires pour confirmer tes droits.'
+                : 'The journey identifies possible support schemes, then asks for the documents needed to confirm your eligibility.'}
             </Typography>
           </Stack>
 
@@ -547,7 +569,7 @@ export function HomePage() {
               const AidIcon = aid.icon
               return (
               <Box
-                key={aid.title}
+                key={aid.frTitle}
                 sx={{
                   bgcolor: '#fff',
                   border: '1px solid #e2e8f0',
@@ -573,13 +595,13 @@ export function HomePage() {
                   <AidIcon size={25} strokeWidth={2} />
                 </Box>
                 <Typography sx={{ fontWeight: 850, fontSize: 18, color: DARK_TEXT, mb: 1 }}>
-                  {aid.title}
+                  {isFrench ? aid.frTitle : aid.enTitle}
                 </Typography>
                 <Typography sx={{ color: '#64748b', fontSize: 14, lineHeight: 1.65, mb: 2 }}>
-                  {aid.desc}
+                  {isFrench ? aid.fr : aid.en}
                 </Typography>
                 <Typography sx={{ color: aid.color, fontWeight: 700, fontSize: 13, lineHeight: 1.5 }}>
-                  {aid.note}
+                  {isFrench ? aid.frNote : aid.enNote}
                 </Typography>
               </Box>
               )
@@ -591,10 +613,10 @@ export function HomePage() {
       <Box sx={{ px: { xs: 2, md: 5 }, py: { xs: 6, md: 8 }, textAlign: 'center' }}>
         <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
           <Typography sx={{ color: BRAND_BLUE, fontWeight: 800, fontSize: 12, letterSpacing: 1.2, mb: 1.5 }}>
-            PENSÉ POUR TOUS
+            {isFrench ? 'PENSÉ POUR TOUS' : 'DESIGNED FOR EVERYONE'}
           </Typography>
           <Typography component="h2" sx={{ fontWeight: 900, fontSize: { xs: 28, md: 36 }, color: DARK_TEXT, mb: 5 }}>
-            Une expérience accessible à tous les Franciliens.
+            {isFrench ? 'Une expérience accessible à tous les Franciliens.' : 'An accessible experience for everyone.'}
           </Typography>
 
           <Stack
@@ -604,7 +626,7 @@ export function HomePage() {
           >
             {accessibility.map((item, index) => (
               <Stack
-                key={item.title}
+                key={item.frTitle}
                 spacing={1.5}
                 sx={{
                   flex: 1,
@@ -628,8 +650,8 @@ export function HomePage() {
                 >
                   <AccessIcon type={item.icon} />
                 </Box>
-                <Typography sx={{ fontWeight: 800, fontSize: 16, color: DARK_TEXT }}>{item.title}</Typography>
-                <Typography sx={{ fontSize: 13, color: '#64748b' }}>{item.desc}</Typography>
+                <Typography sx={{ fontWeight: 800, fontSize: 16, color: DARK_TEXT }}>{isFrench ? item.frTitle : item.enTitle}</Typography>
+                <Typography sx={{ fontSize: 13, color: '#64748b' }}>{isFrench ? item.fr : item.en}</Typography>
               </Stack>
             ))}
           </Stack>
@@ -672,13 +694,15 @@ export function HomePage() {
               <CircleHelp size={27} />
             </Box>
             <Typography sx={{ color: '#93c5fd', fontWeight: 800, fontSize: 12, letterSpacing: 1.2, mb: 1.5 }}>
-              AIDE & SAV
+              {isFrench ? 'AIDE & SAV' : 'HELP & SUPPORT'}
             </Typography>
             <Typography component="h2" sx={{ fontWeight: 900, fontSize: { xs: 28, md: 38 }, lineHeight: 1.15, mb: 2 }}>
-              Un support intégré à ton parcours
+              {isFrench ? 'Un support intégré à ton parcours' : 'Support built into your journey'}
             </Typography>
             <Typography sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.75, maxWidth: 520 }}>
-              Consulte le suivi de ta demande, retrouve tes documents et obtiens une réponse sans repartir de zéro.
+              {isFrench
+                ? 'Consulte le suivi de ta demande, retrouve tes documents et obtiens une réponse sans repartir de zéro.'
+                : 'Track your request, find your documents and get help without starting over.'}
             </Typography>
           </Box>
 
@@ -725,7 +749,7 @@ export function HomePage() {
                 '&:hover': { bgcolor: '#dbeafe' },
               }}
             >
-              Accéder au support
+              {isFrench ? 'Accéder au support' : 'Open support'}
             </Button>
           </Box>
         </Box>
@@ -748,10 +772,12 @@ export function HomePage() {
       >
         <Stack spacing={2} sx={{ alignItems: 'center', maxWidth: 640 }}>
           <Typography component="h2" sx={{ fontWeight: 900, fontSize: { xs: 28, md: 36 }, color: '#fff' }}>
-            Prêt à trouver le bon forfait ?
+            {isFrench ? 'Prêt à trouver le bon forfait ?' : 'Ready to find the right travel pass?'}
           </Typography>
           <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: { xs: 15, md: 17 } }}>
-            En moins de 2 minutes, découvrez l’abonnement adapté à votre situation.
+            {isFrench
+              ? 'En moins de 2 minutes, découvrez l’abonnement adapté à votre situation.'
+              : 'In under 2 minutes, discover the pass that best fits your situation.'}
           </Typography>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 1 }}>
             <Button
@@ -769,7 +795,7 @@ export function HomePage() {
                 '&:hover': { bgcolor: '#1565c0' },
               }}
             >
-              Commencer maintenant
+              {isFrench ? 'Commencer maintenant' : 'Get started'}
               <ArrowRight size={19} aria-hidden="true" />
             </Button>
             <Button
@@ -793,7 +819,7 @@ export function HomePage() {
                 },
               }}
             >
-              Découvrir l’app mobile
+              {isFrench ? 'Découvrir l’app mobile' : 'Discover the mobile app'}
             </Button>
           </Stack>
         </Stack>
