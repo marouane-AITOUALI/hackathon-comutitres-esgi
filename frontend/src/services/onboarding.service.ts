@@ -1,7 +1,25 @@
-import type { OnboardingAnswer, OnboardingDraft, OnboardingResponse, RecommendationResponse } from '../types'
+import type { OfferRecommendation, OnboardingAnswer, OnboardingDraft, OnboardingResponse, RecommendationResponse } from '../types'
 import { apiRequest } from './api'
 
 export const ONBOARDING_KEY = 'comutitres_onboarding'
+export const RECOMMENDATION_KEY = 'comutitres_recommendation'
+
+export function saveRecommendationResult(rec: OfferRecommendation) {
+  localStorage.setItem(RECOMMENDATION_KEY, JSON.stringify(rec))
+}
+
+export function getRecommendationResult(): OfferRecommendation | null {
+  try {
+    const raw = localStorage.getItem(RECOMMENDATION_KEY)
+    return raw ? (JSON.parse(raw) as OfferRecommendation) : null
+  } catch {
+    return null
+  }
+}
+
+export function clearRecommendationResult() {
+  localStorage.removeItem(RECOMMENDATION_KEY)
+}
 
 export function getOnboardingDraft(): OnboardingDraft {
   try {

@@ -1,9 +1,10 @@
 import { Alert, Box, Button, Chip, LinearProgress, Paper, Stack, Typography } from '@mui/material'
-import { ArrowRight, BadgeCheck, CalendarClock, CreditCard, FileWarning, Route } from 'lucide-react'
+import { ArrowRight, BadgeCheck, CalendarClock, CreditCard, FileWarning, Route, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
 import { listOffers } from '../services/offers.service'
 import { listSubscriptions } from '../services/subscriptions.service'
+import { clearRecommendationResult, getRecommendationResult } from '../services/onboarding.service'
 import { colors } from '../theme/colors'
 import type { OfferSummary, SubscriptionSummary } from '../types'
 
@@ -67,6 +68,7 @@ export function DashboardPage() {
   const [offers, setOffers] = useState<OfferSummary[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [pendingRec, setPendingRec] = useState(() => getRecommendationResult())
 
   useEffect(() => {
     let cancelled = false
@@ -96,9 +98,65 @@ export function DashboardPage() {
   const documentsToReview = subscriptions.flatMap((item) => item.documents ?? []).filter((document) => document.status !== 'validated').length
   const paymentsToFix = subscriptions.flatMap((item) => item.payments ?? []).filter((payment) => ['pending', 'rejected', 'cancelled'].includes(payment.status)).length
 
+  function dismissRec() {
+    clearRecommendationResult()
+    setPendingRec(null)
+  }
+
   return (
     <Stack spacing={3}>
       {error && <Alert severity="error">{error}</Alert>}
+
+      {pendingRec && (
+        <Paper sx={{
+          p: { xs: 2, md: 2.5 },
+          borderRadius: 3,
+          bgcolor: '#fff1f2',
+          border: '1.5px solid #fca5a5',
+          borderLeft: '5px solid #dc2626',
+        }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between' }}>
+            <Box>
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
+                <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#dc2626', flexShrink: 0 }} />
+                <Typography sx={{ fontSize: 11, fontWeight: 700, color: '#dc2626', textTransform: 'uppercase', letterSpacing: 0.6 }}>
+                  Éligibilité détectée
+                </Typography>
+              </Stack>
+              <Typography sx={{ fontWeight: 800, color: '#7f1d1d', fontSize: 15, lineHeight: 1.3 }}>
+                Vous êtes éligible au forfait{' '}
+                <Box component="span" sx={{ color: '#dc2626' }}>{pendingRec.offerName}</Box>
+              </Typography>
+              <Typography sx={{ fontSize: 13, color: '#991b1b', mt: 0.5 }}>
+                Correspondance à {pendingRec.confidencePercent} % — complétez votre dossier pour en bénéficier.
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
+              <Button
+                component={Link}
+                to="/subscriptions"
+                variant="contained"
+                size="small"
+                sx={{
+                  bgcolor: '#dc2626', color: '#fff', borderRadius: 50,
+                  fontWeight: 700, fontSize: 13, textTransform: 'none',
+                  px: 2.5, py: 0.9, whiteSpace: 'nowrap',
+                  '&:hover': { bgcolor: '#b91c1c' },
+                }}
+              >
+                Démarrer mon dossier
+              </Button>
+              <Button
+                onClick={dismissRec}
+                size="small"
+                sx={{ minWidth: 0, p: 0.75, color: '#dc2626', borderRadius: 50, '&:hover': { bgcolor: '#fee2e2' } }}
+              >
+                <X size={16} />
+              </Button>
+            </Stack>
+          </Stack>
+        </Paper>
+      )}
 
       <Paper
         sx={{
