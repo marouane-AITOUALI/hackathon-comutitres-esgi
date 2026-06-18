@@ -72,6 +72,9 @@ services:
       - postgres_password
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    configs:
+      - source: postgres_storage_schema
+        target: /docker-entrypoint-initdb.d/10-storage-schema.sql
     networks:
       - data
     deploy:
@@ -99,6 +102,8 @@ configs:
     file: ./docker/nginx.conf
   backend_entrypoint:
     file: ./docker/swarm-backend-entrypoint.sh
+  postgres_storage_schema:
+    file: ./docker/postgres/init-storage.sql
 
 secrets:
   postgres_password:

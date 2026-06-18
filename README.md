@@ -48,6 +48,9 @@ Les services sont disponibles sur :
 - API : http://localhost:8080/api/health
 
 La base PostgreSQL locale n'expose pas son port sur la machine.
+Le bootstrap `docker/postgres/init-storage.sql` crée uniquement la table
+`storage.buckets` attendue par les migrations Supabase, sans modifier ces
+migrations.
 
 Pour utiliser personnellement la base Supabase Production renseignée dans
 `backend/.env` au lieu de la base locale, lancer :

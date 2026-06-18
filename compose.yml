@@ -62,10 +62,14 @@ services:
       - sh
       - -c
       - |
+        set -e
         if [ "$${RUN_MIGRATIONS:-true}" = "true" ]; then
           node dist/db/migrate.js
         fi
         exec node dist/server.js
+    depends_on:
+      database:
+        condition: service_healthy
     expose:
       - "3000"
     networks:
@@ -93,6 +97,7 @@ services:
       POSTGRES_DB: comutitres
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-storage.sql:/docker-entrypoint-initdb.d/10-storage-schema.sql:ro
     expose:
       - "5432"
     networks:
