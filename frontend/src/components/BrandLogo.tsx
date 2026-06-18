@@ -1,7 +1,7 @@
 import { Box } from '@mui/material'
 import { Link } from 'react-router-dom'
 import logoBlack from '../assets/comutitres_v_noir.svg'
-import logoWhite from '../assets/comutitres_v_blanc.svg'
+import logoWhiteTransparent from '../assets/comutitres_v_blanc_transparent.svg'
 
 type BrandLogoProps = {
   variant?: 'black' | 'white'
@@ -30,7 +30,7 @@ export function BrandLogo({ variant = 'black' }: BrandLogoProps) {
     >
       <Box
         component="img"
-        src={variant === 'black' ? logoBlack : logoWhite}
+        src={variant === 'black' ? logoBlack : logoWhiteTransparent}
         alt="Comutitres et Île-de-France Mobilités"
         sx={{
           display: 'block',
