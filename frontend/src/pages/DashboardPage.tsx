@@ -282,7 +282,7 @@ export function DashboardPage() {
             {urgentSubscription ? (
               <Stack spacing={2}>
                 <Typography color="text.secondary">
-                  Priorité sur le dossier {urgentSubscription.offer?.name ?? urgentSubscription.subscription.id.slice(0, 8)}.
+                  Priorité sur {urgentSubscription.offer?.name ?? 'votre dossier en cours'}.
                 </Typography>
                 <Chip color={statusTone[urgentSubscription.subscription.status]} label={statusLabel[urgentSubscription.subscription.status]} sx={{ alignSelf: 'flex-start', fontWeight: 700 }} />
                 <Button component={Link} to={`/subscriptions/${urgentSubscription.subscription.id}`} variant="contained" endIcon={<ArrowRight size={18} />}>

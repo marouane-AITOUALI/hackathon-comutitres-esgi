@@ -101,15 +101,14 @@ export function PaiementsPage() {
         <TableContainer>
           <Table>
             <TableHead>
-              <TableRow><TableCell>Reference</TableCell><TableCell>Dossier</TableCell><TableCell>Type</TableCell><TableCell>Montant</TableCell><TableCell>Statut</TableCell><TableCell align="right">Action</TableCell></TableRow>
+              <TableRow><TableCell>Dossier</TableCell><TableCell>Type</TableCell><TableCell>Montant</TableCell><TableCell>Statut</TableCell><TableCell align="right">Action</TableCell></TableRow>
             </TableHead>
             <TableBody>
               {rows.map(({ payment, subscription }) => (
                 <TableRow key={payment.id}>
-                  <TableCell>{payment.externalReference ?? payment.id.slice(0, 8)}</TableCell>
                   <TableCell>
                     <Button component={Link} size="small" to={`/subscriptions/${subscription.subscription.id}`}>
-                      {subscription.offer?.name ?? subscription.subscription.id.slice(0, 8)}
+                      {subscription.offer?.name ?? 'Dossier en cours'}
                     </Button>
                   </TableCell>
                   <TableCell>{payment.type}</TableCell>

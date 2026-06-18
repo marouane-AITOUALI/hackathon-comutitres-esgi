@@ -229,6 +229,33 @@ export interface SubscriptionNextAction {
   detail: string
 }
 
+export interface RenewalEvent {
+  id: string
+  userId: string
+  subscriptionId: string
+  action: 'accepted' | 'refused' | 'suspended'
+  reason?: string | null
+  effectiveAt: string
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RenewalSummary {
+  subscription: Pick<SubscriptionEntity, 'id' | 'userId' | 'offerId' | 'status' | 'createdAt' | 'updatedAt'>
+  offer: Pick<OfferSummary, 'id' | 'code' | 'name'> | null
+  renewal: {
+    canRenew: boolean
+    nextRenewalDate: string
+    periodDays: number
+    recommendedAction: 'regularize_payment' | 'accept_or_refuse'
+    reasons: string[]
+    warnings: string[]
+  }
+  payments: Array<Pick<PaymentSummary, 'id' | 'type' | 'status' | 'amountCents' | 'currency' | 'createdAt' | 'updatedAt'>>
+  events: RenewalEvent[]
+}
+
 export interface OffersResponse {
   offers: OfferSummary[]
 }

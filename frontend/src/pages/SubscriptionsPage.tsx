@@ -274,9 +274,6 @@ export function SubscriptionsPage() {
                       <Box sx={{ minWidth: 0 }}>
                         <Typography variant="h6" sx={{ fontWeight: 850 }}>{item.offer?.name ?? 'Offre non associée'}</Typography>
                         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap', mt: 0.5 }}>
-                          <Typography color="text.secondary" variant="body2">
-                            Dossier {item.subscription.id.slice(0, 8)}
-                          </Typography>
                           <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', color: colors.greyDark }}>
                             <CalendarClock size={14} />
                             <Typography color="text.secondary" variant="body2">

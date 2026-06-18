@@ -2,12 +2,18 @@ import { asc, desc, eq, inArray } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
-import { createPrivateSignedUrl } from './storage.service.js'
 import { notifyDocumentStatusChanged, notifySubscriptionStatusChanged } from './notifications.service.js'
-import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput } from '../validation/admin.schemas.js'
+import { createPrivateSignedUrl, encodeStorageDocumentId, listSubscriptionDocumentObjects } from './storage.service.js'
+import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput, AdminUpdateUserRoleInput } from '../validation/admin.schemas.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
 type DocumentRow = typeof documents.$inferSelect
+type PaymentRow = typeof payments.$inferSelect
+type AdminDocumentRow = DocumentRow & { source?: 'database' | 'storage' }
+
+function uniqueValues(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))]
+}
 
 const publicUserSelection = {
   id: users.id,
@@ -51,15 +57,51 @@ const documentSelection = {
   updatedAt: documents.updatedAt,
 }
 
-async function withSignedDocument(document: DocumentRow) {
+async function withSignedDocument(document: AdminDocumentRow) {
   return {
     ...document,
     signedUrl: await createPrivateSignedUrl(document.storageBucket, document.storagePath),
   }
 }
 
-async function withSignedDocuments(rows: DocumentRow[]) {
+async function withSignedDocuments(rows: AdminDocumentRow[]) {
   return Promise.all(rows.map(withSignedDocument))
+}
+
+async function loadStorageOnlyDocuments(subscription: SubscriptionRow, existingDocuments: DocumentRow[]): Promise<AdminDocumentRow[]> {
+  const existingPaths = new Set(existingDocuments.map((document) => document.storagePath))
+  const storageObjects = await listSubscriptionDocumentObjects(subscription.userId, subscription.id)
+  const now = new Date()
+
+  return storageObjects
+    .filter((object) => !existingPaths.has(object.path))
+    .map((object) => {
+      const createdAt = object.createdAt ? new Date(object.createdAt) : now
+      const updatedAt = object.updatedAt ? new Date(object.updatedAt) : createdAt
+
+      return {
+        id: encodeStorageDocumentId(object.path),
+        subscriptionId: subscription.id,
+        ownerId: subscription.userId,
+        type: object.type as DocumentRow['type'],
+        fileUrl: object.path,
+        storageBucket: object.bucket,
+        storagePath: object.path,
+        originalFilename: object.name,
+        mimeType: object.mimeType ?? 'application/octet-stream',
+        sizeBytes: object.sizeBytes ?? 0,
+        status: 'pending',
+        analysisResult: {
+          provider: 'storage-fallback',
+          warnings: ['Fichier present dans Supabase Storage sans ligne document associee.'],
+        },
+        analyzedAt: null,
+        rejectionReason: null,
+        createdAt,
+        updatedAt,
+        source: 'storage',
+      } satisfies AdminDocumentRow
+    })
 }
 
 const offerSelection = {
@@ -104,6 +146,7 @@ async function enrichSubscription(subscription: SubscriptionRow) {
   const [payerProfile] = subscription.payerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : []
   const [onboardingSession] = subscription.onboardingSessionId ? await database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : []
   const subscriptionDocuments = await database.select(documentSelection).from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt))
+  const storageOnlyDocuments = await loadStorageOnlyDocuments(subscription, subscriptionDocuments)
   const subscriptionPayments = await database.select(paymentSelection).from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt))
 
   return {
@@ -118,9 +161,68 @@ async function enrichSubscription(subscription: SubscriptionRow) {
       subscriptionFor: onboardingSession.subscriptionFor,
       isBearerPayer: onboardingSession.isBearerPayer,
     } : null,
-    documents: await withSignedDocuments(subscriptionDocuments),
+    documents: await withSignedDocuments([...subscriptionDocuments, ...storageOnlyDocuments].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())),
     payments: subscriptionPayments,
   }
+}
+
+async function enrichSubscriptionList(subscriptionRows: SubscriptionRow[]) {
+  if (subscriptionRows.length === 0) return []
+
+  const database = requireDb()
+  const subscriptionIds = subscriptionRows.map((subscription) => subscription.id)
+  const userIds = uniqueValues(subscriptionRows.map((subscription) => subscription.userId))
+  const offerIds = uniqueValues(subscriptionRows.map((subscription) => subscription.offerId))
+  const profileIds = uniqueValues(subscriptionRows.flatMap((subscription) => [subscription.bearerProfileId, subscription.payerProfileId]))
+  const onboardingSessionIds = uniqueValues(subscriptionRows.map((subscription) => subscription.onboardingSessionId))
+
+  const [userRows, offerRows, profileRows, onboardingRows, documentRows, paymentRows] = await Promise.all([
+    userIds.length ? database.select(publicUserSelection).from(users).where(inArray(users.id, userIds)) : [],
+    offerIds.length ? database.select(offerSelection).from(offers).where(inArray(offers.id, offerIds)) : [],
+    profileIds.length ? database.select().from(profiles).where(inArray(profiles.id, profileIds)) : [],
+    onboardingSessionIds.length ? database.select().from(onboardingSessions).where(inArray(onboardingSessions.id, onboardingSessionIds)) : [],
+    database.select(documentSelection).from(documents).where(inArray(documents.subscriptionId, subscriptionIds)),
+    database.select(paymentSelection).from(payments).where(inArray(payments.subscriptionId, subscriptionIds)),
+  ])
+
+  const usersById = new Map(userRows.map((user) => [user.id, user]))
+  const offersById = new Map(offerRows.map((offer) => [offer.id, offer]))
+  const profilesById = new Map(profileRows.map((profile) => [profile.id, profile]))
+  const onboardingById = new Map(onboardingRows.map((session) => [session.id, session]))
+  const documentsBySubscriptionId = new Map<string, DocumentRow[]>()
+  const paymentsBySubscriptionId = new Map<string, PaymentRow[]>()
+
+  for (const document of documentRows) {
+    const rows = documentsBySubscriptionId.get(document.subscriptionId) ?? []
+    rows.push(document)
+    documentsBySubscriptionId.set(document.subscriptionId, rows)
+  }
+
+  for (const payment of paymentRows) {
+    const rows = paymentsBySubscriptionId.get(payment.subscriptionId) ?? []
+    rows.push(payment)
+    paymentsBySubscriptionId.set(payment.subscriptionId, rows)
+  }
+
+  return subscriptionRows.map((subscription) => {
+    const onboardingSession = subscription.onboardingSessionId ? onboardingById.get(subscription.onboardingSessionId) : null
+
+    return {
+      subscription,
+      user: usersById.get(subscription.userId) ?? null,
+      offer: subscription.offerId ? offersById.get(subscription.offerId) ?? null : null,
+      bearerProfile: subscription.bearerProfileId ? profilesById.get(subscription.bearerProfileId) ?? null : null,
+      payerProfile: subscription.payerProfileId ? profilesById.get(subscription.payerProfileId) ?? null : null,
+      onboardingSession: onboardingSession ? {
+        id: onboardingSession.id,
+        currentStep: onboardingSession.currentStep,
+        subscriptionFor: onboardingSession.subscriptionFor,
+        isBearerPayer: onboardingSession.isBearerPayer,
+      } : null,
+      documents: documentsBySubscriptionId.get(subscription.id) ?? [],
+      payments: paymentsBySubscriptionId.get(subscription.id) ?? [],
+    }
+  })
 }
 
 async function findSubscription(id: string) {
@@ -239,7 +341,10 @@ export async function getAdminStats() {
   const documentRows = await database.select({ status: documents.status }).from(documents)
   const offerRows = await database.select({ isActive: offers.isActive }).from(offers)
   const paymentRows = await database.select({ status: payments.status }).from(payments)
-  const supportAlerts = await loadSupportAlerts()
+  const supportAlertsCount =
+    subscriptionRows.filter((subscription) => ['pending_documents', 'pending_payment', 'rejected', 'suspended'].includes(subscription.status)).length
+    + documentRows.filter((document) => ['pending', 'needs_manual_review'].includes(document.status)).length
+    + paymentRows.filter((payment) => ['rejected', 'cancelled'].includes(payment.status)).length
 
   return {
     users: {
@@ -262,14 +367,15 @@ export async function getAdminStats() {
       total: paymentRows.length,
       ...countStatuses(paymentRows, ['simulated', 'pending', 'accepted', 'rejected', 'cancelled', 'regularized'] as const),
     },
-    supportAlerts: supportAlerts.length,
+    supportAlerts: supportAlertsCount,
   }
 }
 
 export async function listAdminSubscriptions(query: AdminListSubscriptionsQuery) {
   const where = query.status ? eq(subscriptions.status, query.status) : undefined
-  const rows = await requireDb().select(subscriptionSelection).from(subscriptions).where(where).orderBy(desc(subscriptions.updatedAt))
-  return Promise.all(rows.map(enrichSubscription))
+  const request = requireDb().select(subscriptionSelection).from(subscriptions).where(where).orderBy(desc(subscriptions.updatedAt))
+  const rows = query.limit ? await request.limit(query.limit) : await request
+  return enrichSubscriptionList(rows)
 }
 
 export async function getAdminSubscription(id: string) {
@@ -295,16 +401,26 @@ export async function updateAdminSubscriptionStatus(id: string, input: AdminUpda
 }
 
 export async function listPendingDocuments() {
-  const rows = await requireDb()
+  const database = requireDb()
+  const rows = await database
     .select(documentSelection)
     .from(documents)
     .where(inArray(documents.status, ['pending', 'analyzing', 'needs_manual_review']))
     .orderBy(asc(documents.createdAt))
+    .limit(50)
 
-  return Promise.all(rows.map(async (document) => ({
-    document: await withSignedDocument(document),
-    subscription: await enrichSubscription(await findSubscription(document.subscriptionId)),
-  })))
+  const subscriptionIds = uniqueValues(rows.map((document) => document.subscriptionId))
+  const subscriptionRows = subscriptionIds.length
+    ? await database.select(subscriptionSelection).from(subscriptions).where(inArray(subscriptions.id, subscriptionIds))
+    : []
+  const subscriptionsById = new Map((await enrichSubscriptionList(subscriptionRows)).map((item) => [item.subscription.id, item]))
+
+  return rows
+    .map((document) => {
+      const subscription = subscriptionsById.get(document.subscriptionId)
+      return subscription ? { document, subscription } : null
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
 }
 
 export async function reviewAdminDocument(id: string, input: AdminReviewDocumentInput) {
@@ -348,6 +464,31 @@ export async function listAdminUsers() {
     ...user,
     subscriptionCount: subscriptionRows.filter((subscription) => subscription.userId === user.id).length,
   }))
+}
+
+export async function updateAdminUserRole(id: string, input: AdminUpdateUserRoleInput, actorId: string) {
+  if (id === actorId && input.role !== 'admin') {
+    throw new AppError(400, 'Vous ne pouvez pas retirer votre propre acces administrateur.')
+  }
+
+  const database = requireDb()
+  const [current] = await database.select(publicUserSelection).from(users).where(eq(users.id, id)).limit(1)
+  if (!current) throw new AppError(404, 'Utilisateur introuvable.')
+
+  if (current.role === 'admin' && input.role !== 'admin') {
+    const admins = await database.select({ id: users.id }).from(users).where(eq(users.role, 'admin'))
+    if (admins.length <= 1) throw new AppError(400, 'Au moins un administrateur doit rester actif.')
+  }
+
+  const [updated] = await database
+    .update(users)
+    .set({ role: input.role, updatedAt: new Date() })
+    .where(eq(users.id, id))
+    .returning(publicUserSelection)
+
+  if (!updated) throw new AppError(500, "Le role de l'utilisateur n'a pas pu etre mis a jour.")
+  const subscriptionRows = await database.select({ userId: subscriptions.userId }).from(subscriptions).where(eq(subscriptions.userId, id))
+  return { ...updated, subscriptionCount: subscriptionRows.length }
 }
 
 export async function listAdminOffers() {

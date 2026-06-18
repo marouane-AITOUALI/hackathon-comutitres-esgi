@@ -11,7 +11,7 @@ export const subscriptionDocumentsParamsSchema = z.object({
 })
 
 export const documentIdParamsSchema = z.object({
-  id: z.uuid(),
+  id: z.union([z.uuid(), z.string().regex(/^storage_[A-Za-z0-9_-]+$/)]),
 })
 
 export const createDocumentSchema = z.object({
