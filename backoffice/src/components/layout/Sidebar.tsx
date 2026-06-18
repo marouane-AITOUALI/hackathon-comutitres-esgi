@@ -15,7 +15,7 @@ const navItems = [
   { label: 'Utilisateurs', to: '/users', icon: Users },
   { label: 'Offres', to: '/offers', icon: Package },
   { label: 'Communications', to: '/communications', icon: MessageSquare },
-  { label: 'Audit logs', to: '/audit-logs', icon: FileText },
+  { label: "Journal d'activite", to: '/audit-logs', icon: FileText },
 ] as const
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {

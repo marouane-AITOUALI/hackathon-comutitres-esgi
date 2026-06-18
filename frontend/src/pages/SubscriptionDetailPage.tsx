@@ -417,7 +417,6 @@ export function SubscriptionDetailPage() {
       <Paper sx={{ p: 3, borderRadius: 3 }}>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2} sx={{ justifyContent: 'space-between', alignItems: { md: 'center' } }}>
           <Box>
-            <Typography color="text.secondary" variant="body2">Dossier {item.subscription.id.slice(0, 8)}</Typography>
             <Typography variant="h4" sx={{ fontWeight: 900 }}>{item.offer?.name ?? 'Offre non associee'}</Typography>
             <Typography color="text.secondary">Porteur : {profileName(item.bearerProfile)} - Payeur : {profileName(item.payerProfile)}</Typography>
           </Box>

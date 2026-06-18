@@ -6,6 +6,7 @@ export interface AdminUser {
   lastName: string
   email: string
   role: UserRole
+  avatarUrl?: string | null
 }
 
 export interface AuthResponse {

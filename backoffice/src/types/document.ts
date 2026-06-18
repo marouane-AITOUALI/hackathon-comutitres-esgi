@@ -29,6 +29,7 @@ export interface AdminDocument {
   mimeType?: string | null
   sizeBytes?: number | null
   signedUrl?: string | null
+  source?: 'database' | 'storage'
   status: DocumentStatus
   analysisResult?: DocumentAnalysisResult | Record<string, unknown>
   analyzedAt?: string | null

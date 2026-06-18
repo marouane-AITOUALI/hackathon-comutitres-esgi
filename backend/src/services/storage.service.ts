@@ -5,6 +5,7 @@ import { AppError } from '../utils/app-error.js'
 
 export const AVATARS_BUCKET = 'user-avatars'
 export const DOCUMENTS_BUCKET = 'subscription-documents'
+const subscriptionDocumentTypes = ['identity', 'proof_of_address', 'eligibility', 'school_certificate', 'tax_notice', 'other'] as const
 
 const signedUrlTtlSeconds = 60 * 15
 export const DOCUMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024
@@ -35,6 +36,17 @@ export interface UploadedFileMetadata {
   originalFilename: string
   mimeType: string
   sizeBytes: number
+}
+
+export interface StoredSubscriptionDocument {
+  bucket: string
+  path: string
+  name: string
+  type: string
+  mimeType: string | null
+  sizeBytes: number | null
+  createdAt: string | null
+  updatedAt: string | null
 }
 
 function requireStorageClient() {
@@ -71,6 +83,39 @@ function extensionFor(file: Express.Multer.File) {
   if (file.mimetype === 'image/webp') return '.webp'
   if (file.mimetype === 'image/heic') return '.heic'
   return ''
+}
+
+function metadataValue(metadata: unknown, key: string) {
+  if (!metadata || typeof metadata !== 'object' || !(key in metadata)) return null
+  const value = (metadata as Record<string, unknown>)[key]
+  return typeof value === 'string' || typeof value === 'number' ? value : null
+}
+
+export function encodeStorageDocumentId(path: string) {
+  return `storage_${Buffer.from(path, 'utf8').toString('base64url')}`
+}
+
+export function decodeStorageDocumentId(id: string) {
+  if (!id.startsWith('storage_')) return null
+  try {
+    return Buffer.from(id.slice('storage_'.length), 'base64url').toString('utf8')
+  } catch {
+    return null
+  }
+}
+
+export function parseSubscriptionDocumentStoragePath(path: string) {
+  const match = /^users\/([^/]+)\/subscriptions\/([^/]+)\/([^/]+)\/(.+)$/.exec(path)
+  if (!match) return null
+  const [, userId, subscriptionId, type, filenamePath] = match
+  if (!userId || !subscriptionId || !type || !filenamePath) return null
+
+  return {
+    userId,
+    subscriptionId,
+    type,
+    filename: filenamePath.split('/').filter(Boolean).at(-1) ?? 'document',
+  }
 }
 
 function assertFile(file: Express.Multer.File | undefined, allowedMimeTypes: Set<string>, maxSizeBytes: number) {
@@ -135,6 +180,44 @@ export async function createPrivateSignedUrl(bucket: string | null | undefined, 
     throw new AppError(502, "L'URL securisee du fichier n'a pas pu etre generee.", error.message)
   }
   return data.signedUrl
+}
+
+export async function listSubscriptionDocumentObjects(userId: string, subscriptionId: string): Promise<StoredSubscriptionDocument[]> {
+  if (!hasStorageConfiguration()) return []
+
+  const bucket = DOCUMENTS_BUCKET
+  const client = requireStorageClient().storage.from(bucket)
+  const rows: StoredSubscriptionDocument[] = []
+
+  for (const type of subscriptionDocumentTypes) {
+    const prefix = `users/${userId}/subscriptions/${subscriptionId}/${type}`
+    const { data, error } = await client.list(prefix, {
+      limit: 100,
+      sortBy: { column: 'updated_at', order: 'desc' },
+    })
+
+    if (error) throw new AppError(502, "Les documents Supabase n'ont pas pu etre listes.", error.message)
+
+    for (const object of data ?? []) {
+      if (!object.name || object.name === '.emptyFolderPlaceholder') continue
+      const storagePath = `${prefix}/${object.name}`
+      const size = metadataValue(object.metadata, 'size')
+      const mimeType = metadataValue(object.metadata, 'mimetype') ?? metadataValue(object.metadata, 'mimeType')
+
+      rows.push({
+        bucket,
+        path: storagePath,
+        name: object.name,
+        type,
+        mimeType: typeof mimeType === 'string' ? mimeType : null,
+        sizeBytes: typeof size === 'number' ? size : typeof size === 'string' ? Number(size) || null : null,
+        createdAt: object.created_at ?? null,
+        updatedAt: object.updated_at ?? object.created_at ?? null,
+      })
+    }
+  }
+
+  return rows
 }
 
 export async function removePrivateObject(bucket: string | null | undefined, path: string | null | undefined) {

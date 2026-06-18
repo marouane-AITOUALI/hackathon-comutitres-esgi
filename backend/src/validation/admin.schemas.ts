@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 const subscriptionStatuses = ['draft', 'pending_documents', 'pending_payment', 'pending_validation', 'accepted', 'rejected', 'cancelled', 'suspended'] as const
+const userRoles = ['user', 'admin'] as const
 const offerCode = z.string().trim().min(2).max(80).transform((value) => value.toUpperCase())
 const optionalText = z.string().trim().min(1).max(500).optional()
 
@@ -27,6 +28,10 @@ export const adminReviewDocumentSchema = z.object({
   }
 })
 
+export const adminUpdateUserRoleSchema = z.object({
+  role: z.enum(userRoles),
+})
+
 export const adminCreateOfferSchema = z.object({
   code: offerCode,
   name: z.string().trim().min(2).max(160),
@@ -44,5 +49,6 @@ export const adminUpdateOfferSchema = adminCreateOfferSchema.partial().refine(
 export type AdminListSubscriptionsQuery = z.infer<typeof adminListSubscriptionsQuerySchema>
 export type AdminUpdateSubscriptionStatusInput = z.infer<typeof adminUpdateSubscriptionStatusSchema>
 export type AdminReviewDocumentInput = z.infer<typeof adminReviewDocumentSchema>
+export type AdminUpdateUserRoleInput = z.infer<typeof adminUpdateUserRoleSchema>
 export type AdminCreateOfferInput = z.infer<typeof adminCreateOfferSchema>
 export type AdminUpdateOfferInput = z.infer<typeof adminUpdateOfferSchema>

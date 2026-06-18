@@ -2,13 +2,14 @@ import { asc, desc, eq, inArray } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
-import { createPrivateSignedUrl } from './storage.service.js'
 import { notifyDocumentStatusChanged, notifySubscriptionStatusChanged } from './notifications.service.js'
-import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput } from '../validation/admin.schemas.js'
+import { createPrivateSignedUrl, encodeStorageDocumentId, listSubscriptionDocumentObjects } from './storage.service.js'
+import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput, AdminUpdateUserRoleInput } from '../validation/admin.schemas.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
 type DocumentRow = typeof documents.$inferSelect
 type PaymentRow = typeof payments.$inferSelect
+type AdminDocumentRow = DocumentRow & { source?: 'database' | 'storage' }
 
 function uniqueValues(values: Array<string | null | undefined>) {
   return [...new Set(values.filter((value): value is string => Boolean(value)))]
@@ -56,15 +57,51 @@ const documentSelection = {
   updatedAt: documents.updatedAt,
 }
 
-async function withSignedDocument(document: DocumentRow) {
+async function withSignedDocument(document: AdminDocumentRow) {
   return {
     ...document,
     signedUrl: await createPrivateSignedUrl(document.storageBucket, document.storagePath),
   }
 }
 
-async function withSignedDocuments(rows: DocumentRow[]) {
+async function withSignedDocuments(rows: AdminDocumentRow[]) {
   return Promise.all(rows.map(withSignedDocument))
+}
+
+async function loadStorageOnlyDocuments(subscription: SubscriptionRow, existingDocuments: DocumentRow[]): Promise<AdminDocumentRow[]> {
+  const existingPaths = new Set(existingDocuments.map((document) => document.storagePath))
+  const storageObjects = await listSubscriptionDocumentObjects(subscription.userId, subscription.id)
+  const now = new Date()
+
+  return storageObjects
+    .filter((object) => !existingPaths.has(object.path))
+    .map((object) => {
+      const createdAt = object.createdAt ? new Date(object.createdAt) : now
+      const updatedAt = object.updatedAt ? new Date(object.updatedAt) : createdAt
+
+      return {
+        id: encodeStorageDocumentId(object.path),
+        subscriptionId: subscription.id,
+        ownerId: subscription.userId,
+        type: object.type as DocumentRow['type'],
+        fileUrl: object.path,
+        storageBucket: object.bucket,
+        storagePath: object.path,
+        originalFilename: object.name,
+        mimeType: object.mimeType ?? 'application/octet-stream',
+        sizeBytes: object.sizeBytes ?? 0,
+        status: 'pending',
+        analysisResult: {
+          provider: 'storage-fallback',
+          warnings: ['Fichier present dans Supabase Storage sans ligne document associee.'],
+        },
+        analyzedAt: null,
+        rejectionReason: null,
+        createdAt,
+        updatedAt,
+        source: 'storage',
+      } satisfies AdminDocumentRow
+    })
 }
 
 const offerSelection = {
@@ -109,6 +146,7 @@ async function enrichSubscription(subscription: SubscriptionRow) {
   const [payerProfile] = subscription.payerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : []
   const [onboardingSession] = subscription.onboardingSessionId ? await database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : []
   const subscriptionDocuments = await database.select(documentSelection).from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt))
+  const storageOnlyDocuments = await loadStorageOnlyDocuments(subscription, subscriptionDocuments)
   const subscriptionPayments = await database.select(paymentSelection).from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt))
 
   return {
@@ -123,7 +161,7 @@ async function enrichSubscription(subscription: SubscriptionRow) {
       subscriptionFor: onboardingSession.subscriptionFor,
       isBearerPayer: onboardingSession.isBearerPayer,
     } : null,
-    documents: await withSignedDocuments(subscriptionDocuments),
+    documents: await withSignedDocuments([...subscriptionDocuments, ...storageOnlyDocuments].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())),
     payments: subscriptionPayments,
   }
 }
@@ -426,6 +464,31 @@ export async function listAdminUsers() {
     ...user,
     subscriptionCount: subscriptionRows.filter((subscription) => subscription.userId === user.id).length,
   }))
+}
+
+export async function updateAdminUserRole(id: string, input: AdminUpdateUserRoleInput, actorId: string) {
+  if (id === actorId && input.role !== 'admin') {
+    throw new AppError(400, 'Vous ne pouvez pas retirer votre propre acces administrateur.')
+  }
+
+  const database = requireDb()
+  const [current] = await database.select(publicUserSelection).from(users).where(eq(users.id, id)).limit(1)
+  if (!current) throw new AppError(404, 'Utilisateur introuvable.')
+
+  if (current.role === 'admin' && input.role !== 'admin') {
+    const admins = await database.select({ id: users.id }).from(users).where(eq(users.role, 'admin'))
+    if (admins.length <= 1) throw new AppError(400, 'Au moins un administrateur doit rester actif.')
+  }
+
+  const [updated] = await database
+    .update(users)
+    .set({ role: input.role, updatedAt: new Date() })
+    .where(eq(users.id, id))
+    .returning(publicUserSelection)
+
+  if (!updated) throw new AppError(500, "Le role de l'utilisateur n'a pas pu etre mis a jour.")
+  const subscriptionRows = await database.select({ userId: subscriptions.userId }).from(subscriptions).where(eq(subscriptions.userId, id))
+  return { ...updated, subscriptionCount: subscriptionRows.length }
 }
 
 export async function listAdminOffers() {
