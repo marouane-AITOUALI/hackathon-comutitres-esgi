@@ -1,10 +1,11 @@
 import { asc, desc, eq, inArray } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
-import { documents, offers, onboardingSessions, payments, profiles, subscriptions, users } from '../db/schema.js'
+import { documents, offers, onboardingSessions, payments, profiles, subscriptions, terminationRequests, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import { notifyDocumentStatusChanged, notifySubscriptionStatusChanged } from './notifications.service.js'
 import { createPrivateSignedUrl, encodeStorageDocumentId, listSubscriptionDocumentObjects } from './storage.service.js'
 import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput, AdminUpdateUserRoleInput } from '../validation/admin.schemas.js'
+import { evaluateSubscriptionWorkflow, reconcileSubscriptionWorkflow } from './subscription-workflow.service.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
 type DocumentRow = typeof documents.$inferSelect
@@ -34,6 +35,7 @@ const subscriptionSelection = {
   offerId: subscriptions.offerId,
   onboardingSessionId: subscriptions.onboardingSessionId,
   status: subscriptions.status,
+  submittedAt: subscriptions.submittedAt,
   createdAt: subscriptions.createdAt,
   updatedAt: subscriptions.updatedAt,
 }
@@ -111,6 +113,8 @@ const offerSelection = {
   description: offers.description,
   target: offers.target,
   requiredDocuments: offers.requiredDocuments,
+  priceCents: offers.priceCents,
+  monthlyInstallmentCount: offers.monthlyInstallmentCount,
   isActive: offers.isActive,
   createdAt: offers.createdAt,
   updatedAt: offers.updatedAt,
@@ -140,17 +144,29 @@ function countStatuses<T extends string>(items: Array<{ status: T }>, values: re
 
 async function enrichSubscription(subscription: SubscriptionRow) {
   const database = requireDb()
-  const [user] = await database.select(publicUserSelection).from(users).where(eq(users.id, subscription.userId)).limit(1)
-  const [offer] = subscription.offerId ? await database.select(offerSelection).from(offers).where(eq(offers.id, subscription.offerId)).limit(1) : []
-  const [bearerProfile] = subscription.bearerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.bearerProfileId)).limit(1) : []
-  const [payerProfile] = subscription.payerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : []
-  const [onboardingSession] = subscription.onboardingSessionId ? await database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : []
-  const subscriptionDocuments = await database.select(documentSelection).from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt))
+  const workflow = await reconcileSubscriptionWorkflow(subscription.id)
+  const effectiveSubscription = subscription.submittedAt && !['accepted', 'rejected', 'cancelled', 'suspended'].includes(subscription.status)
+    ? { ...subscription, status: workflow.desiredStatus }
+    : subscription
+  const [userRows, offerRows, bearerRows, payerRows, onboardingRows, subscriptionDocuments, subscriptionPayments, subscriptionTerminations] = await Promise.all([
+    database.select(publicUserSelection).from(users).where(eq(users.id, subscription.userId)).limit(1),
+    subscription.offerId ? database.select(offerSelection).from(offers).where(eq(offers.id, subscription.offerId)).limit(1) : [],
+    subscription.bearerProfileId ? database.select().from(profiles).where(eq(profiles.id, subscription.bearerProfileId)).limit(1) : [],
+    subscription.payerProfileId ? database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : [],
+    subscription.onboardingSessionId ? database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : [],
+    database.select(documentSelection).from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt)),
+    database.select(paymentSelection).from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt)),
+    database.select().from(terminationRequests).where(eq(terminationRequests.subscriptionId, subscription.id)).orderBy(desc(terminationRequests.createdAt)),
+  ])
+  const [user] = userRows
+  const [offer] = offerRows
+  const [bearerProfile] = bearerRows
+  const [payerProfile] = payerRows
+  const [onboardingSession] = onboardingRows
   const storageOnlyDocuments = await loadStorageOnlyDocuments(subscription, subscriptionDocuments)
-  const subscriptionPayments = await database.select(paymentSelection).from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt))
 
   return {
-    subscription,
+    subscription: effectiveSubscription,
     user: user ?? null,
     offer: offer ?? null,
     bearerProfile: bearerProfile ?? null,
@@ -163,6 +179,8 @@ async function enrichSubscription(subscription: SubscriptionRow) {
     } : null,
     documents: await withSignedDocuments([...subscriptionDocuments, ...storageOnlyDocuments].sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())),
     payments: subscriptionPayments,
+    terminationRequests: subscriptionTerminations,
+    workflow,
   }
 }
 
@@ -221,6 +239,7 @@ async function enrichSubscriptionList(subscriptionRows: SubscriptionRow[]) {
       } : null,
       documents: documentsBySubscriptionId.get(subscription.id) ?? [],
       payments: paymentsBySubscriptionId.get(subscription.id) ?? [],
+      terminationRequests: [],
     }
   })
 }
@@ -384,6 +403,14 @@ export async function getAdminSubscription(id: string) {
 
 export async function updateAdminSubscriptionStatus(id: string, input: AdminUpdateSubscriptionStatusInput) {
   const current = await findSubscription(id)
+  if (input.status === 'accepted') {
+    const workflow = await evaluateSubscriptionWorkflow(id)
+    if (current.status !== 'pending_validation' || workflow.state !== 'under_review') {
+      throw new AppError(409, "Le dossier ne peut être validé qu'après envoi final et contrôle des prérequis.", {
+        blockingReasons: workflow.blockingReasons,
+      })
+    }
+  }
   const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: input.status, updatedAt: new Date() })
@@ -425,15 +452,20 @@ export async function listPendingDocuments() {
 
 export async function reviewAdminDocument(id: string, input: AdminReviewDocumentInput) {
   const current = await findDocument(id)
+  const status = input.decision === 'validate'
+    ? 'validated'
+    : input.decision === 'reject'
+      ? 'rejected'
+      : 'needs_manual_review'
   const [updated] = await requireDb()
     .update(documents)
     .set({
-      status: input.accepted ? 'validated' : 'rejected',
-      rejectionReason: input.accepted ? null : input.rejectionReason,
+      status,
+      rejectionReason: input.decision === 'reject' ? input.rejectionReason : null,
       analysisResult: {
         provider: 'rules-prototype-free',
         manualReview: true,
-        accepted: input.accepted,
+        decision: input.decision,
         note: input.note ?? null,
         reviewedAt: new Date().toISOString(),
       },
@@ -452,6 +484,7 @@ export async function reviewAdminDocument(id: string, input: AdminReviewDocument
     status: updated.status,
     rejectionReason: updated.rejectionReason,
   })
+  await reconcileSubscriptionWorkflow(updated.subscriptionId)
   return { document: await withSignedDocument(updated) }
 }
 

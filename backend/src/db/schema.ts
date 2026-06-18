@@ -1,4 +1,4 @@
-import { relations } from 'drizzle-orm'
+import { relations, sql } from 'drizzle-orm'
 import { boolean, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 export const userRole = pgEnum('user_role', ['user', 'admin'])
@@ -13,7 +13,8 @@ export const documentStatus = pgEnum('document_status', ['pending', 'analyzing',
 export const documentType = pgEnum('document_type', ['identity', 'proof_of_address', 'eligibility', 'school_certificate', 'tax_notice', 'other'])
 export const paymentType = pgEnum('payment_type', ['simulation', 'direct', 'mandate', 'regularization'])
 export const paymentStatus = pgEnum('payment_status', ['simulated', 'pending', 'accepted', 'rejected', 'cancelled', 'regularized'])
-export const renewalAction = pgEnum('renewal_action', ['accepted', 'refused', 'suspended'])
+export const renewalAction = pgEnum('renewal_action', ['accepted', 'refused', 'suspended', 'requested', 'cancelled'])
+export const terminationRequestStatus = pgEnum('termination_request_status', ['requested', 'cancelled', 'processed', 'rejected'])
 export const notificationCategory = pgEnum('notification_category', ['subscription', 'document', 'payment', 'renewal', 'communication', 'system'])
 export const notificationPriority = pgEnum('notification_priority', ['low', 'normal', 'high'])
 export const communicationAudience = pgEnum('communication_audience', ['clients', 'admins', 'everyone'])
@@ -109,6 +110,8 @@ export const offers = pgTable('offers', {
   description: text('description'),
   target: text('target').notNull(),
   requiredDocuments: jsonb('required_documents').$type<string[]>().default([]).notNull(),
+  priceCents: integer('price_cents').default(0).notNull(),
+  monthlyInstallmentCount: integer('monthly_installment_count'),
   isActive: boolean('is_active').default(true).notNull(),
   ...timestamps,
 }, (table) => [uniqueIndex('offers_code_idx').on(table.code)])
@@ -121,6 +124,7 @@ export const subscriptions = pgTable('subscriptions', {
   offerId: uuid('offer_id').references(() => offers.id, { onDelete: 'restrict' }),
   onboardingSessionId: uuid('onboarding_session_id').references(() => onboardingSessions.id, { onDelete: 'set null' }),
   status: subscriptionStatus('status').default('draft').notNull(),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }),
   ...timestamps,
 }, (table) => [
   index('subscriptions_user_id_idx').on(table.userId),
@@ -187,6 +191,23 @@ export const renewalEvents = pgTable('renewal_events', {
   index('renewal_events_action_idx').on(table.action),
 ])
 
+export const terminationRequests = pgTable('termination_requests', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  subscriptionId: uuid('subscription_id').notNull().references(() => subscriptions.id, { onDelete: 'cascade' }),
+  status: terminationRequestStatus('status').default('requested').notNull(),
+  reason: text('reason'),
+  effectiveAt: timestamp('effective_at', { withTimezone: true }).notNull(),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>().default({}).notNull(),
+  ...timestamps,
+}, (table) => [
+  index('termination_requests_user_id_idx').on(table.userId),
+  index('termination_requests_subscription_id_idx').on(table.subscriptionId),
+  index('termination_requests_status_idx').on(table.status),
+  uniqueIndex('termination_requests_one_pending_idx').on(table.subscriptionId).where(sql`${table.status} = 'requested'`),
+])
+
 export const communications = pgTable('communications', {
   id: uuid('id').defaultRandom().primaryKey(),
   createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
@@ -233,6 +254,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   subscriptions: many(subscriptions),
   payments: many(payments),
   renewalEvents: many(renewalEvents),
+  terminationRequests: many(terminationRequests),
   communications: many(communications),
   notifications: many(notifications),
   avatar: one(userAvatars, { fields: [users.id], references: [userAvatars.ownerId] }),
@@ -251,6 +273,10 @@ export const paymentsRelations = relations(payments, ({ one }) => ({
 export const renewalEventsRelations = relations(renewalEvents, ({ one }) => ({
   user: one(users, { fields: [renewalEvents.userId], references: [users.id] }),
   subscription: one(subscriptions, { fields: [renewalEvents.subscriptionId], references: [subscriptions.id] }),
+}))
+export const terminationRequestsRelations = relations(terminationRequests, ({ one }) => ({
+  user: one(users, { fields: [terminationRequests.userId], references: [users.id] }),
+  subscription: one(subscriptions, { fields: [terminationRequests.subscriptionId], references: [subscriptions.id] }),
 }))
 export const communicationsRelations = relations(communications, ({ many, one }) => ({
   author: one(users, { fields: [communications.createdBy], references: [users.id] }),

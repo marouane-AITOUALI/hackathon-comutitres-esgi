@@ -1,0 +1,27 @@
+prometheus.scrape "comutitres_backend" {
+  targets = [{
+    __address__      = sys.env("COMUTITRES_BACKEND_HOST"),
+    __scheme__       = "https",
+    __metrics_path__ = "/api/metrics",
+    application      = "comutitres-backend",
+    environment      = "production",
+  }]
+
+  authorization {
+    type        = "Bearer"
+    credentials = sys.env("COMUTITRES_METRICS_TOKEN")
+  }
+
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = sys.env("GRAFANA_CLOUD_PROMETHEUS_URL")
+
+    basic_auth {
+      username = sys.env("GRAFANA_CLOUD_PROMETHEUS_USER")
+      password = sys.env("GRAFANA_CLOUD_PROMETHEUS_TOKEN")
+    }
+  }
+}

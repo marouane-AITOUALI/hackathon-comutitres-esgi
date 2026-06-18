@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, Dialog, DialogActions, DialogContent, DialogTitle, Divider, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   AlertCircle,
@@ -12,33 +12,22 @@ import {
   FileText,
   FolderOpen,
   History,
-  Landmark,
-  Pencil,
   RotateCcw,
   Send,
   ShieldCheck,
+  ShieldX,
   X,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
-import { analyzeDocument, createDocument, resubmitDocument } from '../services/documents.service'
+import { createDocument, resubmitDocument } from '../services/documents.service'
 import { createDirectPayment, createMandatePayment, simulatePayment } from '../services/payments.service'
-import { acceptSubscriptionRenewal, getSubscriptionById, getSubscriptionRenewal, refuseSubscriptionRenewal, suspendSubscriptionRenewal } from '../services/subscriptions.service'
+import { acceptSubscriptionRenewal, cancelSubscription, cancelSubscriptionRenewal, cancelSubscriptionTermination, getSubscriptionById, getSubscriptionRenewal, getSubscriptionTermination, requestSubscriptionTermination, submitSubscription } from '../services/subscriptions.service'
 import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
 import { colors } from '../theme/colors'
-import type { DocumentSummary, DocumentType, RenewalSummary, SubscriptionStatus, SubscriptionSummary } from '../types'
+import type { DocumentSummary, DocumentType, PaymentSimulation, RenewalSummary, SubscriptionStatus, SubscriptionSummary, TerminationSummary } from '../types'
 import { useSubscriptionRealtime } from '../hooks/useSubscriptionRealtime'
-
-const statusLabel: Record<SubscriptionStatus, string> = {
-  draft: 'Brouillon',
-  pending_documents: 'Documents attendus',
-  pending_payment: 'Paiement attendu',
-  pending_validation: 'En validation',
-  accepted: 'Acceptée',
-  rejected: 'Refusée',
-  cancelled: 'Annulée',
-  suspended: 'Suspendue',
-}
+import { subscriptionStatusLabels } from '../utils/statusLabels'
 
 const statusTone: Record<string, 'default' | 'warning' | 'success' | 'error' | 'info'> = {
   draft: 'default',
@@ -124,6 +113,41 @@ function uniqueDocumentTypes(types: DocumentType[]) {
   return types.filter((type, index, list) => list.indexOf(type) === index)
 }
 
+function terminationMonthOptions(count = 13) {
+  const formatter = new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' })
+  const now = new Date()
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() + index, 1)
+    return {
+      value: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`,
+      label: formatter.format(date),
+    }
+  })
+}
+
+function workflowPresentation(item: SubscriptionSummary) {
+  switch (item.workflow.state) {
+    case 'documents_required':
+      return { title: 'Complétez les justificatifs', description: 'Déposez les pièces indiquées ci-dessous. Elles seront analysées automatiquement.', severity: 'warning' as const }
+    case 'payment_required':
+      return { title: 'Le dossier attend votre paiement', description: 'Les justificatifs bloquants sont prêts. Choisissez maintenant votre mode de règlement.', severity: 'warning' as const }
+    case 'ready_to_submit':
+      return { title: 'Votre dossier est prêt', description: 'Vérifiez le récapitulatif puis envoyez le dossier à Comutitres.', severity: 'success' as const }
+    case 'under_review':
+      return { title: 'Dossier en cours d’étude', description: 'Comutitres vérifie votre demande. Vous serez informé dès qu’une décision sera prise.', severity: 'info' as const }
+    case 'needs_action':
+      return { title: 'Une correction est nécessaire', description: 'Remplacez uniquement les justificatifs refusés indiqués dans le dossier.', severity: 'error' as const }
+    case 'approved':
+      return { title: 'Dossier validé', description: 'Votre demande a été acceptée par Comutitres.', severity: 'success' as const }
+    case 'rejected':
+      return { title: 'Dossier refusé', description: 'Consultez les informations du dossier ou contactez le support si nécessaire.', severity: 'error' as const }
+    case 'cancelled':
+      return { title: 'Demande annulée', description: 'Ce dossier est terminé. Vous pouvez créer une nouvelle demande.', severity: 'info' as const }
+    case 'suspended':
+      return { title: 'Dossier suspendu', description: 'Une intervention du support Comutitres est nécessaire.', severity: 'warning' as const }
+  }
+}
+
 export function SubscriptionDetailPage() {
   const { id } = useParams()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -140,6 +164,11 @@ export function SubscriptionDetailPage() {
   const [renewal, setRenewal] = useState<RenewalSummary | null>(null)
   const [renewalReason, setRenewalReason] = useState('')
   const [renewing, setRenewing] = useState(false)
+  const [termination, setTermination] = useState<TerminationSummary | null>(null)
+  const [terminationReason, setTerminationReason] = useState('')
+  const [terminationMonth, setTerminationMonth] = useState(terminationMonthOptions(1)[0]?.value ?? '')
+  const [terminationDialogOpen, setTerminationDialogOpen] = useState(false)
+  const [terminating, setTerminating] = useState(false)
   const [cardNumber, setCardNumber] = useState('')
   const [cardExpiry, setCardExpiry] = useState('')
   const [cardCvv, setCardCvv] = useState('')
@@ -148,24 +177,20 @@ export function SubscriptionDetailPage() {
   const [holderName, setHolderName] = useState('')
   const [ibanLast4, setIbanLast4] = useState('')
   const [mandateAccepted, setMandateAccepted] = useState(false)
-  const [simulation, setSimulation] = useState<{
-    amountCents: number
-    feesCents: number
-    totalCents: number
-    currency: string
-    warnings: string[]
-  } | null>(null)
+  const [simulation, setSimulation] = useState<PaymentSimulation | null>(null)
   const [simulating, setSimulating] = useState(false)
   const [paying, setPaying] = useState(false)
 
   async function refresh() {
     if (!id) return
-    const [subscription, renewalResponse] = await Promise.all([
+    const [subscription, renewalResponse, terminationResponse] = await Promise.all([
       getSubscriptionById(id),
       getSubscriptionRenewal(id).catch(() => null),
+      getSubscriptionTermination(id).catch(() => null),
     ])
     setItem(subscription)
     setRenewal(renewalResponse)
+    setTermination(terminationResponse)
   }
 
   useSubscriptionRealtime((detail) => {
@@ -180,13 +205,15 @@ export function SubscriptionDetailPage() {
 
     async function loadInitial() {
       try {
-        const [subscription, renewalResponse] = await Promise.all([
+        const [subscription, renewalResponse, terminationResponse] = await Promise.all([
           getSubscriptionById(subscriptionId),
           getSubscriptionRenewal(subscriptionId).catch(() => null),
+          getSubscriptionTermination(subscriptionId).catch(() => null),
         ])
         if (mounted) {
           setItem(subscription)
           setRenewal(renewalResponse)
+          setTermination(terminationResponse)
         }
       } catch (caught) {
         if (mounted) setError(caught instanceof Error ? caught.message : 'Dossier indisponible.')
@@ -200,7 +227,7 @@ export function SubscriptionDetailPage() {
   }, [id])
 
   const documentSteps = useMemo(() => {
-    const requiredTypes = (item?.offer?.requiredDocuments ?? []).map(normalizeDocumentType)
+    const requiredTypes = (item?.workflow.requiredDocumentTypes ?? item?.offer?.requiredDocuments ?? []).map(normalizeDocumentType)
     const existingTypes = (item?.documents ?? []).map((document) => document.type)
     return uniqueDocumentTypes(requiredTypes.length > 0 ? requiredTypes : existingTypes.length > 0 ? existingTypes : ['other'])
   }, [item])
@@ -209,14 +236,15 @@ export function SubscriptionDetailPage() {
   const activeDocument = activeDocumentType ? item?.documents.find((document) => document.type === activeDocumentType) : undefined
   const preparedCount = documentSteps.filter((type) => preparedFiles[type]).length
   const completedCount = documentSteps.filter((type) => item?.documents.some((document) => document.type === type) || preparedFiles[type]).length
-  const allDocumentsDeposited = completedCount === documentSteps.length
+  const allDocumentsDeposited = item?.workflow.documentsReady ?? completedCount === documentSteps.length
   const paymentStepIndex = documentSteps.length
   const finalStepIndex = documentSteps.length + 1
   const isPaymentStep = activeStep === paymentStepIndex
   const isFinalStep = activeStep === finalStepIndex
   const stepperItems = [...documentSteps, 'payment' as const, 'final' as const]
   const selectedDocumentFile = activeDocumentType ? preparedFiles[activeDocumentType] ?? null : null
-  const hasCompletedPayment = (item?.payments ?? []).some((payment) => ['accepted', 'regularized'].includes(payment.status))
+  const hasCompletedPayment = item?.workflow.hasAcceptedPayment ?? false
+  const activeCanReplace = activeDocumentType ? item?.workflow.replaceableDocumentTypes.includes(activeDocumentType) ?? false : false
   const historyItems = useMemo(() => {
     if (!item) return []
 
@@ -247,13 +275,13 @@ export function SubscriptionDetailPage() {
         date: event.createdAt,
         title: `Renouvellement ${event.action}`,
         detail: event.reason ?? 'Decision de renouvellement enregistree',
-        status: event.action === 'accepted' ? 'accepted' : event.action === 'suspended' ? 'suspended' : 'cancelled',
+        status: event.action === 'accepted' || event.action === 'requested' ? 'accepted' : event.action === 'suspended' ? 'suspended' : 'cancelled',
       })),
       {
         id: `subscription-updated-${item.subscription.id}`,
         date: item.subscription.updatedAt,
         title: 'Donnees synchronisees',
-        detail: `Statut actuel : ${statusLabel[item.subscription.status]}`,
+        detail: `Statut actuel : ${subscriptionStatusLabels[item.subscription.status]}`,
         status: item.subscription.status,
       },
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
@@ -289,21 +317,6 @@ export function SubscriptionDetailPage() {
     selectDocumentFile(event.dataTransfer.files[0])
   }
 
-  async function analyze(idToAnalyze: string) {
-    setSaving(true)
-    setError('')
-    setSuccess('')
-    try {
-      await analyzeDocument(idToAnalyze)
-      await refresh()
-      setSuccess('Analyse documentaire lancée.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Analyse impossible.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   function goToStep(step: number) {
     setActiveStep(Math.max(0, Math.min(step, finalStepIndex)))
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -337,19 +350,19 @@ export function SubscriptionDetailPage() {
     setSuccess('')
     try {
       if (paymentMethod === 'card') {
-        const cardError = validateCardFields(cardNumber, cardExpiry, cardCvv, cardholderName)
+        const cardError = simulation.totalCents === 0 ? null : validateCardFields(cardNumber, cardExpiry, cardCvv, cardholderName)
         if (cardError) {
           setError(cardError)
           return
         }
-        await createDirectPayment({ subscriptionId: id, cardToken: buildCardToken(cardNumber), simulateFailure })
+        await createDirectPayment({ subscriptionId: id, paymentMode, cardToken: simulation.totalCents === 0 ? undefined : buildCardToken(cardNumber), simulateFailure })
         setSuccess(simulateFailure ? 'Paiement refusé (simulation).' : 'Paiement accepté.')
       } else {
         if (!mandateAccepted) {
           setError('Vous devez accepter le mandat SEPA.')
           return
         }
-        await createMandatePayment({ subscriptionId: id, holderName, ibanLast4, mandateAccepted: true })
+        await createMandatePayment({ subscriptionId: id, paymentMode, holderName, ibanLast4, mandateAccepted: true })
         setSuccess('Mandat SEPA enregistré.')
       }
       await refresh()
@@ -361,18 +374,16 @@ export function SubscriptionDetailPage() {
     }
   }
 
-  async function decideRenewal(action: 'accept' | 'refuse' | 'suspend') {
+  async function requestRenewal() {
     if (!id) return
     setRenewing(true)
     setError('')
     setSuccess('')
     try {
-      if (action === 'accept') await acceptSubscriptionRenewal(id, renewalReason || 'Renouvellement demande depuis l espace client.')
-      if (action === 'refuse') await refuseSubscriptionRenewal(id, renewalReason || 'Renouvellement refuse depuis l espace client.')
-      if (action === 'suspend') await suspendSubscriptionRenewal(id, renewalReason || 'Suspension demandee depuis l espace client.')
+      await acceptSubscriptionRenewal(id, renewalReason || "Demande de renouvellement depuis l'espace client.")
       await refresh()
       setRenewalReason('')
-      setSuccess(action === 'accept' ? 'Renouvellement lance.' : action === 'refuse' ? 'Renouvellement refuse.' : 'Abonnement suspendu.')
+      setSuccess('Votre demande de renouvellement est enregistrée. Votre forfait actuel reste actif.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Action de renouvellement impossible.')
     } finally {
@@ -394,8 +405,15 @@ export function SubscriptionDetailPage() {
         else await createDocument(id, { type, file })
       }
       setPreparedFiles({})
-      await refresh()
-      setSuccess('Dossier documentaire prêt pour validation Comutitres.')
+      const latest = await getSubscriptionById(id)
+      if (latest.workflow.canSubmit) {
+        const submitted = await submitSubscription(id)
+        setItem(submitted)
+        setSuccess('Dossier envoyé pour validation Comutitres.')
+      } else {
+        setItem(latest)
+        setSuccess('Documents enregistrés. Le dossier sera envoyable dès que tous les contrôles seront validés.')
+      }
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Envoi du dossier impossible.')
     } finally {
@@ -403,8 +421,78 @@ export function SubscriptionDetailPage() {
     }
   }
 
+  async function cancelRenewalRequest() {
+    if (!id) return
+    setRenewing(true)
+    setError('')
+    setSuccess('')
+    try {
+      await cancelSubscriptionRenewal(id, renewalReason || "Annulation de la demande depuis l'espace client.")
+      await refresh()
+      setRenewalReason('')
+      setSuccess('La demande de renouvellement est annulée. Votre forfait actuel reste actif.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "La demande de renouvellement n'a pas pu être annulée.")
+    } finally {
+      setRenewing(false)
+    }
+  }
+
+  async function submitTerminationRequest() {
+    if (!id) return
+    if (terminationReason.trim().length < 3) {
+      setError('Précisez en quelques mots la raison de votre résiliation.')
+      return
+    }
+    setTerminating(true)
+    setError('')
+    setSuccess('')
+    try {
+      setTermination(await requestSubscriptionTermination(id, { reason: terminationReason.trim(), effectiveMonth: terminationMonth }))
+      setTerminationDialogOpen(false)
+      setTerminationReason('')
+      setSuccess("Votre demande de résiliation est enregistrée. L'abonnement reste actif jusqu'à la date indiquée.")
+      await refresh()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'La résiliation est impossible.')
+    } finally {
+      setTerminating(false)
+    }
+  }
+
+  async function cancelTerminationRequest() {
+    if (!id) return
+    setTerminating(true)
+    setError('')
+    setSuccess('')
+    try {
+      setTermination(await cancelSubscriptionTermination(id, "Annulation depuis l'espace client."))
+      setSuccess("La demande de résiliation est annulée. L'abonnement reste actif.")
+      await refresh()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "La demande de résiliation n'a pas pu être annulée.")
+    } finally {
+      setTerminating(false)
+    }
+  }
+
+  async function cancelCurrentSubscription() {
+    if (!id) return
+    setSaving(true)
+    setError('')
+    try {
+      setItem(await cancelSubscription(id))
+      setSuccess('Votre demande a été annulée.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "L'annulation est impossible.")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   if (loading) return <Alert severity="info">Chargement du dossier...</Alert>
   if (!item) return <Alert severity="error">{error || 'Dossier introuvable.'}</Alert>
+  const workflowCopy = workflowPresentation(item)
 
   return (
     <Stack spacing={3}>
@@ -420,7 +508,65 @@ export function SubscriptionDetailPage() {
             <Typography variant="h4" sx={{ fontWeight: 900 }}>{item.offer?.name ?? 'Offre non associee'}</Typography>
             <Typography color="text.secondary">Porteur : {profileName(item.bearerProfile)} - Payeur : {profileName(item.payerProfile)}</Typography>
           </Box>
-          <Chip color={statusTone[item.subscription.status]} label={statusLabel[item.subscription.status]} />
+          <Chip color={statusTone[item.subscription.status]} label={subscriptionStatusLabels[item.subscription.status]} />
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: { xs: 2.5, md: 3 }, borderRadius: 3, border: `1px solid ${colors.greyMedium}`, bgcolor: colors.blueLight }}>
+        <Stack spacing={2.5}>
+          <Alert severity={workflowCopy.severity}>
+            <Typography sx={{ fontWeight: 850 }}>{workflowCopy.title}</Typography>
+            <Typography variant="body2">{workflowCopy.description}</Typography>
+          </Alert>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 1.5 }}>
+            {[
+              {
+                label: 'Justificatifs',
+                value: item.workflow.documentsReady ? 'Prêts' : `${item.workflow.blockingDocumentTypes.length - item.workflow.missingBlockingDocuments.length}/${item.workflow.blockingDocumentTypes.length} reçus`,
+                complete: item.workflow.documentsReady,
+                icon: <FileText size={21} />,
+              },
+              {
+                label: 'Paiement',
+                value: item.workflow.hasAcceptedPayment ? 'Enregistré' : 'À effectuer',
+                complete: item.workflow.hasAcceptedPayment,
+                icon: <CreditCard size={21} />,
+              },
+              {
+                label: 'Envoi Comutitres',
+                value: item.subscription.submittedAt ? 'Envoyé' : item.workflow.canSubmit ? 'Prêt à envoyer' : 'En attente',
+                complete: Boolean(item.subscription.submittedAt),
+                icon: <Send size={21} />,
+              },
+            ].map((step) => (
+              <Paper key={step.label} variant="outlined" sx={{ p: 2, borderRadius: 2.5, bgcolor: colors.white }}>
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
+                  <Box sx={{ width: 42, height: 42, borderRadius: 2, display: 'grid', placeItems: 'center', color: step.complete ? colors.greenDark : colors.blueInteraction, bgcolor: step.complete ? colors.greenLight : colors.blueLight }}>
+                    {step.icon}
+                  </Box>
+                  <Box>
+                    <Typography color="text.secondary" variant="caption">{step.label}</Typography>
+                    <Typography sx={{ fontWeight: 850 }}>{step.value}</Typography>
+                  </Box>
+                </Stack>
+              </Paper>
+            ))}
+          </Box>
+
+          {item.workflow.blockingReasons.length > 0 && (
+            <Box>
+              <Typography sx={{ fontWeight: 800, mb: 0.75 }}>À faire pour continuer</Typography>
+              <Stack spacing={0.5}>
+                {item.workflow.blockingReasons.map((reason) => (
+                  <Stack key={reason} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                    <AlertCircle size={16} color={colors.orangeDark} />
+                    <Typography variant="body2">{reason}</Typography>
+                  </Stack>
+                ))}
+              </Stack>
+            </Box>
+          )}
         </Stack>
       </Paper>
 
@@ -443,7 +589,7 @@ export function SubscriptionDetailPage() {
                       <Typography color="text.secondary" variant="body2">{entry.detail}</Typography>
                     </Box>
                     <Stack spacing={0.75} sx={{ alignItems: { sm: 'flex-end' }, minWidth: 150 }}>
-                      <Chip color={statusTone[entry.status] ?? 'default'} label={statusLabel[entry.status as SubscriptionStatus] ?? entry.status} size="small" />
+                      <Chip color={statusTone[entry.status] ?? 'default'} label={subscriptionStatusLabels[entry.status as SubscriptionStatus] ?? entry.status} size="small" />
                       <Typography color="text.secondary" variant="caption">{formatDateTime(entry.date)}</Typography>
                     </Stack>
                   </Stack>
@@ -455,36 +601,95 @@ export function SubscriptionDetailPage() {
           <Box sx={{ width: { xs: '100%', lg: 360 }, flexShrink: 0 }}>
             <Paper variant="outlined" sx={{ borderRadius: 2, p: 2.5 }}>
               <Typography sx={{ fontWeight: 850, mb: 1 }}>Actions possibles</Typography>
-              {renewal ? (
-                <Stack spacing={1.5}>
-                  <Alert severity={renewal.renewal.canRenew ? 'info' : 'warning'}>
-                    Prochaine date estimee : {formatDateTime(renewal.renewal.nextRenewalDate)}
-                  </Alert>
-                  {renewal.renewal.warnings.map((warning) => <Alert key={warning} severity="warning">{warning}</Alert>)}
+              {item.subscription.status === 'accepted' && renewal ? (
+                <Stack spacing={2}>
+                  <Box>
+                    <Typography sx={{ fontWeight: 850 }}>Préparer la prochaine année</Typography>
+                    <Typography color="text.secondary" variant="body2">
+                      La demande est ouverte trois mois avant l’échéance. Elle ne remplace et n’annule jamais votre forfait actuel.
+                    </Typography>
+                  </Box>
+                  <Paper variant="outlined" sx={{ borderRadius: 2, p: 1.75 }}>
+                    <Typography color="text.secondary" variant="caption">Prochaine échéance</Typography>
+                    <Typography sx={{ fontWeight: 800 }}>{formatDateTime(renewal.renewal.nextRenewalDate)}</Typography>
+                    <Typography color="text.secondary" variant="body2">
+                      Demande possible dès le {formatDateTime(renewal.renewal.renewalWindowStartsAt)}
+                    </Typography>
+                  </Paper>
+                  {renewal.renewal.requestStatus === 'requested' ? (
+                    <Alert severity="success">
+                      Votre demande de renouvellement est enregistrée. Le forfait actuel continue normalement.
+                    </Alert>
+                  ) : renewal.renewal.warnings.map((warning) => <Alert key={warning} severity="info">{warning}</Alert>)}
                   <TextField
-                    label="Motif ou precision"
+                    label={renewal.renewal.canCancelRequest ? "Motif d'annulation (facultatif)" : 'Précision (facultative)'}
+                    minRows={2}
+                    multiline
                     onChange={(event) => setRenewalReason(event.target.value)}
                     size="small"
                     value={renewalReason}
                   />
-                  <Stack direction={{ xs: 'column', sm: 'row', lg: 'column' }} spacing={1}>
-                    <Button disabled={renewing || !renewal.renewal.canRenew} onClick={() => void decideRenewal('accept')} startIcon={<RotateCcw size={17} />} variant="contained">
-                      Renouveler
+                  {renewal.renewal.canCancelRequest ? (
+                    <Button color="warning" disabled={renewing} onClick={() => void cancelRenewalRequest()} variant="outlined">
+                      Annuler ma demande de renouvellement
                     </Button>
-                    <Button color="warning" disabled={renewing || !renewal.renewal.canRenew} onClick={() => void decideRenewal('suspend')} variant="outlined">
-                      Suspendre
+                  ) : (
+                    <Button disabled={renewing || !renewal.renewal.canRenew} onClick={() => void requestRenewal()} startIcon={<RotateCcw size={17} />} variant="contained">
+                      Demander le renouvellement
                     </Button>
-                    <Button color="error" disabled={renewing || !renewal.renewal.canRenew} onClick={() => void decideRenewal('refuse')} variant="outlined">
-                      Refuser
-                    </Button>
-                  </Stack>
+                  )}
+
+                  {termination && (
+                    <>
+                      <Divider />
+                      <Box>
+                        <Typography sx={{ fontWeight: 850 }}>Arrêter définitivement l’abonnement</Typography>
+                        <Typography color="text.secondary" variant="body2">
+                          La résiliation est différente de l’annulation d’un renouvellement.
+                          {termination.termination.requiresManualReview
+                            ? ' Pour Imagine R, la demande doit être étudiée avant toute fin de droits.'
+                            : ' Elle met fin au forfait en cours à la date effective.'}
+                        </Typography>
+                      </Box>
+                      {termination.termination.canCancelRequest ? (
+                        <Stack spacing={1.25}>
+                          <Alert severity="warning">
+                            Résiliation demandée pour le {termination.termination.effectiveAt ? formatDateTime(termination.termination.effectiveAt) : 'fin du mois'}.
+                            Le forfait reste actif jusque-là.
+                          </Alert>
+                          <Button color="warning" disabled={terminating} onClick={() => void cancelTerminationRequest()} variant="outlined">
+                            Annuler ma demande de résiliation
+                          </Button>
+                        </Stack>
+                      ) : termination.termination.canRequest ? (
+                        <Button color="error" disabled={terminating} onClick={() => setTerminationDialogOpen(true)} startIcon={<ShieldX size={17} />} variant="outlined">
+                          Résilier mon abonnement
+                        </Button>
+                      ) : (
+                        <Alert severity="info">{termination.termination.message}</Alert>
+                      )}
+                    </>
+                  )}
+                </Stack>
+              ) : item.workflow.canCancel ? (
+                <Stack spacing={1.5}>
+                  <Alert severity={item.subscription.status === 'pending_validation' ? 'info' : 'warning'}>
+                    {item.subscription.status === 'pending_validation'
+                      ? "Le dossier est en cours d'étude par Comutitres."
+                      : 'Vous pouvez encore annuler cette demande.'}
+                  </Alert>
+                  {item.workflow.hasAcceptedPayment && (
+                    <Alert severity="info">
+                      Un remboursement éventuel sera traité après contrôle. Le délai dépend du moyen de paiement.
+                    </Alert>
+                  )}
+                  <Button color="error" disabled={saving} onClick={() => void cancelCurrentSubscription()} variant="outlined">
+                    Annuler ma demande
+                  </Button>
                 </Stack>
               ) : (
-                <Alert severity="info">Les donnees de renouvellement ne sont pas disponibles pour ce dossier.</Alert>
+                <Alert severity="info">Aucune action client disponible pour ce dossier.</Alert>
               )}
-              <Button component={Link} startIcon={<Pencil size={17} />} sx={{ mt: 1.5 }} to="/onboarding" variant="text">
-                Modifier les informations
-              </Button>
             </Paper>
           </Box>
         </Stack>
@@ -497,6 +702,9 @@ export function SubscriptionDetailPage() {
             <Typography color="text.secondary">
               Déposez les justificatifs, réglez le paiement, puis envoyez le dossier pour validation.
             </Typography>
+            {item.workflow.state === 'under_review' && (
+              <Alert severity="info" sx={{ mt: 1.5 }}>Dossier en attente d’étude Comutitres.</Alert>
+            )}
           </Box>
           <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
             <Chip icon={<ClipboardCheck size={16} />} label={`${completedCount}/${documentSteps.length}`} color={allDocumentsDeposited ? 'success' : 'warning'} sx={{ fontWeight: 850 }} />
@@ -608,10 +816,15 @@ export function SubscriptionDetailPage() {
                 {activeDocument && (
                   <Alert severity={activeDocument.status === 'validated' ? 'success' : activeDocument.status === 'rejected' ? 'error' : 'warning'} sx={{ mb: 2 }}>
                     {documentStatusMeta(activeDocument).label}. Confiance : {confidence(activeDocument)}
+                    {activeDocument.signedUrl && (
+                      <Button component="a" href={activeDocument.signedUrl} rel="noreferrer" size="small" sx={{ ml: 1 }} target="_blank">
+                        Voir
+                      </Button>
+                    )}
                   </Alert>
                 )}
 
-                {activeDocument?.status === 'validated' ? (
+                {!activeCanReplace ? (
                   <Paper
                     variant="outlined"
                     sx={{
@@ -629,9 +842,11 @@ export function SubscriptionDetailPage() {
                       <CheckCircle2 size={30} />
                     </Box>
                     <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ fontWeight: 850 }}>Justificatif déjà validé</Typography>
+                      <Typography sx={{ fontWeight: 850 }}>{activeDocument ? 'Justificatif enregistré' : 'Dépôt indisponible'}</Typography>
                       <Typography color="text.secondary">
-                        Ce document est accepté pour ce dossier. Aucune nouvelle pièce n’est nécessaire pour cette étape.
+                        {activeDocument
+                          ? 'Le fichier reste consultable ci-dessus. Son remplacement n’est possible que s’il est refusé.'
+                          : "Cette pièce ne peut pas être ajoutée pendant l'étude du dossier."}
                       </Typography>
                     </Box>
                   </Paper>
@@ -715,11 +930,6 @@ export function SubscriptionDetailPage() {
                     </Stack>
                   </Paper>
                 )}
-                {activeDocument && activeDocument.status !== 'validated' && (
-                  <Button disabled={saving} onClick={() => analyze(activeDocument.id)} startIcon={<ShieldCheck size={17} />} sx={{ mt: 2 }} variant="outlined">
-                    Vérifier le document
-                  </Button>
-                )}
               </Box>
             </Stack>
 
@@ -780,7 +990,20 @@ export function SubscriptionDetailPage() {
 
                   {simulation && (
                     <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, bgcolor: colors.blueLight }}>
-                      <Typography sx={{ fontWeight: 800 }}>Total : {formatEuros(simulation.totalCents, simulation.currency)}</Typography>
+                      {paymentMode === 'monthly' ? (
+                        <Stack spacing={0.5}>
+                          <Typography sx={{ fontWeight: 800 }}>
+                            {formatEuros(simulation.installmentAmountCents, simulation.currency)} par mois pendant {simulation.installmentCount} mois
+                          </Typography>
+                          {simulation.schedule.map((installment) => (
+                            <Typography key={installment.installmentNumber} variant="body2">
+                              Échéance {installment.installmentNumber} · {formatEuros(installment.amountCents, simulation.currency)}
+                            </Typography>
+                          ))}
+                        </Stack>
+                      ) : (
+                        <Typography sx={{ fontWeight: 800 }}>Total à régler : {formatEuros(simulation.totalCents, simulation.currency)}</Typography>
+                      )}
                     </Paper>
                   )}
 
@@ -819,7 +1042,7 @@ export function SubscriptionDetailPage() {
           </Paper>
         )}
 
-        {isFinalStep && (
+        {isFinalStep && item.workflow.state !== 'under_review' && (
           <Paper variant="outlined" sx={{ p: { xs: 2, md: 3 }, borderRadius: 3, bgcolor: colors.greyLight40 }}>
             <Stack spacing={2.5}>
               <Stack spacing={1}>
@@ -883,7 +1106,7 @@ export function SubscriptionDetailPage() {
 
               <Stack spacing={1.5} sx={{ alignItems: 'center', pt: 1 }}>
                 <Button
-                  disabled={!allDocumentsDeposited || !hasCompletedPayment || saving}
+                  disabled={(!allDocumentsDeposited && preparedCount === 0) || !hasCompletedPayment || saving}
                   onClick={submitFullDossier}
                   startIcon={<Send size={20} />}
                   variant="contained"
@@ -904,7 +1127,55 @@ export function SubscriptionDetailPage() {
             </Stack>
           </Paper>
         )}
+
+        {isFinalStep && item.workflow.state === 'under_review' && (
+          <Alert severity="info">
+            Votre dossier a déjà été envoyé. Comutitres étudie actuellement les justificatifs et le paiement.
+          </Alert>
+        )}
       </Paper>
+
+      <Dialog fullWidth maxWidth="sm" onClose={() => !terminating && setTerminationDialogOpen(false)} open={terminationDialogOpen}>
+        <DialogTitle sx={{ fontWeight: 900 }}>Résilier mon abonnement annuel</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Alert severity="error">
+              {termination?.termination.requiresManualReview
+                ? 'Votre demande sera étudiée selon son motif et les conditions Imagine R. Vos droits restent actifs tant que Comutitres ne l’a pas validée.'
+                : 'Cette action est définitive à sa date d’effet. Pour une interruption temporaire, contactez le support afin d’étudier une suspension.'}
+            </Alert>
+            <Typography>
+              Le mois en cours reste dû. En cas de paiement annuel comptant, un éventuel trop-perçu sera vérifié puis remboursé selon votre dossier.
+            </Typography>
+            <TextField
+              fullWidth
+              label="Mois de fin souhaité"
+              onChange={(event) => setTerminationMonth(event.target.value)}
+              select
+              value={terminationMonth}
+            >
+              {terminationMonthOptions().map((month) => (
+                <MenuItem key={month.value} value={month.value}>{month.label}</MenuItem>
+              ))}
+            </TextField>
+            <TextField
+              autoFocus
+              fullWidth
+              label="Pourquoi souhaitez-vous résilier ?"
+              minRows={3}
+              multiline
+              onChange={(event) => setTerminationReason(event.target.value)}
+              value={terminationReason}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 1 }}>
+          <Button disabled={terminating} onClick={() => setTerminationDialogOpen(false)}>Conserver mon abonnement</Button>
+          <Button color="error" disabled={terminating || terminationReason.trim().length < 3} onClick={() => void submitTerminationRequest()} variant="contained">
+            Confirmer la résiliation
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   )
 }

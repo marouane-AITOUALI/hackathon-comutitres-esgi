@@ -7,18 +7,18 @@ import { seedAdmin } from './admin.seed.js'
 const storageDemoUserId = 'feb4f4b8-ea46-4e06-95d2-c8ede6059e3e'
 
 const demoOffers = [
-  { code: 'NAVIGO_ANNUEL', name: 'Navigo Annuel', target: 'Adulte voyageant quotidiennement', requiredDocuments: ['identity', 'proof_of_address'] },
-  { code: 'NAVIGO_SENIOR', name: 'Navigo Annuel Senior', target: 'Personne de 62 ans ou plus', requiredDocuments: ['identity', 'tax_notice'] },
-  { code: 'NAVIGO_MOIS', name: 'Navigo Mois', target: 'Voyageur regulier', requiredDocuments: ['identity'] },
-  { code: 'NAVIGO_SEMAINE', name: 'Navigo Semaine', target: 'Besoin hebdomadaire', requiredDocuments: ['identity'] },
-  { code: 'IMAGINE_R_JUNIOR', name: 'Imagine R Junior', target: 'Enfant de moins de 11 ans', requiredDocuments: ['identity', 'school_certificate'] },
-  { code: 'IMAGINE_R_SCOLAIRE', name: 'Imagine R Scolaire', target: 'Scolaire', requiredDocuments: ['identity', 'school_certificate'] },
-  { code: 'IMAGINE_R_ETUDIANT', name: 'Imagine R Etudiant', target: 'Etudiant', requiredDocuments: ['identity', 'school_certificate'] },
-  { code: 'LIBERTE_PLUS', name: 'Liberte+', target: 'Voyageur occasionnel', requiredDocuments: ['identity'] },
-  { code: 'TST_50', name: 'TST Reduction 50%', target: 'Beneficiaire solidarite', requiredDocuments: ['identity', 'eligibility'] },
-  { code: 'TST_75', name: 'TST Solidarite 75%', target: 'Beneficiaire solidarite', requiredDocuments: ['identity', 'eligibility'] },
-  { code: 'TST_GRATUITE', name: 'TST Solidarite Gratuite', target: 'Beneficiaire social', requiredDocuments: ['identity', 'eligibility'] },
-  { code: 'AMETHYSTE', name: 'Amethyste', target: 'Profil eligible selon departement', requiredDocuments: ['identity', 'tax_notice'] },
+  { code: 'NAVIGO_ANNUEL', name: 'Navigo Annuel', target: 'Adulte voyageant quotidiennement', requiredDocuments: ['identity', 'proof_of_address'], priceCents: 97600, monthlyInstallmentCount: 12 },
+  { code: 'NAVIGO_SENIOR', name: 'Navigo Annuel Senior', target: 'Personne de 62 ans ou plus', requiredDocuments: ['identity', 'tax_notice'], priceCents: 42000, monthlyInstallmentCount: 12 },
+  { code: 'NAVIGO_MOIS', name: 'Navigo Mois', target: 'Voyageur regulier', requiredDocuments: ['identity'], priceCents: 8800, monthlyInstallmentCount: null },
+  { code: 'NAVIGO_SEMAINE', name: 'Navigo Semaine', target: 'Besoin hebdomadaire', requiredDocuments: ['identity'], priceCents: 3080, monthlyInstallmentCount: null },
+  { code: 'IMAGINE_R_JUNIOR', name: 'Imagine R Junior', target: 'Enfant de moins de 11 ans', requiredDocuments: ['identity', 'school_certificate'], priceCents: 2400, monthlyInstallmentCount: 10 },
+  { code: 'IMAGINE_R_SCOLAIRE', name: 'Imagine R Scolaire', target: 'Scolaire', requiredDocuments: ['identity', 'school_certificate'], priceCents: 38240, monthlyInstallmentCount: 10 },
+  { code: 'IMAGINE_R_ETUDIANT', name: 'Imagine R Etudiant', target: 'Etudiant', requiredDocuments: ['identity', 'school_certificate'], priceCents: 38240, monthlyInstallmentCount: 10 },
+  { code: 'LIBERTE_PLUS', name: 'Liberte+', target: 'Voyageur occasionnel', requiredDocuments: ['identity'], priceCents: 0, monthlyInstallmentCount: null },
+  { code: 'TST_50', name: 'TST Reduction 50%', target: 'Beneficiaire solidarite', requiredDocuments: ['identity', 'eligibility'], priceCents: 4400, monthlyInstallmentCount: null },
+  { code: 'TST_75', name: 'TST Solidarite 75%', target: 'Beneficiaire solidarite', requiredDocuments: ['identity', 'eligibility'], priceCents: 2200, monthlyInstallmentCount: null },
+  { code: 'TST_GRATUITE', name: 'TST Solidarite Gratuite', target: 'Beneficiaire social', requiredDocuments: ['identity', 'eligibility'], priceCents: 0, monthlyInstallmentCount: null },
+  { code: 'AMETHYSTE', name: 'Amethyste', target: 'Profil eligible selon departement', requiredDocuments: ['identity', 'tax_notice'], priceCents: 0, monthlyInstallmentCount: null },
 ]
 
 async function ensureUser() {
@@ -595,6 +595,10 @@ async function seedDemo() {
   })
 
   return { admin, user, offer, subscription }
+}
+
+if (process.env.NODE_ENV === 'production') {
+  throw new Error('Le seed de démonstration est interdit en production.')
 }
 
 try {

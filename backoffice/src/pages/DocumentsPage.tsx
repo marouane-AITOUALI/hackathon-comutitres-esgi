@@ -116,13 +116,13 @@ export function DocumentsPage() {
     return () => { mounted = false }
   }, [])
 
-  async function review(id: string, accepted: boolean) {
+  async function review(id: string, decision: 'validate' | 'reject' | 'manual_review') {
     setSavingId(id)
     setError('')
     setSuccess('')
     try {
-      const rejectionReason = accepted ? undefined : reasons[id]
-      const response = await reviewDocument(id, accepted, rejectionReason, accepted ? 'Document valide depuis le backoffice.' : 'Document refuse depuis le backoffice.')
+      const rejectionReason = decision === 'reject' ? reasons[id] : undefined
+      const response = await reviewDocument(id, decision, rejectionReason, decision === 'validate' ? 'Document validé depuis le backoffice.' : decision === 'reject' ? 'Document refusé depuis le backoffice.' : 'Revue manuelle demandée.')
       const currentItem = rows.find((item) => item.document.id === id)
       if (currentItem) {
         setHistory((current) => [{
@@ -130,15 +130,17 @@ export function DocumentsPage() {
           documentId: id,
           documentType: currentItem.document.type,
           holder: holderName(currentItem),
-          decision: accepted ? 'Validation' : 'Refus',
+          decision: decision === 'validate' ? 'Validation' : decision === 'reject' ? 'Refus' : 'Revue manuelle',
           status: response.document.status,
           actor: 'Backoffice',
-          reason: accepted ? 'Document valide depuis le backoffice.' : rejectionReason ?? 'Motif non renseigne',
+          reason: decision === 'validate' ? 'Document validé depuis le backoffice.' : decision === 'reject' ? rejectionReason ?? 'Motif non renseigné' : 'Revue humaine demandée',
           decidedAt: response.document.updatedAt,
         }, ...current])
       }
-      setRows((current) => current.filter((item) => item.document.id !== id))
-      setSuccess(accepted ? 'Document valide.' : 'Document refuse.')
+      setRows((current) => decision === 'manual_review'
+        ? current.map((item) => item.document.id === id ? { ...item, document: response.document } : item)
+        : current.filter((item) => item.document.id !== id))
+      setSuccess(decision === 'validate' ? 'Document validé.' : decision === 'reject' ? 'Document refusé.' : 'Revue manuelle demandée.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Action document impossible.')
     } finally {
@@ -215,78 +217,78 @@ export function DocumentsPage() {
           Validez les justificatifs simples et refusez les pieces non conformes avec un motif lisible pour le support.
         </Typography>
 
-        <TableContainer>
-          <Table aria-label="Documents en attente" size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Document</TableCell>
-                <TableCell>Fichier</TableCell>
-                <TableCell>Porteur</TableCell>
-                <TableCell>Offre</TableCell>
-                <TableCell>Statut</TableCell>
-                <TableCell>Confiance IA</TableCell>
-                <TableCell>Warnings</TableCell>
-                <TableCell>Revue manuelle</TableCell>
-                <TableCell>Date upload</TableCell>
-                <TableCell>Motif refus</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((item) => {
-                const requiresManualReview = item.document.status === 'needs_manual_review'
-                return (
-                  <TableRow key={item.document.id} hover>
-                    <TableCell>{documentTypeLabel(item.document.type)}</TableCell>
-                    <TableCell sx={{ maxWidth: 180 }}>
-                      <Typography sx={{ fontWeight: 700 }} variant="body2">{item.document.originalFilename ?? item.document.fileUrl}</Typography>
-                      <Typography color="text.secondary" variant="caption">
-                        {item.document.mimeType ?? 'type inconnu'} - {item.document.sizeBytes ? `${Math.round(item.document.sizeBytes / 1024)} Ko` : 'taille inconnue'}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{holderName(item)}</TableCell>
-                    <TableCell>{item.subscription.offer?.name ?? 'Non renseignee'}</TableCell>
-                    <TableCell><StatusBadge status={item.document.status} /></TableCell>
-                    <TableCell>{confidence(item)}</TableCell>
-                    <TableCell sx={{ maxWidth: 220 }}>{warnings(item) || 'Aucun'}</TableCell>
-                    <TableCell>
-                      {requiresManualReview
-                        ? <StatusBadge status="needs_manual_review" />
-                        : <StatusBadge status="validated" label="Non requis" />}
-                    </TableCell>
-                    <TableCell>{new Date(item.document.createdAt).toLocaleDateString('fr-FR')}</TableCell>
-                    <TableCell>
-                      <TextField
-                        disabled={savingId === item.document.id}
-                        label="Motif si refus"
-                        placeholder="Ex. Document illisible"
-                        onChange={(event) => setReasons((current) => ({ ...current, [item.document.id]: event.target.value }))}
-                        size="small"
-                        value={reasons[item.document.id] ?? ''}
-                      />
-                    </TableCell>
-                    <TableCell align="right">
-                      <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ justifyContent: 'flex-end' }}>
-                        <Button disabled={savingId === item.document.id} onClick={() => visualize(item.document.id)} size="small" variant="outlined">Visualiser</Button>
-                        <Button disabled={savingId === item.document.id} onClick={() => review(item.document.id, true)} size="small" variant="contained">Valider</Button>
-                        <Button
-                          color="error"
-                          disabled={savingId === item.document.id || (reasons[item.document.id] ?? '').trim().length < 3}
-                          onClick={() => review(item.document.id, false)}
-                          size="small"
-                          variant="outlined"
-                        >
-                          Refuser
-                        </Button>
-                        <Button disabled={savingId === item.document.id} onClick={() => analyze(item.document.id)} size="small" variant="text">Analyser</Button>
+        <Box sx={{ display: 'grid', gap: 2 }}>
+          {rows.map((item) => {
+            const documentWarnings = warnings(item)
+            const busy = savingId === item.document.id
+
+            return (
+              <Paper key={item.document.id} variant="outlined" sx={{ borderRadius: 3, overflow: 'hidden' }}>
+                <Box sx={{ p: { xs: 2, md: 2.5 }, bgcolor: item.document.status === 'needs_manual_review' ? '#fffaf0' : 'background.paper' }}>
+                  <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2.5} sx={{ justifyContent: 'space-between' }}>
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' }, mb: 1 }}>
+                        <Typography variant="h6" sx={{ fontWeight: 900 }}>{documentTypeLabel(item.document.type)}</Typography>
+                        <StatusBadge status={item.document.status} />
                       </Stack>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </TableContainer>
+                      <Typography sx={{ fontWeight: 750, wordBreak: 'break-word' }}>
+                        {item.document.originalFilename ?? item.document.fileUrl}
+                      </Typography>
+                      <Typography color="text.secondary" variant="body2">
+                        Porteur : {holderName(item)} · Offre : {item.subscription.offer?.name ?? 'Non renseignée'}
+                      </Typography>
+                      <Typography color="text.secondary" variant="body2">
+                        Déposé le {new Date(item.document.createdAt).toLocaleDateString('fr-FR')} · {item.document.mimeType ?? 'type inconnu'} · {item.document.sizeBytes ? `${Math.round(item.document.sizeBytes / 1024)} Ko` : 'taille inconnue'}
+                      </Typography>
+                    </Box>
+
+                    <Box sx={{ width: { xs: '100%', lg: 300 }, flexShrink: 0 }}>
+                      <Paper variant="outlined" sx={{ p: 1.75, borderRadius: 2, bgcolor: 'background.default' }}>
+                        <Typography color="text.secondary" variant="caption">Analyse automatique</Typography>
+                        <Typography sx={{ fontWeight: 850 }}>Confiance : {confidence(item)}</Typography>
+                        <Typography color={documentWarnings ? 'warning.main' : 'text.secondary'} variant="body2" sx={{ mt: 0.5 }}>
+                          {documentWarnings || 'Aucun avertissement détecté.'}
+                        </Typography>
+                      </Paper>
+                    </Box>
+                  </Stack>
+                </Box>
+
+                <Box sx={{ borderTop: '1px solid', borderColor: 'divider', p: { xs: 2, md: 2.5 } }}>
+                  <Stack spacing={2}>
+                    <TextField
+                      disabled={busy}
+                      fullWidth
+                      helperText="Obligatoire uniquement pour refuser la pièce. Le client verra ce motif."
+                      label="Motif du refus"
+                      placeholder="Ex. Document illisible, incomplet ou expiré"
+                      onChange={(event) => setReasons((current) => ({ ...current, [item.document.id]: event.target.value }))}
+                      value={reasons[item.document.id] ?? ''}
+                    />
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexWrap: 'wrap' }}>
+                      <Button disabled={busy} onClick={() => visualize(item.document.id)} variant="outlined">Voir le document</Button>
+                      <Button color="success" disabled={busy} onClick={() => review(item.document.id, 'validate')} variant="contained">Accepter la pièce</Button>
+                      <Button
+                        color="error"
+                        disabled={busy || (reasons[item.document.id] ?? '').trim().length < 3}
+                        onClick={() => review(item.document.id, 'reject')}
+                        variant="outlined"
+                      >
+                        Refuser avec ce motif
+                      </Button>
+                      <Button disabled={busy} onClick={() => review(item.document.id, 'manual_review')} variant="outlined">
+                        Demander une revue manuelle
+                      </Button>
+                      <Button disabled={busy} onClick={() => analyze(item.document.id)} variant="text">
+                        Relancer l’analyse
+                      </Button>
+                    </Stack>
+                  </Stack>
+                </Box>
+              </Paper>
+            )
+          })}
+        </Box>
 
         {rows.length === 0 && <EmptyState title="Aucun document a traiter" description="Les justificatifs en attente ou en revue manuelle apparaitront ici." />}
       </Paper>

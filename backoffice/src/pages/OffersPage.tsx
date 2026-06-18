@@ -12,6 +12,8 @@ const emptyPayload: OfferPayload = {
   description: '',
   target: '',
   requiredDocuments: [],
+  priceCents: 0,
+  monthlyInstallmentCount: null,
   isActive: true,
 }
 
@@ -76,6 +78,8 @@ export function OffersPage() {
       description: offer.description ?? '',
       target: offer.target,
       requiredDocuments: offer.requiredDocuments,
+      priceCents: offer.priceCents,
+      monthlyInstallmentCount: offer.monthlyInstallmentCount,
       isActive: offer.isActive !== false,
     })
     setEditDocumentsText(offer.requiredDocuments.join(', '))
@@ -122,6 +126,12 @@ export function OffersPage() {
           </Grid>
           <Grid size={{ xs: 12, md: 3 }}>
             <TextField fullWidth label="Documents requis, separes par virgule" onChange={(event) => setDocumentsText(event.target.value)} value={documentsText} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <TextField fullWidth label="Prix total (centimes)" onChange={(event) => setPayload((current) => ({ ...current, priceCents: Number(event.target.value) }))} type="number" value={payload.priceCents} />
+          </Grid>
+          <Grid size={{ xs: 12, md: 3 }}>
+            <TextField fullWidth label="Nombre de mensualités" onChange={(event) => setPayload((current) => ({ ...current, monthlyInstallmentCount: event.target.value ? Number(event.target.value) : null }))} type="number" value={payload.monthlyInstallmentCount ?? ''} />
           </Grid>
           <Grid size={{ xs: 12 }}>
             <TextField fullWidth label="Description" multiline onChange={(event) => setPayload((current) => ({ ...current, description: event.target.value }))} rows={2} value={payload.description} />

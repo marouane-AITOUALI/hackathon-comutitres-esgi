@@ -1,20 +1,14 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
-import { offers, payments, renewalEvents, subscriptions } from '../db/schema.js'
+import { offers, payments, renewalEvents, subscriptions, terminationRequests } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import type { RenewalDecisionInput } from '../validation/renewal.schemas.js'
-import { notifyRenewalDecision, notifySubscriptionStatusChanged } from './notifications.service.js'
+import { notifyRenewalDecision } from './notifications.service.js'
 
-type RenewalSubscriptionStatus = (typeof subscriptions.$inferSelect)['status']
-
-type RenewalSubscription = {
-  id: string
-  userId: string
-  offerId: string | null
-  status: RenewalSubscriptionStatus
-  createdAt: Date
-  updatedAt: Date
-}
+type RenewalSubscription = Pick<
+  typeof subscriptions.$inferSelect,
+  'id' | 'userId' | 'offerId' | 'status' | 'createdAt' | 'updatedAt'
+>
 
 const subscriptionSelection = {
   id: subscriptions.id,
@@ -47,6 +41,14 @@ const paymentSelection = {
   updatedAt: payments.updatedAt,
 }
 
+const annualOfferCodes = new Set([
+  'NAVIGO_ANNUEL',
+  'NAVIGO_SENIOR',
+  'IMAGINE_R_JUNIOR',
+  'IMAGINE_R_SCOLAIRE',
+  'IMAGINE_R_ETUDIANT',
+])
+
 async function findOwnSubscription(userId: string, subscriptionId: string) {
   const [subscription] = await requireDb()
     .select(subscriptionSelection)
@@ -64,49 +66,98 @@ async function getOffer(subscription: RenewalSubscription) {
   return offer ?? null
 }
 
-function addDays(date: Date, days: number) {
+function addYears(date: Date, years: number) {
   const next = new Date(date)
-  next.setDate(next.getDate() + days)
+  next.setUTCFullYear(next.getUTCFullYear() + years)
   return next
 }
 
-function renewalPeriodDays(offerCode: string | null) {
-  if (!offerCode) return 365
-  if (offerCode.includes('SEMAINE')) return 7
-  if (offerCode.includes('MOIS') || offerCode === 'LIBERTE_PLUS') return 30
-  return 365
+export function addMonths(date: Date, months: number) {
+  const next = new Date(date)
+  next.setUTCMonth(next.getUTCMonth() + months)
+  return next
 }
 
-async function buildRenewal(subscription: RenewalSubscription) {
+export function nextAnnualRenewalDate(start: Date, now = new Date()) {
+  let next = addYears(start, 1)
+  while (next.getTime() <= now.getTime()) next = addYears(next, 1)
+  return next
+}
+
+export function annualRenewalWindow(start: Date, now = new Date()) {
+  const nextRenewalDate = nextAnnualRenewalDate(start, now)
+  const renewalWindowStartsAt = addMonths(nextRenewalDate, -3)
+  return {
+    nextRenewalDate,
+    renewalWindowStartsAt,
+    isOpen: now.getTime() >= renewalWindowStartsAt.getTime() && now.getTime() < nextRenewalDate.getTime(),
+  }
+}
+
+function latestRequestState(events: Array<typeof renewalEvents.$inferSelect>) {
+  const latest = events.find((event) => ['requested', 'cancelled', 'refused', 'suspended'].includes(event.action))
+  return {
+    activeRequest: latest?.action === 'requested' ? latest : null,
+    lastRequestEvent: latest ?? null,
+  }
+}
+
+async function buildRenewal(subscription: RenewalSubscription, now = new Date()) {
   const database = requireDb()
   const offer = await getOffer(subscription)
   const eventRows = await database.select(renewalSelection).from(renewalEvents).where(eq(renewalEvents.subscriptionId, subscription.id)).orderBy(desc(renewalEvents.createdAt))
   const paymentRows = await database.select(paymentSelection).from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.createdAt))
-  const periodDays = renewalPeriodDays(offer?.code ?? null)
-  const nextRenewalDate = addDays(subscription.createdAt, periodDays)
-  const lastPayment = paymentRows[0] ?? null
+  const [terminationRequest] = await database
+    .select({ id: terminationRequests.id })
+    .from(terminationRequests)
+    .where(and(eq(terminationRequests.subscriptionId, subscription.id), eq(terminationRequests.status, 'requested')))
+    .limit(1)
+
+  const annual = annualOfferCodes.has(offer?.code ?? '')
+  const { nextRenewalDate, renewalWindowStartsAt, isOpen: windowOpen } = annualRenewalWindow(subscription.createdAt, now)
   const hasPaymentIssue = paymentRows.some((payment) => payment.status === 'rejected' || payment.status === 'cancelled')
+  const { activeRequest, lastRequestEvent } = latestRequestState(eventRows)
+  const eligibleStatus = subscription.status === 'accepted'
+  const canRenew = annual && eligibleStatus && windowOpen && !activeRequest && !terminationRequest
+
+  const warnings: string[] = []
+  if (!annual) warnings.push("Cette offre n'utilise pas le renouvellement annuel.")
+  if (annual && !windowOpen) warnings.push(`La demande sera disponible à partir du ${renewalWindowStartsAt.toLocaleDateString('fr-FR')}.`)
+  if (!eligibleStatus) warnings.push('Seul un forfait actif et validé peut être renouvelé.')
+  if (hasPaymentIssue) warnings.push('Un paiement refusé ou annulé devra être régularisé.')
+  if (terminationRequest) warnings.push('Une demande de résiliation est déjà en cours.')
 
   return {
     subscription,
     offer: offer ? { id: offer.id, code: offer.code, name: offer.name } : null,
     renewal: {
-      canRenew: !['cancelled', 'rejected', 'suspended'].includes(subscription.status),
+      annual,
+      canRenew,
+      canCancelRequest: Boolean(activeRequest),
+      requestStatus: activeRequest ? 'requested' as const : lastRequestEvent ? 'cancelled' as const : 'none' as const,
+      activeRequestId: activeRequest?.id ?? null,
       nextRenewalDate: nextRenewalDate.toISOString(),
-      periodDays,
-      recommendedAction: hasPaymentIssue ? 'regularize_payment' : 'accept_or_refuse',
+      renewalWindowStartsAt: renewalWindowStartsAt.toISOString(),
+      periodDays: 365,
+      recommendedAction: hasPaymentIssue ? 'regularize_payment' as const : 'request_or_cancel' as const,
       reasons: [
-        'Renouvellement calcule a partir du type de forfait.',
-        lastPayment ? `Dernier paiement: ${lastPayment.status}.` : 'Aucun paiement encore rattache.',
+        'Une demande de renouvellement annuel est possible trois mois avant l’échéance.',
+        'Le forfait actuel reste actif tant que son échéance ou une résiliation effective ne l’arrête pas.',
       ],
-      warnings: hasPaymentIssue ? ['Un paiement refuse ou annule doit etre regularise avant validation finale.'] : [],
+      warnings,
     },
     payments: paymentRows,
     events: eventRows,
   }
 }
 
-async function insertRenewalEvent(userId: string, subscriptionId: string, action: 'accepted' | 'refused' | 'suspended', input: RenewalDecisionInput) {
+async function insertRenewalEvent(
+  userId: string,
+  subscriptionId: string,
+  action: 'requested' | 'cancelled' | 'refused' | 'suspended',
+  input: RenewalDecisionInput,
+  effectiveAt: Date,
+) {
   const [created] = await requireDb()
     .insert(renewalEvents)
     .values({
@@ -114,12 +165,12 @@ async function insertRenewalEvent(userId: string, subscriptionId: string, action
       subscriptionId,
       action,
       reason: input.reason,
-      metadata: { source: 'prototype', action },
-      effectiveAt: new Date(),
+      metadata: { source: 'client', action },
+      effectiveAt,
     })
     .returning(renewalSelection)
 
-  if (!created) throw new AppError(500, "L'evenement de renouvellement n'a pas pu etre cree.")
+  if (!created) throw new AppError(500, "L'événement de renouvellement n'a pas pu être créé.")
   return created
 }
 
@@ -129,48 +180,45 @@ export async function getSubscriptionRenewal(userId: string, subscriptionId: str
 
 export async function acceptSubscriptionRenewal(userId: string, subscriptionId: string, input: RenewalDecisionInput) {
   const subscription = await findOwnSubscription(userId, subscriptionId)
-  const event = await insertRenewalEvent(userId, subscriptionId, 'accepted', input)
+  const current = await buildRenewal(subscription)
+  if (!current.renewal.canRenew) {
+    throw new AppError(409, "La demande de renouvellement n'est pas disponible.", {
+      renewalWindowStartsAt: current.renewal.renewalWindowStartsAt,
+      warnings: current.renewal.warnings,
+    })
+  }
 
-  const [updated] = await requireDb()
-    .update(subscriptions)
-    .set({ status: 'pending_payment', updatedAt: new Date() })
-    .where(eq(subscriptions.id, subscription.id))
-    .returning(subscriptionSelection)
-
-  if (!updated) throw new AppError(500, "Le renouvellement n'a pas pu mettre à jour la souscription.")
-  await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
-  await notifyRenewalDecision({ userId, subscriptionId, action: 'accepted', reason: input.reason })
+  const event = await insertRenewalEvent(
+    userId,
+    subscriptionId,
+    'requested',
+    input,
+    new Date(current.renewal.nextRenewalDate),
+  )
+  await notifyRenewalDecision({ userId, subscriptionId, action: 'requested', reason: input.reason })
   return { event, renewal: await getSubscriptionRenewal(userId, subscriptionId) }
 }
 
-export async function refuseSubscriptionRenewal(userId: string, subscriptionId: string, input: RenewalDecisionInput) {
+export async function cancelSubscriptionRenewal(userId: string, subscriptionId: string, input: RenewalDecisionInput) {
   const subscription = await findOwnSubscription(userId, subscriptionId)
-  const event = await insertRenewalEvent(userId, subscriptionId, 'refused', input)
+  const current = await buildRenewal(subscription)
+  if (!current.renewal.canCancelRequest) throw new AppError(409, 'Aucune demande de renouvellement active à annuler.')
 
-  const [updated] = await requireDb()
-    .update(subscriptions)
-    .set({ status: 'cancelled', updatedAt: new Date() })
-    .where(eq(subscriptions.id, subscription.id))
-    .returning(subscriptionSelection)
-
-  if (!updated) throw new AppError(500, "Le refus de renouvellement n'a pas pu mettre à jour la souscription.")
-  await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
-  await notifyRenewalDecision({ userId, subscriptionId, action: 'refused', reason: input.reason })
+  const event = await insertRenewalEvent(userId, subscriptionId, 'cancelled', input, new Date())
+  await notifyRenewalDecision({ userId, subscriptionId, action: 'cancelled', reason: input.reason })
   return { event, renewal: await getSubscriptionRenewal(userId, subscriptionId) }
+}
+
+// Compatibilité des anciennes routes : ces choix concernent uniquement la demande future.
+export async function refuseSubscriptionRenewal(userId: string, subscriptionId: string, input: RenewalDecisionInput) {
+  return cancelSubscriptionRenewal(userId, subscriptionId, input)
 }
 
 export async function suspendSubscriptionRenewal(userId: string, subscriptionId: string, input: RenewalDecisionInput) {
   const subscription = await findOwnSubscription(userId, subscriptionId)
-  const event = await insertRenewalEvent(userId, subscriptionId, 'suspended', input)
-
-  const [updated] = await requireDb()
-    .update(subscriptions)
-    .set({ status: 'suspended', updatedAt: new Date() })
-    .where(eq(subscriptions.id, subscription.id))
-    .returning(subscriptionSelection)
-
-  if (!updated) throw new AppError(500, "La suspension du renouvellement n'a pas pu mettre à jour la souscription.")
-  await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
+  const current = await buildRenewal(subscription)
+  if (!current.renewal.canCancelRequest) throw new AppError(409, 'Aucune demande de renouvellement active à suspendre.')
+  const event = await insertRenewalEvent(userId, subscriptionId, 'suspended', input, new Date())
   await notifyRenewalDecision({ userId, subscriptionId, action: 'suspended', reason: input.reason })
   return { event, renewal: await getSubscriptionRenewal(userId, subscriptionId) }
 }

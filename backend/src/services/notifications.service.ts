@@ -10,7 +10,7 @@ type NotificationCategory = (typeof notifications.$inferInsert)['category']
 type NotificationPriority = (typeof notifications.$inferInsert)['priority']
 type DocumentStatus = 'pending' | 'analyzing' | 'validated' | 'rejected' | 'needs_manual_review'
 type PaymentStatus = 'simulated' | 'pending' | 'accepted' | 'rejected' | 'cancelled' | 'regularized'
-type RenewalAction = 'accepted' | 'refused' | 'suspended'
+type RenewalAction = 'accepted' | 'refused' | 'suspended' | 'requested' | 'cancelled'
 
 const notificationSelection = {
   id: notifications.id,
@@ -349,6 +349,16 @@ export async function notifyRenewalDecision(input: {
       message: 'Votre renouvellement est suspendu. Vous pourrez contacter le support si nécessaire.',
       priority: 'high',
     },
+    requested: {
+      title: 'Demande de renouvellement enregistrée',
+      message: 'Votre demande concerne la prochaine période. Votre forfait actuel reste actif.',
+      priority: 'normal',
+    },
+    cancelled: {
+      title: 'Demande de renouvellement annulée',
+      message: 'Seule la demande de renouvellement a été annulée. Votre forfait actuel reste actif.',
+      priority: 'normal',
+    },
   }
   const copy = copies[input.action]
 
@@ -371,10 +381,59 @@ export async function notifyRenewalDecision(input: {
     type: `renewal_${input.action}`,
     category: 'renewal',
     priority: input.action === 'suspended' ? 'high' : 'normal',
-    title: `Renouvellement ${input.action === 'accepted' ? 'accepté' : input.action === 'refused' ? 'refusé' : 'suspendu'}`,
+    title: input.action === 'requested'
+      ? 'Nouvelle demande de renouvellement'
+      : input.action === 'cancelled'
+        ? 'Demande de renouvellement annulée'
+        : `Renouvellement ${input.action === 'accepted' ? 'accepté' : input.action === 'refused' ? 'refusé' : 'suspendu'}`,
     message: 'Une décision de renouvellement client vient d’être enregistrée.',
     data: actionData(`/subscriptions/${input.subscriptionId}`, 'Voir le dossier', {
       action: input.action,
+      reason: input.reason ?? null,
+      userId: input.userId,
+    }),
+  })
+
+  return clientNotification
+}
+
+export async function notifyTerminationRequest(input: {
+  userId: string
+  subscriptionId: string
+  action: 'requested' | 'cancelled'
+  effectiveAt: Date
+  reason?: string
+}) {
+  const requested = input.action === 'requested'
+  const clientNotification = await createNotification({
+    userId: input.userId,
+    subscriptionId: input.subscriptionId,
+    type: `termination_${input.action}`,
+    category: 'subscription',
+    priority: requested ? 'high' : 'normal',
+    title: requested ? 'Demande de résiliation enregistrée' : 'Demande de résiliation annulée',
+    message: requested
+      ? `Votre demande est prévue pour le ${input.effectiveAt.toLocaleDateString('fr-FR')}. Le forfait reste actif jusque-là.`
+      : 'Votre abonnement reste actif : seule la demande de résiliation a été annulée.',
+    data: actionData(`/subscriptions/${input.subscriptionId}`, 'Voir mon abonnement', {
+      action: input.action,
+      effectiveAt: input.effectiveAt.toISOString(),
+      reason: input.reason ?? null,
+    }),
+  })
+
+  await notifyAdmins({
+    subscriptionId: input.subscriptionId,
+    type: `termination_${input.action}`,
+    category: 'subscription',
+    priority: requested ? 'high' : 'normal',
+    title: requested ? 'Résiliation demandée' : 'Résiliation annulée',
+    message: requested
+      ? `Une résiliation est demandée pour le ${input.effectiveAt.toLocaleDateString('fr-FR')}.`
+      : 'Le client a annulé sa demande de résiliation.',
+    data: actionData(`/subscriptions/${input.subscriptionId}`, 'Voir le dossier', {
+      action: input.action,
+      effectiveAt: input.effectiveAt.toISOString(),
       reason: input.reason ?? null,
       userId: input.userId,
     }),

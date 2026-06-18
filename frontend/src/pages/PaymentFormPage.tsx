@@ -17,7 +17,8 @@ import { listSubscriptions } from '../services/subscriptions.service'
 import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
 import { colors } from '../theme/colors'
-import type { SubscriptionSummary } from '../types'
+import type { PaymentSimulation, SubscriptionSummary } from '../types'
+import { subscriptionStatusLabels } from '../utils/statusLabels'
 
 type PaymentMode = 'one_time' | 'monthly'
 type PaymentMethod = 'card' | 'mandate'
@@ -50,13 +51,7 @@ export function PaymentFormPage() {
   const [ibanLast4, setIbanLast4] = useState('')
   const [mandateAccepted, setMandateAccepted] = useState(false)
 
-  const [simulation, setSimulation] = useState<{
-    amountCents: number
-    feesCents: number
-    totalCents: number
-    currency: string
-    warnings: string[]
-  } | null>(null)
+  const [simulation, setSimulation] = useState<PaymentSimulation | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [simulating, setSimulating] = useState(false)
@@ -65,9 +60,7 @@ export function PaymentFormPage() {
   const [success, setSuccess] = useState('')
 
   const payableSubscriptions = useMemo(
-    () => subscriptions.filter((item) =>
-      ['draft', 'pending_documents', 'pending_payment', 'pending_validation'].includes(item.subscription.status),
-    ),
+    () => subscriptions.filter((item) => item.workflow.canPay),
     [subscriptions],
   )
 
@@ -146,19 +139,19 @@ export function PaymentFormPage() {
 
     try {
       if (method === 'card') {
-        const cardError = validateCardFields(cardNumber, cardExpiry, cardCvv, cardholderName)
+        const cardError = simulation.totalCents === 0 ? null : validateCardFields(cardNumber, cardExpiry, cardCvv, cardholderName)
         if (cardError) {
           setError(cardError)
           return
         }
-        await createDirectPayment({ subscriptionId, cardToken: buildCardToken(cardNumber), simulateFailure })
-        setSuccess(simulateFailure ? 'Paiement refusé (simulation). Vous pourrez le régulariser depuis l’historique.' : 'Paiement accepté. Votre dossier passe en validation.')
+        await createDirectPayment({ subscriptionId, paymentMode, cardToken: simulation.totalCents === 0 ? undefined : buildCardToken(cardNumber), simulateFailure })
+        setSuccess(simulateFailure ? 'Paiement refusé (simulation).' : 'Paiement enregistré. Vous pouvez finaliser l’envoi du dossier.')
       } else {
         if (!mandateAccepted) {
           setError('Vous devez accepter le mandat SEPA.')
           return
         }
-        await createMandatePayment({ subscriptionId, holderName, ibanLast4, mandateAccepted: true })
+        await createMandatePayment({ subscriptionId, paymentMode, holderName, ibanLast4, mandateAccepted: true })
         setSuccess('Mandat SEPA enregistré. Le paiement est en cours de traitement.')
       }
       setTimeout(() => navigate('/paiements'), 1800)
@@ -202,7 +195,7 @@ export function PaymentFormPage() {
             >
               {payableSubscriptions.map((item) => (
                 <MenuItem key={item.subscription.id} value={item.subscription.id}>
-                  {profileLabel(item)} ({item.subscription.status})
+                  {profileLabel(item)} ({subscriptionStatusLabels[item.subscription.status]})
                 </MenuItem>
               ))}
             </TextField>
@@ -249,9 +242,24 @@ export function PaymentFormPage() {
                   {simulation.feesCents > 0 && (
                     <Typography>Frais : {formatEuros(simulation.feesCents, simulation.currency)}</Typography>
                   )}
-                  <Typography sx={{ fontWeight: 800, fontSize: 18, color: colors.blueInteraction }}>
-                    Total : {formatEuros(simulation.totalCents, simulation.currency)}
-                  </Typography>
+                  {paymentMode === 'monthly' ? (
+                    <>
+                      <Typography sx={{ fontWeight: 800, fontSize: 18, color: colors.blueInteraction }}>
+                        {formatEuros(simulation.installmentAmountCents, simulation.currency)} par mois pendant {simulation.installmentCount} mois
+                      </Typography>
+                      <Stack spacing={0.25} sx={{ mt: 1 }}>
+                        {simulation.schedule.map((installment) => (
+                          <Typography key={installment.installmentNumber} variant="body2">
+                            Échéance {installment.installmentNumber} · {new Intl.DateTimeFormat('fr-FR').format(new Date(installment.dueDate))} · {formatEuros(installment.amountCents, simulation.currency)}
+                          </Typography>
+                        ))}
+                      </Stack>
+                    </>
+                  ) : (
+                    <Typography sx={{ fontWeight: 800, fontSize: 18, color: colors.blueInteraction }}>
+                      Total à régler : {formatEuros(simulation.totalCents, simulation.currency)}
+                    </Typography>
+                  )}
                   {simulation.warnings.map((warning) => (
                     <Typography key={warning} color="text.secondary" variant="body2">• {warning}</Typography>
                   ))}

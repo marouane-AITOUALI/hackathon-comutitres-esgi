@@ -25,6 +25,7 @@ export const registerWithOnboarding = (payload: RegisterPayload & { onboarding: 
         subscriptionFor: payload.onboarding.subscriptionFor,
         isBearerPayer: payload.onboarding.isBearerPayer,
         currentStep: 'result',
+        address: payload.onboarding.address,
         bearer: payload.onboarding.bearer,
         payer: payload.onboarding.isBearerPayer ? undefined : payload.onboarding.payer,
         answers: {

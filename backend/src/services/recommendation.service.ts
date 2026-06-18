@@ -151,8 +151,12 @@ function scoreCandidates(input: RecommendationInput) {
   }
 
   if (age > 0 && age < 11) add('IMAGINE_R_JUNIOR', 0.94, ['Porteur junior de moins de 11 ans'], ['Piece identite'])
-  if (input.status === 'school' || (age > 0 && age < 18)) add('IMAGINE_R_SCOLAIRE', 0.9, ['Porteur scolaire ou mineur'], STUDENT_DOCS)
-  if (input.status === 'student' || input.socialSituation === 'student') add('IMAGINE_R_ETUDIANT', 0.91, ['Porteur etudiant'], STUDENT_DOCS)
+  if ((input.status === 'school' && age >= 11) || (age >= 11 && age < 18 && input.status !== 'student')) {
+    add('IMAGINE_R_SCOLAIRE', 0.9, ['Porteur scolaire'], STUDENT_DOCS)
+  }
+  if (input.status === 'student' || input.socialSituation === 'student') {
+    add('IMAGINE_R_ETUDIANT', 0.95, ['Statut étudiant confirmé'], STUDENT_DOCS)
+  }
   if (age >= 62 || input.status === 'senior' || input.socialSituation === 'senior') add('NAVIGO_SENIOR', age >= 62 ? 0.88 : 0.68, ['Profil senior'], SENIOR_DOCS)
   if (input.frequency === 'occasional' || input.planPreference === 'pay_as_you_go') add('LIBERTE_PLUS', 0.87, ['Usage occasionnel / paiement a l usage'])
   if (input.planPreference === 'weekly') add('NAVIGO_SEMAINE', 0.85, ['Besoin hebdomadaire'])
@@ -174,7 +178,13 @@ function scoreCandidates(input: RecommendationInput) {
     }
   }
 
-  return { candidates: Array.from(byCode.values()).sort((a, b) => b.score - a.score), warnings }
+  const compatibleCandidates = Array.from(byCode.values()).filter((candidate) => {
+    if (candidate.code === 'IMAGINE_R_JUNIOR') return age > 0 && age < 11
+    if (candidate.code === 'IMAGINE_R_SCOLAIRE') return age >= 11 && (input.status === 'school' || age < 18)
+    return true
+  })
+
+  return { candidates: compatibleCandidates.sort((a, b) => b.score - a.score), warnings }
 }
 
 export async function compareOffers(input: RecommendationInput): Promise<OfferRecommendation[]> {
