@@ -183,7 +183,15 @@ export function DashboardPage() {
               Retrouvez les actions prioritaires pour maintenir vos droits à circuler, suivre les profils porteur/payeur et préparer vos renouvellements.
             </Typography>
           </Box>
-          <Stack direction={{ xs: 'row', sm: 'row' }} spacing={1.5} sx={{ alignSelf: { lg: 'center' }, flexWrap: 'wrap' }}>
+          <Stack
+            direction={{ xs: 'column', sm: 'row' }}
+            spacing={1.5}
+            sx={{
+              alignSelf: { xs: 'stretch', lg: 'center' },
+              width: { xs: '100%', lg: 'auto' },
+              alignItems: 'stretch',
+            }}
+          >
             <Button
               aria-label="Démarrer un nouveau parcours"
               component={Link}
@@ -191,7 +199,7 @@ export function DashboardPage() {
               state={{ mode: 'chat' }}
               variant="contained"
               endIcon={<ArrowRight size={18} />}
-              sx={{ minWidth: { xs: 132, sm: 144 }, whiteSpace: 'nowrap' }}
+              sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 144 }, whiteSpace: 'nowrap' }}
             >
               Démarrer
             </Button>
@@ -200,7 +208,7 @@ export function DashboardPage() {
               component={Link}
               to="/subscriptions"
               variant="outlined"
-              sx={{ minWidth: { xs: 118, sm: 132 }, whiteSpace: 'nowrap' }}
+              sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 144 }, whiteSpace: 'nowrap' }}
             >
               Dossiers
             </Button>
