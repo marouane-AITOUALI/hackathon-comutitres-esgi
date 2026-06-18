@@ -15,6 +15,8 @@ import {
 } from '@mui/material'
 import { Bell, ChevronDown, LogOut, Menu, Search, User } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { AccessibilityMenu } from '../accessibility/AccessibilityMenu'
+import { useAccessibility } from '../accessibility/useAccessibility'
 import { colors } from '../theme/colors'
 
 interface HeaderProps {
@@ -34,6 +36,7 @@ export function Header({
   onLogout,
   onProfileClick,
 }: HeaderProps) {
+  const { language } = useAccessibility()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
 
@@ -47,6 +50,25 @@ export function Header({
   }
 
   const handleProfileToggle = () => setProfileOpen((prev) => !prev)
+  const labels = language === 'fr'
+    ? {
+        menu: 'Ouvrir le menu',
+        search: 'Rechercher',
+        searchPlaceholder: 'Rechercher…',
+        notifications: 'Notifications',
+        profile: 'Ouvrir le menu du profil',
+        profileItem: 'Profil',
+        logout: 'Se déconnecter',
+      }
+    : {
+        menu: 'Open menu',
+        search: 'Search',
+        searchPlaceholder: 'Search…',
+        notifications: 'Notifications',
+        profile: 'Open profile menu',
+        profileItem: 'Profile',
+        logout: 'Sign out',
+      }
 
   const userInitials = userName
     .split(' ')
@@ -86,7 +108,7 @@ export function Header({
         {/* Left: hamburger (mobile) + greeting */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
           {isMobile && (
-            <IconButton onClick={onMenuToggle} size="small" sx={{ color: colors.anthracite, mr: 0.5 }}>
+            <IconButton aria-label={labels.menu} onClick={onMenuToggle} size="small" sx={{ color: colors.anthracite, mr: 0.5 }}>
               <Menu size={20} />
             </IconButton>
           )}
@@ -123,6 +145,8 @@ export function Header({
               cursor: 'pointer',
             }}
             onClick={() => setSearchOpen(true)}
+            role="search"
+            aria-label={labels.search}
           >
             <Box
               sx={{
@@ -145,7 +169,8 @@ export function Header({
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
                 onBlur={handleSearchBlur}
-                placeholder="Rechercher…"
+                aria-label={labels.search}
+                placeholder={labels.searchPlaceholder}
                 sx={{
                   border: 'none',
                   outline: 'none',
@@ -162,6 +187,7 @@ export function Header({
 
           {/* Bell */}
           <IconButton
+            aria-label={labels.notifications}
             size="small"
             sx={{
               width: 40,
@@ -176,11 +202,17 @@ export function Header({
             <Bell size={18} />
           </IconButton>
 
+          <AccessibilityMenu />
+
           {/* Profile dropdown */}
           <Box ref={profileRef} sx={{ position: 'relative' }} onKeyDown={handleProfileMenuKeyDown}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box
-                sx={{
+                role="button"
+                tabIndex={0}
+                aria-label={labels.profile}
+                aria-expanded={profileOpen}
+                  sx={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -196,6 +228,9 @@ export function Header({
                   flexShrink: 0,
                 }}
                 onClick={handleProfileToggle}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') handleProfileToggle()
+                }}
               >
                 {avatarUrl ? (
                   <Avatar
@@ -211,7 +246,14 @@ export function Header({
               </Box>
 
               <Box
+                role="button"
+                tabIndex={0}
+                aria-label={labels.profile}
+                aria-expanded={profileOpen}
                 onClick={handleProfileToggle}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') handleProfileToggle()
+                }}
                 sx={{
                   display: 'flex',
                   alignItems: 'center',
@@ -270,7 +312,7 @@ export function Header({
                     }}
                   >
                     <User size={16} color={colors.greyDark} />
-                    Profil
+                    {labels.profileItem}
                   </MenuItem>
                   <Divider sx={{ my: 0.5 }} />
                   <MenuItem
@@ -281,7 +323,7 @@ export function Header({
                     }}
                   >
                     <LogOut size={16} color={colors.redDark} />
-                    Se déconnecter
+                    {labels.logout}
                   </MenuItem>
                 </MenuList>
               </Paper>

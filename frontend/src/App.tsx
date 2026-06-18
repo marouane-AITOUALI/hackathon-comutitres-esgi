@@ -1,4 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { useAccessibility } from './accessibility/useAccessibility'
+import { DocumentTranslationBridge } from './i18n/DocumentTranslationBridge'
 import { AppLayout } from './components/AppLayout'
 import { ClientLayout } from './components/ClientLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -19,8 +21,15 @@ import { SubscriptionsPage } from './pages/SubscriptionsPage'
 import { SupportPage } from './pages/SupportPage'
 
 function App() {
+  const { language } = useAccessibility()
+
   return (
-    <Routes>
+    <>
+      <DocumentTranslationBridge />
+      <a className="skip-link" href="#main-content">
+        {language === 'fr' ? 'Aller au contenu principal' : 'Skip to main content'}
+      </a>
+      <Routes>
       <Route path="auth/login" element={<LoginPage />} />
       <Route path="auth/register" element={<RegisterPage />} />
       <Route path="mobile-app" element={<MobileAppPage />} />
@@ -44,7 +53,8 @@ function App() {
         <Route path="infos/:page" element={<FooterInfoPage />} />
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />
-    </Routes>
+      </Routes>
+    </>
   )
 }
 
