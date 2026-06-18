@@ -1,38 +1,9 @@
 import { Box, IconButton, Stack, Typography } from '@mui/material'
 import { Link } from 'react-router-dom'
+import { useAccessibility } from '../accessibility/useAccessibility'
+import { BrandLogo } from './BrandLogo'
 
 const FOOTER_BG = '#0d1b2a'
-
-const footerColumns = [
-  {
-    title: 'À propos',
-    links: [
-      { label: 'Qui sommes-nous ?', to: '/infos/qui-sommes-nous' },
-      { label: 'Nos engagements', to: '/infos/engagements' },
-    ],
-  },
-  {
-    title: 'Aide',
-    links: [
-      { label: 'FAQ', to: '/infos/faq' },
-      { label: 'Nous contacter', to: '/infos/contact' },
-    ],
-  },
-  {
-    title: 'Informations',
-    links: [
-      { label: 'Mentions légales', to: '/infos/mentions-legales' },
-      { label: 'Conditions générales', to: '/infos/conditions-generales' },
-    ],
-  },
-  {
-    title: 'Confidentialité',
-    links: [
-      { label: 'Politique de confidentialité', to: '/infos/confidentialite' },
-      { label: 'Gestion des cookies', to: '/infos/cookies' },
-    ],
-  },
-]
 
 const socialLinks: Record<string, string> = {
   x: 'https://x.com/IDFmobilites',
@@ -42,57 +13,7 @@ const socialLinks: Record<string, string> = {
 }
 
 function Logos() {
-  return (
-    <Stack direction="row" spacing={1.75} sx={{ alignItems: 'center', flexShrink: 0 }}>
-      <Typography
-        component={Link}
-        to="/"
-        sx={{
-          fontWeight: 800,
-          fontSize: { xs: 18, md: 20 },
-          color: '#fff',
-          letterSpacing: -0.3,
-          textDecoration: 'none',
-          lineHeight: 1,
-        }}
-      >
-        comu<span style={{ color: '#93c5fd' }}>titres</span>
-      </Typography>
-
-      <Box sx={{ width: '1px', height: 24, bgcolor: 'rgba(255,255,255,0.35)', flexShrink: 0 }} />
-
-      <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-        <Box
-          sx={{
-            width: 26,
-            height: 26,
-            borderRadius: '50%',
-            border: '2px solid #fff',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: '#fff' }} />
-        </Box>
-        <Typography
-          sx={{
-            fontWeight: 600,
-            fontSize: 10.5,
-            lineHeight: 1.15,
-            color: 'rgba(255,255,255,0.85)',
-            maxWidth: 88,
-            display: { xs: 'none', sm: 'block' },
-          }}
-        >
-          Île-de-France
-          <br />
-          Mobilités
-        </Typography>
-      </Stack>
-    </Stack>
-  )
+  return <BrandLogo variant="white" />
 }
 
 function SocialIcon({ label }: { label: string }) {
@@ -120,6 +41,21 @@ function SocialIcon({ label }: { label: string }) {
 }
 
 export function Footer() {
+  const { language } = useAccessibility()
+  const footerColumns = language === 'fr'
+    ? [
+        { title: 'À propos', links: [{ label: 'Qui sommes-nous ?', to: '/infos/qui-sommes-nous' }, { label: 'Nos engagements', to: '/infos/engagements' }, { label: 'Application mobile', to: '/mobile-app' }] },
+        { title: 'Aide', links: [{ label: 'FAQ', to: '/infos/faq' }, { label: 'Nous contacter', to: '/infos/contact' }] },
+        { title: 'Informations', links: [{ label: 'Mentions légales', to: '/infos/mentions-legales' }, { label: 'Conditions générales', to: '/infos/conditions-generales' }] },
+        { title: 'Confidentialité', links: [{ label: 'Politique de confidentialité', to: '/infos/confidentialite' }, { label: 'Gestion des cookies', to: '/infos/cookies' }] },
+      ]
+    : [
+        { title: 'About', links: [{ label: 'Who are we?', to: '/infos/qui-sommes-nous' }, { label: 'Our commitments', to: '/infos/engagements' }, { label: 'Mobile app', to: '/mobile-app' }] },
+        { title: 'Help', links: [{ label: 'FAQ', to: '/infos/faq' }, { label: 'Contact us', to: '/infos/contact' }] },
+        { title: 'Information', links: [{ label: 'Legal notice', to: '/infos/mentions-legales' }, { label: 'Terms and conditions', to: '/infos/conditions-generales' }] },
+        { title: 'Privacy', links: [{ label: 'Privacy policy', to: '/infos/confidentialite' }, { label: 'Cookie settings', to: '/infos/cookies' }] },
+      ]
+
   return (
     <Box component="footer" sx={{ bgcolor: FOOTER_BG, color: '#fff', px: { xs: 2, md: 5 }, pt: 6, pb: 3 }}>
       <Box sx={{ maxWidth: 1280, mx: 'auto' }}>
@@ -127,7 +63,9 @@ export function Footer() {
           <Box sx={{ flex: 1, maxWidth: 360 }}>
             <Logos />
             <Typography sx={{ mt: 2, color: 'rgba(255,255,255,0.65)', fontSize: 14, lineHeight: 1.6 }}>
-              La plateforme officielle de souscription de vos forfaits Île-de-France Mobilités.
+              {language === 'fr'
+                ? 'La plateforme officielle de souscription de vos forfaits Île-de-France Mobilités.'
+                : 'The official platform for subscribing to your Île-de-France Mobilités travel passes.'}
             </Typography>
           </Box>
 
@@ -152,7 +90,7 @@ export function Footer() {
 
         <Box sx={{ borderTop: '1px solid rgba(255,255,255,0.12)', pt: 3, display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: 'center', gap: 2 }}>
           <Typography sx={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
-            © {new Date().getFullYear()} Comutitres — Île-de-France Mobilités. Tous droits réservés.
+            © {new Date().getFullYear()} Comutitres · Île-de-France Mobilités. {language === 'fr' ? 'Tous droits réservés.' : 'All rights reserved.'}
           </Typography>
           <Stack direction="row" spacing={0.5}>
             <SocialIcon label="x" />

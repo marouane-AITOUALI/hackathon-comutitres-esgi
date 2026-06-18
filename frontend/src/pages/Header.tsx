@@ -20,6 +20,8 @@ import {
 } from '@mui/material'
 import { Bell, Check, ChevronDown, LogOut, Mail, Menu, Search, Trash2, User } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { AccessibilityMenu } from '../accessibility/AccessibilityMenu'
+import { useAccessibility } from '../accessibility/useAccessibility'
 import { colors } from '../theme/colors'
 import { useNotifications } from '../hooks/useNotifications'
 import type { UserNotification } from '../types'
@@ -43,6 +45,7 @@ export function Header({
   onProfileClick,
   onNotificationClick,
 }: HeaderProps) {
+  const { language } = useAccessibility()
   const theme = useTheme()
   const isMobile = useMediaQuery(theme.breakpoints.down('md'))
 
@@ -58,10 +61,29 @@ export function Header({
     : notifications
 
   const handleSearchBlur = () => {
-    if (!searchValue) setSearchOpen(false)
+    setSearchOpen(false)
   }
 
   const handleProfileToggle = () => setProfileOpen((prev) => !prev)
+  const labels = language === 'fr'
+    ? {
+        menu: 'Ouvrir le menu',
+        search: 'Rechercher',
+        searchPlaceholder: 'Rechercher…',
+        notifications: 'Notifications',
+        profile: 'Ouvrir le menu du profil',
+        profileItem: 'Profil',
+        logout: 'Se déconnecter',
+      }
+    : {
+        menu: 'Open menu',
+        search: 'Search',
+        searchPlaceholder: 'Search…',
+        notifications: 'Notifications',
+        profile: 'Open profile menu',
+        profileItem: 'Profile',
+        logout: 'Sign out',
+      }
 
   const userInitials = userName
     .split(' ')
@@ -90,39 +112,75 @@ export function Header({
     >
       <Toolbar
         sx={{
-          minHeight: { xs: 64, md: 116 },
+          minHeight: { xs: 128, sm: 136, md: 116 },
           alignItems: { xs: 'center', md: 'flex-start' },
-          pt: { xs: 0, md: 4 },
+          alignContent: { xs: 'center', md: 'initial' },
+          flexWrap: { xs: 'wrap', md: 'nowrap' },
+          pt: { xs: 1.5, md: 4 },
+          pb: { xs: 1.5, md: 0 },
           px: { xs: 2, md: 4 },
-          gap: 1,
+          columnGap: 1,
+          rowGap: { xs: 1.5, md: 0 },
           justifyContent: 'space-between',
         }}
       >
         {/* Left: hamburger (mobile) + greeting */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: 1 }}>
-          {isMobile && (
-            <IconButton onClick={onMenuToggle} size="small" sx={{ color: colors.anthracite, mr: 0.5 }}>
-              <Menu size={20} />
-            </IconButton>
-          )}
-          {(!isMobile || !searchOpen) && (
-            <Typography
-              variant="h5"
-              sx={{
-                fontWeight: 800,
-                color: colors.anthracite,
-                fontSize: { xs: 18, md: 32 },
-                lineHeight: 1.25,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {greeting}
-            </Typography>
-          )}
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1,
+            order: { xs: 2, md: 1 },
+            flex: { xs: '1 1 100%', md: '0 0 auto' },
+            minWidth: 0,
+            width: { xs: '100%', md: 'auto' },
+          }}
+        >
+          <Typography
+            variant="h5"
+            sx={{
+              fontWeight: 800,
+              color: colors.anthracite,
+              fontSize: { xs: 22, md: 32 },
+              lineHeight: 1.25,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {greeting}
+          </Typography>
         </Box>
 
         {/* Right: search + bell + profile */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 1 }, mr: { xs: 1, md: 2 } }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: { xs: 0.75, md: 1 },
+            order: { xs: 1, md: 2 },
+            width: { xs: '100%', md: 'auto' },
+            flex: { xs: '1 1 100%', md: '1 1 auto' },
+            justifyContent: 'flex-end',
+            minWidth: 0,
+            mr: { xs: 0, md: 2 },
+          }}
+        >
+          {isMobile && (
+            <IconButton
+              aria-label={labels.menu}
+              onClick={onMenuToggle}
+              size="small"
+              sx={{
+                width: 40,
+                height: 40,
+                color: colors.anthracite,
+                flexShrink: 0,
+                mr: 'auto',
+              }}
+            >
+              <Menu size={22} />
+            </IconButton>
+          )}
+
           {/* Search */}
           <Box
             sx={{
@@ -132,12 +190,16 @@ export function Header({
               borderRadius: 99,
               height: 40,
               overflow: 'hidden',
-              transition: 'width 0.25s ease, border-color 0.2s',
-              width: searchOpen ? { xs: 180, md: 260 } : 40,
+              transition: 'width 0.25s ease, border-color 0.2s, flex-grow 0.25s ease',
+              width: searchOpen ? 'auto' : 40,
+              flex: searchOpen ? '1 1 0' : '0 0 40px',
+              minWidth: 40,
               bgcolor: colors.white,
               cursor: 'pointer',
             }}
             onClick={() => setSearchOpen(true)}
+            role="search"
+            aria-label={labels.search}
           >
             <Box
               sx={{
@@ -153,21 +215,33 @@ export function Header({
               <Search size={18} />
             </Box>
 
-            <Collapse in={searchOpen} orientation="horizontal" timeout={200}>
+            <Collapse
+              in={searchOpen}
+              orientation="horizontal"
+              timeout={200}
+              sx={{
+                flex: searchOpen ? '1 1 auto' : '0 0 auto',
+                minWidth: 0,
+                '& .MuiCollapse-wrapper': { width: '100%' },
+                '& .MuiCollapse-wrapperInner': { width: '100%' },
+              }}
+            >
               <Box
                 component="input"
                 autoFocus={searchOpen}
                 value={searchValue}
                 onChange={(e) => setSearchValue(e.target.value)}
                 onBlur={handleSearchBlur}
-                placeholder="Rechercher…"
+                aria-label={labels.search}
+                placeholder={labels.searchPlaceholder}
                 sx={{
                   border: 'none',
                   outline: 'none',
                   fontSize: 14,
                   color: colors.anthracite,
                   bgcolor: 'transparent',
-                  width: { xs: 140, md: 216 },
+                  width: { xs: '100%', md: 216 },
+                  minWidth: 0,
                   pr: 2,
                   '&::placeholder': { color: colors.greyDark },
                 }}
@@ -178,7 +252,7 @@ export function Header({
           {/* Bell */}
           <Badge badgeContent={unreadCount} color="error" max={99}>
             <IconButton
-              aria-label={`${unreadCount} notification(s) non lue(s)`}
+              aria-label={`${labels.notifications} : ${unreadCount} non lue(s)`}
               onClick={(event) => setNotificationAnchor(event.currentTarget)}
               size="small"
               sx={{
@@ -327,68 +401,96 @@ export function Header({
             </Box>
           </Popover>
 
+          <AccessibilityMenu />
+
           {/* Profile dropdown */}
-          <Box ref={profileRef} sx={{ position: 'relative' }} onKeyDown={handleProfileMenuKeyDown}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box
+            ref={profileRef}
+            sx={{
+              position: 'relative',
+              display: 'block',
+              flex: '0 1 auto',
+              width: { xs: 144, sm: 160, md: 164 },
+              maxWidth: { xs: 'calc(100vw - 174px)', md: 164 },
+              minWidth: 0,
+            }}
+            onKeyDown={handleProfileMenuKeyDown}
+          >
+            <Box
+              role="button"
+              tabIndex={0}
+              aria-label={labels.profile}
+              aria-expanded={profileOpen}
+              onClick={handleProfileToggle}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  handleProfileToggle()
+                }
+              }}
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1,
+                border: `1.5px solid ${profileOpen ? colors.blueInteraction : colors.greyMedium}`,
+                borderRadius: 99,
+                p: '3px 6px 3px 3px',
+                height: 40,
+                width: '100%',
+                cursor: 'pointer',
+                bgcolor: colors.white,
+                transition: 'border-color 0.2s, box-shadow 0.2s',
+                '&:hover': {
+                  borderColor: colors.blueInteraction,
+                  boxShadow: '0 3px 10px rgba(37, 48, 56, 0.08)',
+                },
+                userSelect: 'none',
+              }}
+            >
+              <Avatar
+                alt={userName}
+                src={avatarUrl || undefined}
+                sx={{
+                  height: 32,
+                  width: 32,
+                  flexShrink: 0,
+                  bgcolor: colors.blueMedium,
+                  color: colors.anthracite,
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
+              >
+                {!avatarUrl ? userInitials : null}
+              </Avatar>
+              <Typography
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: colors.anthracite,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {userName}
+              </Typography>
               <Box
                 sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: `1.5px solid ${profileOpen ? colors.blueInteraction : colors.greyMedium}`,
-                  borderRadius: 99,
-                  height: 40,
-                  width: 40,
-                  cursor: 'pointer',
-                  bgcolor: colors.white,
-                  transition: 'border-color 0.2s',
-                  '&:hover': { borderColor: colors.blueInteraction },
-                  userSelect: 'none',
+                  width: 30,
+                  height: 30,
+                  borderRadius: '50%',
+                  bgcolor: colors.greyLight,
+                  color: colors.greyDark,
+                  display: 'grid',
+                  placeItems: 'center',
                   flexShrink: 0,
                 }}
-                onClick={handleProfileToggle}
               >
-                {avatarUrl ? (
-                  <Avatar
-                    alt={userName}
-                    src={avatarUrl}
-                    sx={{ height: 36, width: 36 }}
-                  />
-                ) : (
-                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: colors.anthracite, lineHeight: 1 }}>
-                    {userInitials}
-                  </Typography>
-                )}
-              </Box>
-
-              <Box
-                onClick={handleProfileToggle}
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  border: `1.5px solid ${profileOpen ? colors.blueInteraction : colors.greyMedium}`,
-                  borderRadius: 99,
-                  px: { xs: 1.5, md: 1.75 },
-                  height: 40,
-                  minWidth: { md: 171 },
-                  justifyContent: 'space-between',
-                  cursor: 'pointer',
-                  bgcolor: colors.white,
-                  transition: 'border-color 0.2s',
-                  '&:hover': { borderColor: colors.blueInteraction },
-                  userSelect: 'none',
-                }}
-              >
-                {!isMobile && (
-                  <Typography sx={{ fontSize: 14, fontWeight: 500, color: colors.anthracite, whiteSpace: 'nowrap' }}>
-                    {userName}
-                  </Typography>
-                )}
                 <ChevronDown
                   size={16}
                   style={{
-                    color: colors.greyDark,
                     transform: profileOpen ? 'rotate(180deg)' : 'rotate(0deg)',
                     transition: 'transform 0.2s',
                   }}
@@ -421,7 +523,7 @@ export function Header({
                     }}
                   >
                     <User size={16} color={colors.greyDark} />
-                    Profil
+                    {labels.profileItem}
                   </MenuItem>
                   <Divider sx={{ my: 0.5 }} />
                   <MenuItem
@@ -432,7 +534,7 @@ export function Header({
                     }}
                   >
                     <LogOut size={16} color={colors.redDark} />
-                    Se déconnecter
+                    {labels.logout}
                   </MenuItem>
                 </MenuList>
               </Paper>

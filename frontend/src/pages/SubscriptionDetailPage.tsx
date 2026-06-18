@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Checkbox, Chip, FormControlLabel, MenuItem, Paper, Stack, Tab, Tabs, TextField, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, TextField, Typography } from '@mui/material'
 import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import {
   AlertCircle,
@@ -11,7 +11,6 @@ import {
   CreditCard,
   FileText,
   FolderOpen,
-  Landmark,
   RotateCcw,
   Send,
   ShieldCheck,
@@ -21,7 +20,7 @@ import { Link, useParams } from 'react-router-dom'
 import { analyzeDocument, createDocument, resubmitDocument } from '../services/documents.service'
 import { createDirectPayment, createMandatePayment, simulatePayment } from '../services/payments.service'
 import { getSubscriptionById } from '../services/subscriptions.service'
-import { CardPaymentFields } from '../components/payment/CardPaymentFields'
+import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
 import { colors } from '../theme/colors'
 import type { DocumentSummary, DocumentType, SubscriptionStatus, SubscriptionSummary } from '../types'
@@ -639,32 +638,26 @@ export function SubscriptionDetailPage() {
                     </Paper>
                   )}
 
-                  <Tabs value={paymentMethod} onChange={(_, v: 'card' | 'mandate') => setPaymentMethod(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
-                    <Tab icon={<CreditCard size={16} />} iconPosition="start" label="Carte bancaire" value="card" sx={{ fontWeight: 700, textTransform: 'none' }} />
-                    <Tab icon={<Landmark size={16} />} iconPosition="start" label="Prélèvement SEPA" value="mandate" sx={{ fontWeight: 700, textTransform: 'none' }} />
-                  </Tabs>
-
-                  {paymentMethod === 'card' ? (
-                    <Stack spacing={2}>
-                      <CardPaymentFields
-                        cardNumber={cardNumber}
-                        onCardNumberChange={setCardNumber}
-                        expiry={cardExpiry}
-                        onExpiryChange={setCardExpiry}
-                        cvv={cardCvv}
-                        onCvvChange={setCardCvv}
-                        cardholderName={cardholderName}
-                        onCardholderNameChange={setCardholderName}
-                      />
-                      <FormControlLabel control={<Checkbox checked={simulateFailure} onChange={(e) => setSimulateFailure(e.target.checked)} />} label="Simuler un refus" />
-                    </Stack>
-                  ) : (
-                    <Stack spacing={2}>
-                      <TextField label="Titulaire du compte" value={holderName} onChange={(e) => setHolderName(e.target.value)} fullWidth />
-                      <TextField label="4 derniers chiffres IBAN" value={ibanLast4} onChange={(e) => setIbanLast4(e.target.value.replace(/\D/g, '').slice(0, 4))} fullWidth />
-                      <FormControlLabel control={<Checkbox checked={mandateAccepted} onChange={(e) => setMandateAccepted(e.target.checked)} />} label="J’autorise le prélèvement SEPA" />
-                    </Stack>
-                  )}
+                  <PaymentMethodSection
+                    method={paymentMethod}
+                    onMethodChange={setPaymentMethod}
+                    cardNumber={cardNumber}
+                    onCardNumberChange={setCardNumber}
+                    expiry={cardExpiry}
+                    onExpiryChange={setCardExpiry}
+                    cvv={cardCvv}
+                    onCvvChange={setCardCvv}
+                    cardholderName={cardholderName}
+                    onCardholderNameChange={setCardholderName}
+                    simulateFailure={simulateFailure}
+                    onSimulateFailureChange={setSimulateFailure}
+                    holderName={holderName}
+                    onHolderNameChange={setHolderName}
+                    ibanLast4={ibanLast4}
+                    onIbanLast4Change={setIbanLast4}
+                    mandateAccepted={mandateAccepted}
+                    onMandateAcceptedChange={setMandateAccepted}
+                  />
 
                   <Button disabled={paying || !simulation} onClick={() => void submitPayment()} variant="contained" sx={{ alignSelf: { sm: 'flex-start' }, fontWeight: 700 }}>
                     {paying ? 'Traitement...' : paymentMethod === 'card' ? 'Payer maintenant' : 'Valider le mandat'}
