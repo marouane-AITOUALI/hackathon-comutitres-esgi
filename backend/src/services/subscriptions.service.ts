@@ -5,6 +5,7 @@ import { AppError } from '../utils/app-error.js'
 import { createPrivateSignedUrl } from './storage.service.js'
 import { notifySubscriptionStatusChanged } from './notifications.service.js'
 import type { CreateSubscriptionInput, UpdateSubscriptionInput } from '../validation/subscription.schemas.js'
+import { assertNoOpenSubscription, evaluateSubscriptionWorkflow, reconcileSubscriptionWorkflow } from './subscription-workflow.service.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
 type SubscriptionInput = CreateSubscriptionInput | UpdateSubscriptionInput
@@ -17,6 +18,7 @@ const subscriptionSelection = {
   offerId: subscriptions.offerId,
   onboardingSessionId: subscriptions.onboardingSessionId,
   status: subscriptions.status,
+  submittedAt: subscriptions.submittedAt,
   createdAt: subscriptions.createdAt,
   updatedAt: subscriptions.updatedAt,
 }
@@ -87,6 +89,10 @@ async function findOwnOnboardingSession(userId: string, id: string) {
 
 async function enrich(subscription: SubscriptionRow) {
   const database = requireDb()
+  const workflow = await reconcileSubscriptionWorkflow(subscription.id)
+  const effectiveSubscription = subscription.submittedAt && !['accepted', 'rejected', 'cancelled', 'suspended'].includes(subscription.status)
+    ? { ...subscription, status: workflow.desiredStatus }
+    : subscription
   const [offer] = subscription.offerId ? await database.select().from(offers).where(eq(offers.id, subscription.offerId)).limit(1) : []
   const [bearerProfile] = subscription.bearerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.bearerProfileId)).limit(1) : []
   const [payerProfile] = subscription.payerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : []
@@ -99,7 +105,7 @@ async function enrich(subscription: SubscriptionRow) {
   })))
 
   return {
-    subscription,
+    subscription: effectiveSubscription,
     offer: offer ?? null,
     bearerProfile: bearerProfile ?? null,
     payerProfile: payerProfile ?? null,
@@ -111,6 +117,7 @@ async function enrich(subscription: SubscriptionRow) {
     } : null,
     documents: documentsWithSignedUrls,
     payments: subscriptionPayments,
+    workflow,
   }
 }
 
@@ -133,6 +140,7 @@ async function resolveSubscriptionValues(userId: string, input: SubscriptionInpu
 }
 
 export async function createSubscription(userId: string, input: CreateSubscriptionInput) {
+  await assertNoOpenSubscription(userId)
   const values = await resolveSubscriptionValues(userId, input)
   const [created] = await requireDb()
     .insert(subscriptions)
@@ -232,16 +240,19 @@ export async function updateSubscription(userId: string, id: string, input: Upda
 
 export async function submitSubscription(userId: string, id: string) {
   const current = await findOwnSubscription(userId, id)
-  if (current.status !== 'draft') throw new AppError(409, 'La souscription a deja ete soumise.')
+  if (current.status !== 'draft' || current.submittedAt) throw new AppError(409, 'La souscription a déjà été soumise.')
   if (!current.offerId) throw new AppError(400, 'Une offre doit etre associee avant soumission.')
 
-  const [offer] = await requireDb().select().from(offers).where(eq(offers.id, current.offerId)).limit(1)
-  if (!offer) throw new AppError(404, 'Offre introuvable.')
+  const workflow = await evaluateSubscriptionWorkflow(id)
+  if (!workflow.canSubmit) {
+    throw new AppError(409, "Le dossier n'est pas prêt à être envoyé.", {
+      blockingReasons: workflow.blockingReasons,
+    })
+  }
 
-  const nextStatus = offer.requiredDocuments.length > 0 ? 'pending_documents' : 'pending_payment'
   const [updated] = await requireDb()
     .update(subscriptions)
-    .set({ status: nextStatus, updatedAt: new Date() })
+    .set({ status: 'pending_validation', submittedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
     .returning(subscriptionSelection)
 
@@ -257,6 +268,9 @@ export async function submitSubscription(userId: string, id: string) {
 
 export async function cancelSubscription(userId: string, id: string) {
   const current = await findOwnSubscription(userId, id)
+  if (!['draft', 'pending_documents', 'pending_payment', 'pending_validation'].includes(current.status)) {
+    throw new AppError(409, "Cette souscription ne peut plus être annulée depuis l'espace client.")
+  }
   const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: 'cancelled', updatedAt: new Date() })

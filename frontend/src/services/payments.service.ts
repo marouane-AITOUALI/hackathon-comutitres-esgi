@@ -1,19 +1,19 @@
-import type { PaymentSummary } from '../types'
+import type { PaymentSimulation, PaymentSummary } from '../types'
 import { apiRequest } from './api'
 
 export const simulatePayment = (payload: { subscriptionId: string; paymentMode?: 'one_time' | 'monthly' | 'weekly' | 'usage' }) =>
-  apiRequest<{ simulation: { amountCents: number; feesCents: number; totalCents: number; currency: string; warnings: string[] }; payment: PaymentSummary | null }>('/payments/simulate', {
+  apiRequest<{ simulation: PaymentSimulation; payment: PaymentSummary | null }>('/payments/simulate', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 
-export const createDirectPayment = (payload: { subscriptionId: string; cardToken?: string; simulateFailure?: boolean }) =>
+export const createDirectPayment = (payload: { subscriptionId: string; paymentMode?: 'one_time' | 'monthly'; cardToken?: string; simulateFailure?: boolean }) =>
   apiRequest<{ payment: PaymentSummary }>('/payments/direct', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
 
-export const createMandatePayment = (payload: { subscriptionId: string; holderName: string; ibanLast4: string; mandateAccepted: boolean }) =>
+export const createMandatePayment = (payload: { subscriptionId: string; paymentMode?: 'one_time' | 'monthly'; holderName: string; ibanLast4: string; mandateAccepted: boolean }) =>
   apiRequest<{ payment: PaymentSummary }>('/payments/mandate', {
     method: 'POST',
     body: JSON.stringify(payload),

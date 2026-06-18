@@ -54,6 +54,7 @@ export const createOnboarding = (answer: OnboardingAnswer) =>
       subscriptionFor: answer.subscriptionFor,
       isBearerPayer: answer.isBearerPayer,
       currentStep: 'result',
+      address: answer.address,
       bearer: answer.bearer,
       payer: answer.isBearerPayer ? undefined : answer.payer,
       answers: {
@@ -83,4 +84,9 @@ export const getRecommendation = (answer: OnboardingAnswer) =>
       solidarity: answer.solidarity,
       department: answer.department || undefined,
     }),
+  }).then((response) => response.recommendation)
+
+export const getOnboardingRecommendation = (id: string) =>
+  apiRequest<{ recommendation: OfferRecommendation }>(`/onboarding/${id}/recommendation`, {
+    method: 'POST',
   }).then((response) => response.recommendation)

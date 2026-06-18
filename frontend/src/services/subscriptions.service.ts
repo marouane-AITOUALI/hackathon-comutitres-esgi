@@ -16,6 +16,9 @@ export const createSubscription = (payload: { onboardingSessionId?: string; offe
 export const submitSubscription = (id: string) =>
   apiRequest<SubscriptionSummary>(`/subscriptions/${id}/submit`, { method: 'POST' })
 
+export const cancelSubscription = (id: string) =>
+  apiRequest<SubscriptionSummary>(`/subscriptions/${id}/cancel`, { method: 'POST' })
+
 export const getSubscriptionNextActions = (id: string) =>
   apiRequest<{ subscriptionId: string; actions: SubscriptionNextAction[] }>(`/subscriptions/${id}/next-actions`)
 

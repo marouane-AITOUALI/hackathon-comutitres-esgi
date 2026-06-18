@@ -19,6 +19,7 @@ export const paymentSimulationSchema = z.object({
 export const directPaymentSchema = z.object({
   subscriptionId: z.uuid(),
   amountCents: z.number().int().positive().max(500000).optional(),
+  paymentMode: z.enum(paymentModes).default('one_time'),
   cardToken: z.string().trim().min(4).max(120).optional(),
   simulateFailure: z.boolean().default(false),
 })
@@ -26,6 +27,7 @@ export const directPaymentSchema = z.object({
 export const mandatePaymentSchema = z.object({
   subscriptionId: z.uuid(),
   amountCents: z.number().int().positive().max(500000).optional(),
+  paymentMode: z.enum(paymentModes).default('monthly'),
   holderName: z.string().trim().min(2).max(160),
   ibanLast4: z.string().trim().regex(/^\d{4}$/, 'Conserver uniquement les 4 derniers chiffres IBAN.'),
   mandateAccepted: z.boolean(),

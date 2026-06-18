@@ -1,19 +1,21 @@
 import { Alert, Box, Button, Chip, CircularProgress, Paper, Stack, TextField, Typography } from '@mui/material'
 import RefreshIcon from '@mui/icons-material/Refresh'
 import CheckIcon from '@mui/icons-material/Check'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { LandmarkStepper } from '../components/onboarding/LandmarkStepper'
-import { createOnboarding, getRecommendation, saveRecommendationResult } from '../services/onboarding.service'
+import { createOnboarding, getOnboardingRecommendation, saveRecommendationResult } from '../services/onboarding.service'
 import { createSubscription } from '../services/subscriptions.service'
+import { listSubscriptions } from '../services/subscriptions.service'
+import { searchFrenchAddresses, type AddressSuggestion } from '../services/address.service'
 import { useAuth } from '../hooks/useAuth'
 import type { OfferRecommendation, OnboardingAnswer, OnboardingDraft } from '../types'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type StepType = 'text' | 'email' | 'date' | 'choice' | 'yesno'
+type StepType = 'text' | 'email' | 'date' | 'choice' | 'yesno' | 'address'
 
 interface StepOption { value: string; label: string; description?: string }
 
@@ -145,6 +147,11 @@ const STEPS: ChatStep[] = [
 
   // Section 4
   {
+    section: 4, field: 'address', label: 'Adresse du compte', type: 'address',
+    botMessage: () => 'Recherchez puis sélectionnez votre adresse. Elle sera enregistrée sur votre compte.',
+    placeholder: 'Commencez à saisir votre adresse…',
+  },
+  {
     section: 4, field: 'frequency', label: 'Fréquence d\'utilisation', type: 'choice',
     botMessage: (d) =>
       `Parlons des habitudes de transport de ${d.subscriptionFor === 'self' ? 'vous-même' : (d.bearer?.firstName ?? 'votre porteur')}.\n\n`
@@ -258,7 +265,15 @@ export function OnboardingChatPage() {
   const locationState = location.state as { fromSimpleForm?: boolean; mode?: string } | null
   const chatMode = locationState?.mode === 'chat' || locationState?.fromSimpleForm === false
 
-  const [draft,          setDraft]          = useState<OnboardingDraft>({})
+  const [draft,          setDraft]          = useState<OnboardingDraft>(() => user?.addressLine1 && user.postalCode && user.city ? {
+    address: {
+      addressLine1: user.addressLine1,
+      addressLine2: user.addressLine2 ?? undefined,
+      postalCode: user.postalCode,
+      city: user.city,
+      country: 'FR',
+    },
+  } : {})
   const [stepIdx,        setStepIdx]        = useState(0)
   const [inputValue,     setInputValue]     = useState('')
   const [error,          setError]          = useState('')
@@ -268,9 +283,18 @@ export function OnboardingChatPage() {
   const [onboardingSessionId, setOnboardingSessionId] = useState<string | null>(null)
   const [subscribing,       setSubscribing]       = useState(false)
   const [subscribeError,    setSubscribeError]    = useState('')
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([])
+  const [addressLoading, setAddressLoading] = useState(false)
 
   const step           = STEPS[stepIdx] as ChatStep | undefined
   const currentSection = isDone ? 5 : step?.section ?? 1
+
+  useEffect(() => {
+    void listSubscriptions().then((subscriptions) => {
+      const current = subscriptions.find((item) => ['draft', 'pending_documents', 'pending_payment', 'pending_validation', 'accepted', 'suspended'].includes(item.subscription.status))
+      if (current) navigate(`/subscriptions/${current.subscription.id}`, { replace: true })
+    }).catch(() => undefined)
+  }, [navigate])
 
   // ── Reset ─────────────────────────────────────────────────────────────────
 
@@ -286,11 +310,8 @@ export function OnboardingChatPage() {
     setLoading(true)
     try {
       const answer = finalDraft as OnboardingAnswer
-      // Les deux appels en parallèle : recommandation + création session en DB
-      const [rec, session] = await Promise.all([
-        getRecommendation(answer),
-        createOnboarding(answer),
-      ])
+      const session = await createOnboarding(answer)
+      const rec = await getOnboardingRecommendation(session.id)
       saveRecommendationResult(rec)
       setRecommendation(rec)
       setOnboardingSessionId(session.id)
@@ -361,7 +382,36 @@ export function OnboardingChatPage() {
     const value = inputValue.trim()
     if (!value && !step.optional) { setError('Ce champ est requis.'); return }
     if (step.type === 'email' && value && !value.includes('@')) { setError('Adresse e-mail invalide.'); return }
+    if (step.type === 'date' && (value < '1900-01-01' || value > new Date().toISOString().slice(0, 10))) {
+      setError('Saisissez une date de naissance valide, non future.')
+      return
+    }
     applyAnswer(step.field, value || undefined)
+  }
+
+  async function searchAddress(value: string) {
+    setInputValue(value)
+    setAddressSuggestions([])
+    setError('')
+    if (value.trim().length < 3) return
+    setAddressLoading(true)
+    try {
+      setAddressSuggestions(await searchFrenchAddresses(value))
+    } catch {
+      setError("La recherche d'adresse est momentanément indisponible.")
+    } finally {
+      setAddressLoading(false)
+    }
+  }
+
+  function selectAddress(suggestion: AddressSuggestion) {
+    applyAnswer('address', {
+      addressLine1: suggestion.addressLine1,
+      postalCode: suggestion.postalCode,
+      city: suggestion.city,
+      country: 'FR',
+    })
+    setAddressSuggestions([])
   }
 
   function handleBack() {
@@ -455,6 +505,44 @@ export function OnboardingChatPage() {
                   fullWidth autoFocus size="small"
                   sx={{ mb: 1.5 }}
                 />
+              )}
+
+              {step.type === 'address' && (
+                <Box sx={{ mb: 2, position: 'relative' }}>
+                  {draft.address && (
+                    <Paper variant="outlined" sx={{ p: 1.75, mb: 1.5, borderRadius: 2.5, bgcolor: '#f0fdf4', borderColor: '#bbf7d0' }}>
+                      <Typography sx={{ fontWeight: 800, color: '#166534' }}>Adresse déjà enregistrée</Typography>
+                      <Typography variant="body2" sx={{ color: '#166534', mb: 1 }}>
+                        {draft.address.addressLine1}, {draft.address.postalCode} {draft.address.city}
+                      </Typography>
+                      <Button color="success" onClick={() => applyAnswer('address', draft.address)} size="small" variant="contained">
+                        Utiliser cette adresse
+                      </Button>
+                    </Paper>
+                  )}
+                  <TextField
+                    fullWidth
+                    value={inputValue}
+                    onChange={(event) => void searchAddress(event.target.value)}
+                    placeholder={step.placeholder}
+                    helperText="Saisissez au moins 3 caractères puis choisissez une proposition."
+                    slotProps={{ input: { endAdornment: addressLoading ? <CircularProgress size={18} /> : undefined } }}
+                  />
+                  {addressSuggestions.length > 0 && (
+                    <Paper elevation={5} sx={{ left: 0, mt: 0.5, overflow: 'hidden', position: 'absolute', right: 0, zIndex: 20 }}>
+                      {addressSuggestions.map((suggestion) => (
+                        <Box
+                          component="button"
+                          key={suggestion.id}
+                          onClick={() => selectAddress(suggestion)}
+                          sx={{ bgcolor: '#fff', border: 0, borderBottom: '1px solid #e5e7eb', cursor: 'pointer', display: 'block', p: 1.5, textAlign: 'left', width: '100%', '&:hover': { bgcolor: '#eff6ff' } }}
+                        >
+                          {suggestion.label}
+                        </Box>
+                      ))}
+                    </Paper>
+                  )}
+                </Box>
               )}
 
               {/* Choice */}
@@ -650,6 +738,45 @@ export function OnboardingChatPage() {
                 </Box>
               )}
 
+              {step.type === 'address' && (
+                <Box sx={{ ml: 4.5, mb: 2, position: 'relative' }}>
+                  {draft.address && (
+                    <Paper variant="outlined" sx={{ p: 1.75, mb: 1.5, borderRadius: 2.5, bgcolor: '#f0fdf4', borderColor: '#bbf7d0' }}>
+                      <Typography sx={{ fontWeight: 800, color: '#166534' }}>Adresse déjà enregistrée</Typography>
+                      <Typography variant="body2" sx={{ color: '#166534', mb: 1 }}>
+                        {draft.address.addressLine1}, {draft.address.postalCode} {draft.address.city}
+                      </Typography>
+                      <Button color="success" onClick={() => applyAnswer('address', draft.address)} size="small" variant="contained">
+                        Utiliser cette adresse
+                      </Button>
+                    </Paper>
+                  )}
+                  <TextField
+                    fullWidth
+                    value={inputValue}
+                    onChange={(event) => void searchAddress(event.target.value)}
+                    placeholder={step.placeholder}
+                    helperText="Choisissez une adresse proposée."
+                    slotProps={{ input: { endAdornment: addressLoading ? <CircularProgress size={18} /> : undefined } }}
+                    sx={{ '& .MuiOutlinedInput-root': { borderRadius: 3, bgcolor: '#fff' } }}
+                  />
+                  {addressSuggestions.length > 0 && (
+                    <Paper elevation={5} sx={{ left: 0, mt: 0.5, overflow: 'hidden', position: 'absolute', right: 0, zIndex: 20 }}>
+                      {addressSuggestions.map((suggestion) => (
+                        <Box
+                          component="button"
+                          key={suggestion.id}
+                          onClick={() => selectAddress(suggestion)}
+                          sx={{ bgcolor: '#fff', border: 0, borderBottom: '1px solid #e5e7eb', cursor: 'pointer', display: 'block', p: 1.5, textAlign: 'left', width: '100%', '&:hover': { bgcolor: '#eff6ff' } }}
+                        >
+                          {suggestion.label}
+                        </Box>
+                      ))}
+                    </Paper>
+                  )}
+                </Box>
+              )}
+
               {/* Choice */}
               {step.type === 'choice' && (
                 <Stack spacing={1} sx={{ mb: 2, ml: 4.5 }}>
@@ -785,7 +912,7 @@ export function OnboardingChatPage() {
                   Souhaitez-vous souscrire à cette offre ?
                 </Typography>
                 <Typography sx={{ fontSize: 12.5, color: '#15803d', mt: 0.4 }}>
-                  Si vous souscrivez maintenant, nous vous guidons pour déposer vos documents justificatifs.
+                  Créez votre dossier puis suivez clairement les documents et le paiement attendus.
                 </Typography>
               </Box>
               <Box sx={{ p: 3 }}>
@@ -804,7 +931,7 @@ export function OnboardingChatPage() {
                       '&:hover': { background: 'linear-gradient(135deg, #15803d, #166534)' },
                     }}
                   >
-                    {subscribing ? 'Création du dossier…' : 'Souscrire maintenant — déposer mes documents →'}
+                    {subscribing ? 'Création du dossier…' : 'Créer mon dossier'}
                   </Button>
                   <Button
                     variant="outlined" fullWidth

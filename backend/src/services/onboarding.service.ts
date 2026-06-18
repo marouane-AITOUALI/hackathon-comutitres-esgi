@@ -1,10 +1,11 @@
 import { and, eq } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
-import { onboardingSessions, profiles } from '../db/schema.js'
+import { onboardingSessions, profiles, users } from '../db/schema.js'
 import type { CompleteOnboardingStepInput, OnboardingInput, UpdateOnboardingInput } from '../validation/onboarding.schemas.js'
 import type { RecommendationInput } from '../validation/recommendation.schemas.js'
 import { recommendOffer } from './recommendation.service.js'
 import { AppError } from '../utils/app-error.js'
+import { assertNoOpenSubscription } from './subscription-workflow.service.js'
 
 type BearerInput = NonNullable<OnboardingInput['bearer']>
 type PayerInput = NonNullable<OnboardingInput['payer']>
@@ -100,7 +101,7 @@ async function hydrateSession(session: OnboardingSession) {
 function buildRecommendationInput(session: OnboardingSession, bearerProfile: Awaited<ReturnType<typeof hydrateSession>>['bearerProfile']): RecommendationInput {
   const answers = session.answers ?? {}
   return {
-    age: Number(answers.age ?? yearsBetween(bearerProfile?.birthDate)),
+    age: yearsBetween(bearerProfile?.birthDate),
     status: (stringAnswer(answers, 'status') ?? bearerProfile?.status ?? 'other') as RecommendationInput['status'],
     frequency: (stringAnswer(answers, 'frequency') ?? 'regular') as RecommendationInput['frequency'],
     planPreference: (stringAnswer(answers, 'planPreference') ?? 'unsure') as RecommendationInput['planPreference'],
@@ -125,7 +126,14 @@ function getMissingFields(session: OnboardingSession, bearerProfile: unknown, pa
 }
 
 export async function createOnboardingSession(userId: string, input: OnboardingInput) {
+  await assertNoOpenSubscription(userId)
   return requireDb().transaction(async (tx) => {
+    await tx.update(users).set({
+      ...input.address,
+      addressLine2: input.address.addressLine2 ?? null,
+      profileUpdatedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(users.id, userId))
     const bearer = input.bearer ? await upsertBearerProfile(tx, userId, null, input.bearer) : null
     let payerProfileId = input.isBearerPayer ? bearer?.id ?? null : null
     if (!input.isBearerPayer && input.payer) {
@@ -145,6 +153,14 @@ export async function getOnboardingSession(userId: string, id: string) {
 export async function updateOnboardingSession(userId: string, id: string, input: UpdateOnboardingInput) {
   const current = await findOwnSession(userId, id)
   return requireDb().transaction(async (tx) => {
+    if (input.address) {
+      await tx.update(users).set({
+        ...input.address,
+        addressLine2: input.address.addressLine2 ?? null,
+        profileUpdatedAt: new Date(),
+        updatedAt: new Date(),
+      }).where(eq(users.id, userId))
+    }
     const bearer = input.bearer ? await upsertBearerProfile(tx, userId, current.bearerProfileId, input.bearer) : null
     const nextIsBearerPayer = input.isBearerPayer ?? current.isBearerPayer
     let payerProfileId = current.payerProfileId

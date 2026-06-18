@@ -77,6 +77,13 @@ export interface OnboardingAnswer {
   scholarship: boolean
   solidarity: boolean
   department?: string
+  address: {
+    addressLine1: string
+    addressLine2?: string
+    postalCode: string
+    city: string
+    country: 'FR'
+  }
 }
 
 export type OnboardingDraft = Partial<OnboardingAnswer>
@@ -88,6 +95,8 @@ export interface OfferRecommendation {
   confidencePercent: number
   reasons: string[]
   requiredDocuments: string[]
+  priceCents: number
+  monthlyInstallmentCount: number | null
   warnings: string[]
 }
 
@@ -141,6 +150,7 @@ export interface SubscriptionEntity {
   offerId: string | null
   onboardingSessionId: string | null
   status: SubscriptionStatus
+  submittedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -220,6 +230,49 @@ export interface SubscriptionSummary {
   onboardingSession: OnboardingSessionSummary | null
   documents: DocumentSummary[]
   payments: PaymentSummary[]
+  workflow: SubscriptionWorkflow
+}
+
+export type SubscriptionWorkflowState =
+  | 'documents_required'
+  | 'payment_required'
+  | 'ready_to_submit'
+  | 'under_review'
+  | 'needs_action'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled'
+  | 'suspended'
+
+export interface SubscriptionWorkflow {
+  state: SubscriptionWorkflowState
+  requiredDocumentTypes: DocumentType[]
+  blockingDocumentTypes: DocumentType[]
+  missingBlockingDocuments: DocumentType[]
+  rejectedBlockingDocuments: DocumentType[]
+  pendingBlockingDocuments: DocumentType[]
+  documentsReady: boolean
+  hasAcceptedPayment: boolean
+  canUpload: boolean
+  canPay: boolean
+  canSubmit: boolean
+  canCancel: boolean
+  replaceableDocumentTypes: DocumentType[]
+  blockingReasons: string[]
+  schoolCertificateBlocking: boolean
+}
+
+export interface PaymentSimulation {
+  amountCents: number
+  feesCents: number
+  totalCents: number
+  currency: string
+  paymentMode: 'one_time' | 'monthly' | 'weekly' | 'usage'
+  installmentCount: number
+  installmentAmountCents: number
+  lastInstallmentAmountCents: number
+  schedule: Array<{ installmentNumber: number; dueDate: string; amountCents: number }>
+  warnings: string[]
 }
 
 export interface SubscriptionNextAction {

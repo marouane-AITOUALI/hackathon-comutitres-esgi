@@ -36,6 +36,7 @@ export interface AdminSubscription {
   offerId: string | null
   onboardingSessionId: string | null
   status: SubscriptionStatus
+  submittedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -63,6 +64,14 @@ export interface AdminSubscriptionItem {
   } | null
   documents: AdminDocument[]
   payments: AdminPayment[]
+  workflow?: {
+    state: 'documents_required' | 'payment_required' | 'ready_to_submit' | 'under_review' | 'needs_action' | 'approved' | 'rejected' | 'cancelled' | 'suspended'
+    blockingReasons: string[]
+    documentsReady: boolean
+    hasAcceptedPayment: boolean
+    canSubmit: boolean
+    canCancel: boolean
+  }
 }
 
 export interface SubscriptionNextAction {

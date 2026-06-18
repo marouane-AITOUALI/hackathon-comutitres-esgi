@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { LoadingState } from '../components/common/LoadingState'
 import { StatusBadge } from '../components/common/StatusBadge'
-import { deleteDocument, getDocumentSignedUrl } from '../services/documents.service'
+import { getDocumentSignedUrl, reviewDocument } from '../services/documents.service'
 import { regularizePayment } from '../services/payments.service'
 import { getAdminSubscription, getSubscriptionNextActions, updateAdminSubscriptionStatus } from '../services/subscriptions.service'
 import type { AdminDocument } from '../types/document'
@@ -112,6 +112,7 @@ export function SubscriptionDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [documentActionId, setDocumentActionId] = useState<string | null>(null)
+  const [documentReasons, setDocumentReasons] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -148,21 +149,17 @@ export function SubscriptionDetailPage() {
   }
 
   async function regularize(id: string) {
-    if (!item) return
+    if (!item || !item.subscription.id) return
     setSaving(true)
     setError('')
     setSuccess('')
     try {
-      const response = await regularizePayment(id, 'Regularisation effectuee pendant la demo backoffice.')
-      const updated: AdminSubscriptionItem = {
-        ...item,
-        payments: item.payments.map((payment) => payment.id === id ? response.payment : payment),
-        subscription: { ...item.subscription, status: 'pending_validation' },
-      }
+      await regularizePayment(id, 'Regularisation effectuee pendant la demo backoffice.')
+      const updated = await getAdminSubscription(item.subscription.id)
       setItem(updated)
-      setSelectedStatus('pending_validation')
+      setSelectedStatus(updated.subscription.status)
       setActions(fallbackNextActions(updated))
-      setSuccess('Paiement regularise. Le dossier repasse en validation.')
+      setSuccess('Paiement regularise. Le workflow du dossier a été recalculé.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Regularisation impossible.')
     } finally {
@@ -186,26 +183,20 @@ export function SubscriptionDetailPage() {
     }
   }
 
-  async function removeDocument(document: AdminDocument) {
-    if (!item) return
-    const filename = document.originalFilename ?? document.fileUrl
-    const confirmed = window.confirm(`Supprimer le document "${filename}" du dossier et du bucket Supabase ?`)
-    if (!confirmed) return
-
+  async function reviewSubscriptionDocument(document: AdminDocument, decision: 'validate' | 'reject' | 'manual_review') {
+    if (!item || !id) return
     setDocumentActionId(document.id)
     setError('')
     setSuccess('')
     try {
-      await deleteDocument(document.id)
-      const updated: AdminSubscriptionItem = {
-        ...item,
-        documents: item.documents.filter((current) => current.id !== document.id),
-      }
+      const reason = decision === 'reject' ? documentReasons[document.id] : undefined
+      await reviewDocument(document.id, decision, reason, decision === 'manual_review' ? 'Revue manuelle demandée depuis la fiche dossier.' : undefined)
+      const updated = await getAdminSubscription(id)
       setItem(updated)
       setActions(fallbackNextActions(updated))
-      setSuccess('Document supprime du dossier et du stockage.')
+      setSuccess(decision === 'validate' ? 'Document validé.' : decision === 'reject' ? 'Document refusé.' : 'Revue manuelle demandée.')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Suppression du document impossible.')
+      setError(caught instanceof Error ? caught.message : 'Décision documentaire impossible.')
     } finally {
       setDocumentActionId(null)
     }
@@ -236,7 +227,7 @@ export function SubscriptionDetailPage() {
             </Typography>
           </Box>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexShrink: 0 }}>
-            <Button disabled={saving} onClick={() => changeStatus('accepted')} color="success" startIcon={<CheckCircle2 size={17} />} variant="contained">Accepter</Button>
+            <Button disabled={saving || item.workflow?.state !== 'under_review'} onClick={() => changeStatus('accepted')} color="success" startIcon={<CheckCircle2 size={17} />} variant="contained">Accepter</Button>
             <Button disabled={saving} onClick={() => changeStatus('rejected')} color="error" startIcon={<XCircle size={17} />} variant="outlined">Refuser</Button>
             <Button disabled={saving} onClick={() => changeStatus('suspended')} color="warning" startIcon={<PauseCircle size={17} />} variant="outlined">Suspendre</Button>
           </Stack>
@@ -276,7 +267,7 @@ export function SubscriptionDetailPage() {
                 Mettre a jour le statut
               </Button>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <Button disabled={saving} onClick={() => changeStatus('accepted')} color="success" variant="outlined">Accepter</Button>
+                <Button disabled={saving || item.workflow?.state !== 'under_review'} onClick={() => changeStatus('accepted')} color="success" variant="outlined">Accepter</Button>
                 <Button disabled={saving} onClick={() => changeStatus('rejected')} color="error" variant="outlined">Refuser</Button>
                 <Button disabled={saving} onClick={() => changeStatus('suspended')} color="warning" variant="outlined">Suspendre</Button>
               </Stack>
@@ -424,7 +415,15 @@ export function SubscriptionDetailPage() {
                   </TableCell>
                   <TableCell><StatusBadge status={document.status} /></TableCell>
                   <TableCell>{documentConfidence(document.analysisResult)}</TableCell>
-                  <TableCell>{document.rejectionReason ?? 'Aucun'}</TableCell>
+                  <TableCell>
+                    <TextField
+                      disabled={documentActionId === document.id}
+                      label="Motif si refus"
+                      onChange={(event) => setDocumentReasons((current) => ({ ...current, [document.id]: event.target.value }))}
+                      size="small"
+                      value={documentReasons[document.id] ?? document.rejectionReason ?? ''}
+                    />
+                  </TableCell>
                   <TableCell>{formatDate(document.createdAt)}</TableCell>
                   <TableCell align="right">
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ justifyContent: 'flex-end' }}>
@@ -436,14 +435,20 @@ export function SubscriptionDetailPage() {
                       >
                         Visualiser
                       </Button>
+                      <Button disabled={documentActionId === document.id} onClick={() => reviewSubscriptionDocument(document, 'validate')} size="small" variant="contained">
+                        Accepter
+                      </Button>
                       <Button
                         color="error"
-                        disabled={documentActionId === document.id}
-                        onClick={() => removeDocument(document)}
+                        disabled={documentActionId === document.id || (documentReasons[document.id] ?? '').trim().length < 3}
+                        onClick={() => reviewSubscriptionDocument(document, 'reject')}
                         size="small"
                         variant="outlined"
                       >
-                        Supprimer
+                        Refuser
+                      </Button>
+                      <Button disabled={documentActionId === document.id} onClick={() => reviewSubscriptionDocument(document, 'manual_review')} size="small" variant="outlined">
+                        Revue manuelle
                       </Button>
                     </Stack>
                   </TableCell>

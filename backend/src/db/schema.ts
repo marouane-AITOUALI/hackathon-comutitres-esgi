@@ -109,6 +109,8 @@ export const offers = pgTable('offers', {
   description: text('description'),
   target: text('target').notNull(),
   requiredDocuments: jsonb('required_documents').$type<string[]>().default([]).notNull(),
+  priceCents: integer('price_cents').default(0).notNull(),
+  monthlyInstallmentCount: integer('monthly_installment_count'),
   isActive: boolean('is_active').default(true).notNull(),
   ...timestamps,
 }, (table) => [uniqueIndex('offers_code_idx').on(table.code)])
@@ -121,6 +123,7 @@ export const subscriptions = pgTable('subscriptions', {
   offerId: uuid('offer_id').references(() => offers.id, { onDelete: 'restrict' }),
   onboardingSessionId: uuid('onboarding_session_id').references(() => onboardingSessions.id, { onDelete: 'set null' }),
   status: subscriptionStatus('status').default('draft').notNull(),
+  submittedAt: timestamp('submitted_at', { withTimezone: true }),
   ...timestamps,
 }, (table) => [
   index('subscriptions_user_id_idx').on(table.userId),

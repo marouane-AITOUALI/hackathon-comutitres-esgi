@@ -85,6 +85,20 @@
       "when": 1781787287243,
       "tag": "0011_notification-center-communications",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781791200000,
+      "tag": "0012_subscription-workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781794800000,
+      "tag": "0013_backfill-submitted-subscriptions",
+      "breakpoints": true
     }
   ]
 }

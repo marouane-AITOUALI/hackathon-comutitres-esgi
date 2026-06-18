@@ -8,17 +8,7 @@ import { clearRecommendationResult, getRecommendationResult } from '../services/
 import { colors } from '../theme/colors'
 import type { OfferSummary, SubscriptionSummary } from '../types'
 import { useSubscriptionRealtime } from '../hooks/useSubscriptionRealtime'
-
-const statusLabel: Record<string, string> = {
-  draft: 'Brouillon',
-  pending_documents: 'Documents attendus',
-  pending_payment: 'Paiement attendu',
-  pending_validation: 'En validation',
-  accepted: 'Actif',
-  rejected: 'Refusé',
-  cancelled: 'Annulé',
-  suspended: 'Suspendu',
-}
+import { subscriptionStatusLabels } from '../utils/statusLabels'
 
 const statusTone: Record<string, 'default' | 'warning' | 'success' | 'error' | 'info'> = {
   draft: 'default',
@@ -100,6 +90,9 @@ export function DashboardPage() {
 
   const counters = useMemo(() => countByStatus(subscriptions), [subscriptions])
   const urgentSubscription = useMemo(() => mostUrgentSubscription(subscriptions), [subscriptions])
+  const openSubscription = subscriptions.find((item) =>
+    ['draft', 'pending_documents', 'pending_payment', 'pending_validation', 'accepted', 'suspended'].includes(item.subscription.status),
+  )
   const recentSubscriptions = subscriptions.slice(0, 4)
   const featuredOffers = offers.filter((offer) => offer.isActive).slice(0, 3)
   const documentsToReview = subscriptions.flatMap((item) => item.documents ?? []).filter((document) => document.status !== 'validated').length
@@ -141,7 +134,7 @@ export function DashboardPage() {
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
               <Button
                 component={Link}
-                to="/subscriptions"
+                to={openSubscription ? `/subscriptions/${openSubscription.subscription.id}` : '/onboarding'}
                 variant="contained"
                 size="small"
                 sx={{
@@ -151,7 +144,7 @@ export function DashboardPage() {
                   '&:hover': { bgcolor: '#b91c1c' },
                 }}
               >
-                Démarrer mon dossier
+                {openSubscription ? 'Voir mon dossier en cours' : 'Créer mon dossier'}
               </Button>
               <Button
                 onClick={dismissRec}
@@ -195,13 +188,13 @@ export function DashboardPage() {
             <Button
               aria-label="Démarrer un nouveau parcours"
               component={Link}
-              to="/onboarding"
+              to={openSubscription ? `/subscriptions/${openSubscription.subscription.id}` : '/onboarding'}
               state={{ mode: 'chat' }}
               variant="contained"
               endIcon={<ArrowRight size={18} />}
               sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 144 }, whiteSpace: 'nowrap' }}
             >
-              Démarrer
+              {openSubscription ? 'Voir mon dossier en cours' : 'Démarrer'}
             </Button>
             <Button
               aria-label="Voir mes dossiers"
@@ -265,7 +258,7 @@ export function DashboardPage() {
                     <LinearProgress variant="determinate" value={getProgress(item.subscription.status)} sx={{ mt: 1.5, height: 7, borderRadius: 99 }} />
                   </Box>
                   <Stack direction={{ xs: 'row', sm: 'column' }} spacing={1} sx={{ alignItems: { xs: 'center', sm: 'flex-end' } }}>
-                    <Chip color={statusTone[item.subscription.status]} label={statusLabel[item.subscription.status] ?? item.subscription.status} size="small" />
+                    <Chip color={statusTone[item.subscription.status]} label={subscriptionStatusLabels[item.subscription.status]} size="small" />
                     <Button component={Link} size="small" to={`/subscriptions/${item.subscription.id}`} variant="text">
                       Suivre
                     </Button>
@@ -284,7 +277,7 @@ export function DashboardPage() {
                 <Typography color="text.secondary">
                   Priorité sur {urgentSubscription.offer?.name ?? 'votre dossier en cours'}.
                 </Typography>
-                <Chip color={statusTone[urgentSubscription.subscription.status]} label={statusLabel[urgentSubscription.subscription.status]} sx={{ alignSelf: 'flex-start', fontWeight: 700 }} />
+                <Chip color={statusTone[urgentSubscription.subscription.status]} label={subscriptionStatusLabels[urgentSubscription.subscription.status]} sx={{ alignSelf: 'flex-start', fontWeight: 700 }} />
                 <Button component={Link} to={`/subscriptions/${urgentSubscription.subscription.id}`} variant="contained" endIcon={<ArrowRight size={18} />}>
                   Traiter maintenant
                 </Button>
