@@ -119,6 +119,67 @@ const aidCards = [
   },
 ]
 
+const journeySteps = [
+  {
+    number: '01',
+    title: 'Décris ton besoin',
+    desc: 'Profil, fréquence des trajets, porteur, payeur et situation particulière.',
+    icon: SearchCheck,
+  },
+  {
+    number: '02',
+    title: 'Reçois une recommandation',
+    desc: 'Le questionnaire compare les offres et explique pourquoi un forfait te correspond.',
+    icon: BadgeCheck,
+  },
+  {
+    number: '03',
+    title: 'Ajoute tes justificatifs',
+    desc: 'La plateforme demande uniquement les documents utiles et suit leur validation.',
+    icon: FileCheck2,
+  },
+  {
+    number: '04',
+    title: 'Finalise et suis ton dossier',
+    desc: 'Paiement, réception du titre, état de la demande et support restent au même endroit.',
+    icon: CreditCard,
+  },
+]
+
+const aidCards = [
+  {
+    title: 'Imagine R et bourse',
+    desc: 'Des réductions peuvent s’appliquer aux élèves et étudiants boursiers selon leur situation et leur département.',
+    note: 'Attestation de scolarité ou de bourse à prévoir.',
+    icon: GraduationCap,
+    color: '#7c3aed',
+    bg: '#f3e8ff',
+  },
+  {
+    title: 'Tarification Solidarité',
+    desc: 'Selon les droits sociaux, la TST peut ouvrir accès à une réduction de 50 %, Solidarité 75 % ou à la gratuité.',
+    note: 'Les droits et justificatifs sont vérifiés régulièrement.',
+    icon: HeartHandshake,
+    color: '#ea580c',
+    bg: '#ffedd5',
+  },
+  {
+    title: 'Senior et Améthyste',
+    desc: 'Les personnes de 65 ans et plus ou en situation de handicap peuvent bénéficier d’offres adaptées.',
+    note: 'Les conditions varient selon le département.',
+    icon: MapPin,
+    color: '#db2777',
+    bg: '#fce7f3',
+  },
+]
+
+const supportCases = [
+  'J’ai perdu ma carte',
+  'Mon paiement a été refusé',
+  'Je veux résilier',
+  'Je souhaite modifier mon adresse',
+]
+
 function ForfaitIcon({ type, color }: { type: string; color: string }) {
   const props = { width: 22, height: 22, fill: 'none', stroke: color, strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const }
 
