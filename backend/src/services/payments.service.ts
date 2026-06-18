@@ -3,6 +3,7 @@ import { requireDb } from '../db/client.js'
 import { offers, payments, subscriptions } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import type { DirectPaymentInput, MandatePaymentInput, PaymentSimulationInput, RegularizePaymentInput } from '../validation/payment.schemas.js'
+import { notifyPaymentStatus, notifySubscriptionStatusChanged } from './notifications.service.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
 type PaymentRow = typeof payments.$inferSelect
@@ -87,10 +88,26 @@ function paymentResponse(payment: PaymentRow) {
 }
 
 async function markSubscriptionAfterPayment(subscriptionId: string, accepted: boolean) {
-  await requireDb()
+  const [current] = await requireDb()
+    .select(subscriptionSelection)
+    .from(subscriptions)
+    .where(eq(subscriptions.id, subscriptionId))
+    .limit(1)
+  if (!current) throw new AppError(404, 'Souscription introuvable.')
+
+  const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: accepted ? 'pending_validation' : 'pending_payment', updatedAt: new Date() })
     .where(eq(subscriptions.id, subscriptionId))
+    .returning(subscriptionSelection)
+
+  if (!updated) throw new AppError(500, "Le statut de la souscription n'a pas pu être mis à jour.")
+  await notifySubscriptionStatusChanged({
+    userId: updated.userId,
+    subscriptionId: updated.id,
+    previousStatus: current.status,
+    status: updated.status,
+  })
 }
 
 export async function simulatePayment(userId: string, input: PaymentSimulationInput) {
@@ -156,6 +173,14 @@ export async function createDirectPayment(userId: string, input: DirectPaymentIn
 
   if (!created) throw new AppError(500, "Le paiement direct n'a pas pu etre cree.")
   await markSubscriptionAfterPayment(subscription.id, accepted)
+  await notifyPaymentStatus({
+    userId: created.userId,
+    subscriptionId: created.subscriptionId,
+    paymentId: created.id,
+    status: created.status,
+    amountCents: created.amountCents,
+    currency: created.currency,
+  })
   return paymentResponse(created)
 }
 
@@ -186,6 +211,14 @@ export async function createMandatePayment(userId: string, input: MandatePayment
 
   if (!created) throw new AppError(500, "Le mandat de paiement n'a pas pu etre cree.")
   await markSubscriptionAfterPayment(subscription.id, accepted)
+  await notifyPaymentStatus({
+    userId: created.userId,
+    subscriptionId: created.subscriptionId,
+    paymentId: created.id,
+    status: created.status,
+    amountCents: created.amountCents,
+    currency: created.currency,
+  })
   return paymentResponse(created)
 }
 
@@ -206,6 +239,14 @@ export async function cancelPayment(userId: string, role: string, id: string) {
     .returning(paymentSelection)
 
   if (!updated) throw new AppError(500, "Le paiement n'a pas pu etre annule.")
+  await notifyPaymentStatus({
+    userId: updated.userId,
+    subscriptionId: updated.subscriptionId,
+    paymentId: updated.id,
+    status: updated.status,
+    amountCents: updated.amountCents,
+    currency: updated.currency,
+  })
   return paymentResponse(updated)
 }
 
@@ -234,6 +275,14 @@ export async function regularizePayment(userId: string, role: string, id: string
 
   if (!updated) throw new AppError(500, "Le paiement n'a pas pu etre regularise.")
   await markSubscriptionAfterPayment(payment.subscriptionId, true)
+  await notifyPaymentStatus({
+    userId: updated.userId,
+    subscriptionId: updated.subscriptionId,
+    paymentId: updated.id,
+    status: updated.status,
+    amountCents: updated.amountCents,
+    currency: updated.currency,
+  })
   return paymentResponse(updated)
 }
 

@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { AdminLayout } from './components/layout/AdminLayout'
 import { AuditLogsPage } from './pages/AuditLogsPage'
+import { CommunicationsPage } from './pages/CommunicationsPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { DocumentsPage } from './pages/DocumentsPage'
 import { LoginPage } from './pages/LoginPage'
@@ -26,6 +27,7 @@ function App() {
           <Route path="/users" element={<UsersPage />} />
           <Route path="/offers" element={<OffersPage />} />
           <Route path="/audit-logs" element={<AuditLogsPage />} />
+          <Route path="/communications" element={<CommunicationsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate replace to="/dashboard" />} />

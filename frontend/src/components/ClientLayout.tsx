@@ -66,6 +66,10 @@ export function ClientLayout() {
           onMenuToggle={() => setMobileOpen(true)}
           onLogout={handleLogout}
           onProfileClick={() => navigate('/profil')}
+          onNotificationClick={(notification) => {
+            const actionPath = typeof notification.data.actionPath === 'string' ? notification.data.actionPath : null
+            navigate(actionPath ?? (notification.subscriptionId ? `/subscriptions/${notification.subscriptionId}` : '/dashboard'))
+          }}
         />
 
         <Box id="main-content" component="main" tabIndex={-1} sx={{ flex: 1, minHeight: 0, p: { xs: 2, md: 4 }, overflowX: 'hidden', overflowY: 'auto' }}>

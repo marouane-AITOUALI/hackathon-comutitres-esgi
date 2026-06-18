@@ -41,6 +41,7 @@ backoffice n'ecrit pas le JWT admin dans `localStorage`.
 - `/support-alerts` : signaux qui anticipent les appels support.
 - `/users` : utilisateurs publics sans `passwordHash`.
 - `/offers` : catalogue des offres et documents requis.
+- `/communications` : annonces generales et rappels cibles, diffuses en temps reel.
 - `/audit-logs` : journal prototype derive des statuts existants.
 
 ## Endpoints utilises
@@ -63,6 +64,12 @@ backoffice n'ecrit pas le JWT admin dans `localStorage`.
 - `POST /api/admin/offers`
 - `PATCH /api/admin/offers/:id`
 - `GET /api/admin/support-alerts`
+- `GET /api/notifications`
+- `PATCH /api/notifications/:id/read`
+- `PATCH /api/notifications/:id/unread`
+- `DELETE /api/notifications/:id`
+- `GET /api/admin/communications`
+- `POST /api/admin/communications`
 - `GET /api/admin/audit-logs`
 
 ## Innovation demo
@@ -72,8 +79,24 @@ signaux metier en actions :
 
 - un justificatif ambigu devient une revue manuelle ;
 - un paiement refuse cree une alerte support ;
+- une cloche temps reel remonte les dossiers, documents, paiements et renouvellements a traiter ;
+- une communication generale peut cibler les clients, le backoffice ou les deux ;
 - les next actions indiquent quoi faire pour debloquer le dossier ;
 - les audit logs aident a expliquer ce qui s'est passe.
 
 Cette logique montre comment reduire les appels support : l'equipe voit les
 blocages avant que l'usager ne se perde dans le parcours.
+
+## Diffusion des communications
+
+Dans le prototype, tout compte ayant le role `admin` peut agir comme manager et
+publier une communication. La publication cree une ligne `communications`, puis
+une ligne `notifications` par destinataire pour simplifier le temps reel, les
+compteurs non lus et la suppression individuelle.
+
+Pour une volumetrie importante, le modele recommande est different :
+
+- une seule ligne pour la communication generale ;
+- une table de recus legere par utilisateur uniquement pour les etats lu,
+  masque ou acquitte ;
+- les notifications metier individuelles restent dans `notifications`.
