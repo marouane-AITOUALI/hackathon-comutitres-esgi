@@ -1,7 +1,7 @@
 import { Alert, Snackbar } from '@mui/material'
 import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react'
 import { AUTH_TOKEN_KEY, getWebSocketUrl } from '../services/api'
-import { listNotifications, markAllNotificationsRead, markNotificationRead } from '../services/notifications.service'
+import { deleteNotification, listNotifications, markAllNotificationsRead, markNotificationRead, markNotificationUnread } from '../services/notifications.service'
 import type { UserNotification } from '../types'
 import { useAuth } from './useAuth'
 import { NotificationsContext } from './notifications-context'
@@ -86,8 +86,20 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
 
   const markRead = useCallback(async (id: string) => {
     const { notification } = await markNotificationRead(id)
-    setNotifications((current) => current.map((item) => item.id === id ? notification : item))
-    setUnreadCount((current) => Math.max(0, current - 1))
+    setNotifications((current) => {
+      const wasUnread = current.some((item) => item.id === id && !item.readAt)
+      if (wasUnread) setUnreadCount((count) => Math.max(0, count - 1))
+      return current.map((item) => item.id === id ? notification : item)
+    })
+  }, [])
+
+  const markUnread = useCallback(async (id: string) => {
+    const { notification } = await markNotificationUnread(id)
+    setNotifications((current) => {
+      const wasRead = current.some((item) => item.id === id && Boolean(item.readAt))
+      if (wasRead) setUnreadCount((count) => count + 1)
+      return current.map((item) => item.id === id ? notification : item)
+    })
   }, [])
 
   const markAllRead = useCallback(async () => {
@@ -97,15 +109,26 @@ export function NotificationsProvider({ children }: PropsWithChildren) {
     setUnreadCount(0)
   }, [])
 
+  const remove = useCallback(async (id: string) => {
+    await deleteNotification(id)
+    setNotifications((current) => {
+      const removed = current.find((item) => item.id === id)
+      if (removed && !removed.readAt) setUnreadCount((count) => Math.max(0, count - 1))
+      return current.filter((item) => item.id !== id)
+    })
+  }, [])
+
   const value = useMemo(() => ({
     notifications,
     unreadCount,
     connected,
     latestNotification,
     markRead,
+    markUnread,
     markAllRead,
+    remove,
     closeLatestNotification: () => setLatestNotification(null),
-  }), [connected, latestNotification, markAllRead, markRead, notifications, unreadCount])
+  }), [connected, latestNotification, markAllRead, markRead, markUnread, notifications, remove, unreadCount])
 
   return (
     <NotificationsContext.Provider value={value}>

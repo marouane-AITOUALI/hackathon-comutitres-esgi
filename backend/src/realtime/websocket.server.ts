@@ -2,6 +2,7 @@ import type { Server } from 'node:http'
 import type { IncomingMessage } from 'node:http'
 import { WebSocket, WebSocketServer } from 'ws'
 import { env } from '../config/env.js'
+import { AUTH_COOKIE_NAME } from '../utils/auth-cookie.js'
 import { verifyAuthToken } from '../utils/jwt.js'
 
 const socketsByUser = new Map<string, Set<WebSocket>>()
@@ -14,6 +15,14 @@ function tokenFromProtocols(request: IncomingMessage) {
     .map((protocol) => protocol.trim()) ?? []
   const authProtocol = protocols.find((protocol) => protocol.startsWith('comutitres.jwt.'))
   return authProtocol?.slice('comutitres.jwt.'.length)
+}
+
+function tokenFromCookie(request: IncomingMessage) {
+  for (const cookie of request.headers.cookie?.split(';') ?? []) {
+    const index = cookie.indexOf('=')
+    if (index < 0 || cookie.slice(0, index).trim() !== AUTH_COOKIE_NAME) continue
+    return decodeURIComponent(cookie.slice(index + 1).trim())
+  }
 }
 
 function rejectUpgrade(socket: import('node:stream').Duplex, statusCode: number, message: string) {
@@ -50,7 +59,7 @@ export function initializeWebSocketServer(server: Server) {
       return
     }
 
-    const token = tokenFromProtocols(request)
+    const token = tokenFromProtocols(request) ?? tokenFromCookie(request)
     if (!token) {
       rejectUpgrade(socket, 401, 'Unauthorized')
       return

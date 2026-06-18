@@ -9,6 +9,7 @@ const navItems = [
   { label: 'Alertes support', to: '/support-alerts', marker: 'A' },
   { label: 'Utilisateurs', to: '/users', marker: 'U' },
   { label: 'Offres', to: '/offers', marker: 'O' },
+  { label: 'Communications', to: '/communications', marker: 'C' },
   { label: 'Audit logs', to: '/audit-logs', marker: 'L' },
 ]
 

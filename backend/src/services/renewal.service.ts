@@ -3,7 +3,7 @@ import { requireDb } from '../db/client.js'
 import { offers, payments, renewalEvents, subscriptions } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import type { RenewalDecisionInput } from '../validation/renewal.schemas.js'
-import { notifySubscriptionStatusChanged } from './notifications.service.js'
+import { notifyRenewalDecision, notifySubscriptionStatusChanged } from './notifications.service.js'
 
 type RenewalSubscriptionStatus = (typeof subscriptions.$inferSelect)['status']
 
@@ -137,7 +137,9 @@ export async function acceptSubscriptionRenewal(userId: string, subscriptionId: 
     .where(eq(subscriptions.id, subscription.id))
     .returning(subscriptionSelection)
 
-  if (updated) await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
+  if (!updated) throw new AppError(500, "Le renouvellement n'a pas pu mettre à jour la souscription.")
+  await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
+  await notifyRenewalDecision({ userId, subscriptionId, action: 'accepted', reason: input.reason })
   return { event, renewal: await getSubscriptionRenewal(userId, subscriptionId) }
 }
 
@@ -151,7 +153,9 @@ export async function refuseSubscriptionRenewal(userId: string, subscriptionId: 
     .where(eq(subscriptions.id, subscription.id))
     .returning(subscriptionSelection)
 
-  if (updated) await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
+  if (!updated) throw new AppError(500, "Le refus de renouvellement n'a pas pu mettre à jour la souscription.")
+  await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
+  await notifyRenewalDecision({ userId, subscriptionId, action: 'refused', reason: input.reason })
   return { event, renewal: await getSubscriptionRenewal(userId, subscriptionId) }
 }
 
@@ -165,6 +169,8 @@ export async function suspendSubscriptionRenewal(userId: string, subscriptionId:
     .where(eq(subscriptions.id, subscription.id))
     .returning(subscriptionSelection)
 
-  if (updated) await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
+  if (!updated) throw new AppError(500, "La suspension du renouvellement n'a pas pu mettre à jour la souscription.")
+  await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
+  await notifyRenewalDecision({ userId, subscriptionId, action: 'suspended', reason: input.reason })
   return { event, renewal: await getSubscriptionRenewal(userId, subscriptionId) }
 }

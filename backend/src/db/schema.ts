@@ -14,6 +14,9 @@ export const documentType = pgEnum('document_type', ['identity', 'proof_of_addre
 export const paymentType = pgEnum('payment_type', ['simulation', 'direct', 'mandate', 'regularization'])
 export const paymentStatus = pgEnum('payment_status', ['simulated', 'pending', 'accepted', 'rejected', 'cancelled', 'regularized'])
 export const renewalAction = pgEnum('renewal_action', ['accepted', 'refused', 'suspended'])
+export const notificationCategory = pgEnum('notification_category', ['subscription', 'document', 'payment', 'renewal', 'communication', 'system'])
+export const notificationPriority = pgEnum('notification_priority', ['low', 'normal', 'high'])
+export const communicationAudience = pgEnum('communication_audience', ['clients', 'admins', 'everyone'])
 
 export interface DocumentAnalysisResult {
   provider: 'rules-prototype-free'
@@ -184,11 +187,32 @@ export const renewalEvents = pgTable('renewal_events', {
   index('renewal_events_action_idx').on(table.action),
 ])
 
+export const communications = pgTable('communications', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+  audience: communicationAudience('audience').notNull(),
+  title: text('title').notNull(),
+  message: text('message').notNull(),
+  priority: notificationPriority('priority').default('normal').notNull(),
+  actionLabel: text('action_label'),
+  actionPath: text('action_path'),
+  recipientCount: integer('recipient_count').default(0).notNull(),
+  publishedAt: timestamp('published_at', { withTimezone: true }).defaultNow().notNull(),
+  ...timestamps,
+}, (table) => [
+  index('communications_created_by_idx').on(table.createdBy),
+  index('communications_audience_idx').on(table.audience),
+  index('communications_published_at_idx').on(table.publishedAt),
+])
+
 export const notifications = pgTable('notifications', {
   id: uuid('id').defaultRandom().primaryKey(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   subscriptionId: uuid('subscription_id').references(() => subscriptions.id, { onDelete: 'cascade' }),
+  communicationId: uuid('communication_id').references(() => communications.id, { onDelete: 'set null' }),
   type: text('type').notNull(),
+  category: notificationCategory('category').default('system').notNull(),
+  priority: notificationPriority('priority').default('normal').notNull(),
   title: text('title').notNull(),
   message: text('message').notNull(),
   data: jsonb('data').$type<Record<string, unknown>>().default({}).notNull(),
@@ -197,6 +221,8 @@ export const notifications = pgTable('notifications', {
 }, (table) => [
   index('notifications_user_id_idx').on(table.userId),
   index('notifications_subscription_id_idx').on(table.subscriptionId),
+  index('notifications_communication_id_idx').on(table.communicationId),
+  index('notifications_category_idx').on(table.category),
   index('notifications_read_at_idx').on(table.readAt),
   index('notifications_created_at_idx').on(table.createdAt),
 ])
@@ -207,6 +233,7 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   subscriptions: many(subscriptions),
   payments: many(payments),
   renewalEvents: many(renewalEvents),
+  communications: many(communications),
   notifications: many(notifications),
   avatar: one(userAvatars, { fields: [users.id], references: [userAvatars.ownerId] }),
 }))
@@ -225,7 +252,12 @@ export const renewalEventsRelations = relations(renewalEvents, ({ one }) => ({
   user: one(users, { fields: [renewalEvents.userId], references: [users.id] }),
   subscription: one(subscriptions, { fields: [renewalEvents.subscriptionId], references: [subscriptions.id] }),
 }))
+export const communicationsRelations = relations(communications, ({ many, one }) => ({
+  author: one(users, { fields: [communications.createdBy], references: [users.id] }),
+  notifications: many(notifications),
+}))
 export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, { fields: [notifications.userId], references: [users.id] }),
   subscription: one(subscriptions, { fields: [notifications.subscriptionId], references: [subscriptions.id] }),
+  communication: one(communications, { fields: [notifications.communicationId], references: [communications.id] }),
 }))

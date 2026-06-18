@@ -59,7 +59,10 @@ export function ClientLayout() {
           onMenuToggle={() => setMobileOpen(true)}
           onLogout={handleLogout}
           onProfileClick={() => navigate('/profil')}
-          onNotificationClick={(subscriptionId) => navigate(subscriptionId ? `/subscriptions/${subscriptionId}` : '/subscriptions')}
+          onNotificationClick={(notification) => {
+            const actionPath = typeof notification.data.actionPath === 'string' ? notification.data.actionPath : null
+            navigate(actionPath ?? (notification.subscriptionId ? `/subscriptions/${notification.subscriptionId}` : '/dashboard'))
+          }}
         />
 
         <Box component="main" sx={{ flex: 1, minHeight: 0, p: { xs: 2, md: 4 }, overflowX: 'hidden', overflowY: 'auto' }}>
