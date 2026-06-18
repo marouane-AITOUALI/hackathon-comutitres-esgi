@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { LoadingState } from '../components/common/LoadingState'
 import { StatusBadge } from '../components/common/StatusBadge'
-import { getDocumentSignedUrl, reviewDocument } from '../services/documents.service'
+import { deleteDocument, getDocumentSignedUrl, reviewDocument } from '../services/documents.service'
 import { regularizePayment } from '../services/payments.service'
 import { getAdminSubscription, getSubscriptionNextActions, updateAdminSubscriptionStatus } from '../services/subscriptions.service'
 import type { AdminDocument } from '../types/document'
@@ -198,6 +198,27 @@ export function SubscriptionDetailPage() {
       setSuccess(decision === 'validate' ? 'Document validé.' : decision === 'reject' ? 'Document refusé.' : 'Revue manuelle demandée.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Décision documentaire impossible.')
+    } finally {
+      setDocumentActionId(null)
+    }
+  }
+
+  async function removeDocument(document: AdminDocument) {
+    if (!item || !id) return
+    const filename = document.originalFilename ?? document.fileUrl
+    if (!window.confirm(`Supprimer définitivement le document « ${filename} » du dossier et du stockage ?`)) return
+
+    setDocumentActionId(document.id)
+    setError('')
+    setSuccess('')
+    try {
+      await deleteDocument(document.id)
+      const updated = await getAdminSubscription(id)
+      setItem(updated)
+      setActions(fallbackNextActions(updated))
+      setSuccess('Document supprimé du dossier et du stockage.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Suppression du document impossible.')
     } finally {
       setDocumentActionId(null)
     }
@@ -467,6 +488,9 @@ export function SubscriptionDetailPage() {
                       </Button>
                       <Button disabled={documentActionId === document.id} onClick={() => reviewSubscriptionDocument(document, 'manual_review')} size="small" variant="outlined">
                         Revue manuelle
+                      </Button>
+                      <Button color="error" disabled={documentActionId === document.id} onClick={() => removeDocument(document)} size="small" variant="text">
+                        Supprimer
                       </Button>
                     </Stack>
                   </TableCell>

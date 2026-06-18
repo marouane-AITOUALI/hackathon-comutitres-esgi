@@ -12,6 +12,7 @@ import {
   FileText,
   FolderOpen,
   History,
+  Pencil,
   RotateCcw,
   Send,
   ShieldCheck,
@@ -19,7 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
-import { createDocument, resubmitDocument } from '../services/documents.service'
+import { analyzeDocument, createDocument, resubmitDocument } from '../services/documents.service'
 import { createDirectPayment, createMandatePayment, simulatePayment } from '../services/payments.service'
 import { acceptSubscriptionRenewal, cancelSubscription, cancelSubscriptionRenewal, cancelSubscriptionTermination, getSubscriptionById, getSubscriptionRenewal, getSubscriptionTermination, requestSubscriptionTermination, submitSubscription } from '../services/subscriptions.service'
 import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
@@ -315,6 +316,21 @@ export function SubscriptionDetailPage() {
     event.preventDefault()
     setIsDraggingDocument(false)
     selectDocumentFile(event.dataTransfer.files[0])
+  }
+
+  async function analyze(idToAnalyze: string) {
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      await analyzeDocument(idToAnalyze)
+      await refresh()
+      setSuccess('Analyse documentaire relancée.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Analyse impossible.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   function goToStep(step: number) {
@@ -690,6 +706,9 @@ export function SubscriptionDetailPage() {
               ) : (
                 <Alert severity="info">Aucune action client disponible pour ce dossier.</Alert>
               )}
+              <Button component={Link} startIcon={<Pencil size={17} />} sx={{ mt: 1.5 }} to="/onboarding" variant="text">
+                Modifier les informations
+              </Button>
             </Paper>
           </Box>
         </Stack>
@@ -822,6 +841,11 @@ export function SubscriptionDetailPage() {
                       </Button>
                     )}
                   </Alert>
+                )}
+                {activeDocument && activeDocument.status !== 'validated' && (
+                  <Button disabled={saving} onClick={() => void analyze(activeDocument.id)} startIcon={<ShieldCheck size={17} />} sx={{ mb: 2 }} variant="outlined">
+                    Relancer l’analyse
+                  </Button>
                 )}
 
                 {!activeCanReplace ? (
