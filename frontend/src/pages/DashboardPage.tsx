@@ -123,6 +123,7 @@ export function DashboardPage() {
               aria-label="Démarrer un nouveau parcours"
               component={Link}
               to="/onboarding"
+              state={{ mode: 'chat' }}
               variant="contained"
               endIcon={<ArrowRight size={18} />}
               sx={{ minWidth: { xs: 132, sm: 144 }, whiteSpace: 'nowrap' }}

@@ -51,7 +51,7 @@ export function RegisterPage() {
           zIndex: 1,
         }}
       >
-        <Box sx={{ width: '100%', maxWidth: mode === 'select' ? 820 : 480, display: 'flex', flexDirection: 'column' }}>
+        <Box sx={{ width: '100%', maxWidth: mode === 'select' ? 820 : 560, display: 'flex', flexDirection: 'column' }}>
           {mode !== 'select' && (
             <Button
               startIcon={<ArrowBackIcon />}
