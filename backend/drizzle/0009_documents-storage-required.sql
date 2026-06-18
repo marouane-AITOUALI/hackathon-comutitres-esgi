@@ -1,12 +1,17 @@
-INSERT INTO "storage"."buckets" ("id", "name", "public", "file_size_limit", "allowed_mime_types")
-VALUES
-  ('user-avatars', 'user-avatars', false, 2097152, ARRAY['image/jpeg', 'image/png', 'image/webp']),
-  ('subscription-documents', 'subscription-documents', false, 10485760, ARRAY['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'])
-ON CONFLICT ("id") DO UPDATE
-SET
-  "public" = EXCLUDED."public",
-  "file_size_limit" = EXCLUDED."file_size_limit",
-  "allowed_mime_types" = EXCLUDED."allowed_mime_types";
+DO $$
+BEGIN
+  IF to_regclass('storage.buckets') IS NOT NULL THEN
+    INSERT INTO "storage"."buckets" ("id", "name", "public", "file_size_limit", "allowed_mime_types")
+    VALUES
+      ('user-avatars', 'user-avatars', false, 2097152, ARRAY['image/jpeg', 'image/png', 'image/webp']),
+      ('subscription-documents', 'subscription-documents', false, 10485760, ARRAY['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'])
+    ON CONFLICT ("id") DO UPDATE
+    SET
+      "public" = EXCLUDED."public",
+      "file_size_limit" = EXCLUDED."file_size_limit",
+      "allowed_mime_types" = EXCLUDED."allowed_mime_types";
+  END IF;
+END $$;
 --> statement-breakpoint
 ALTER TABLE "documents" ADD COLUMN IF NOT EXISTS "owner_id" uuid;
 --> statement-breakpoint

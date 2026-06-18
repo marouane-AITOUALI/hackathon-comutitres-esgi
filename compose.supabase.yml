@@ -1,0 +1,4 @@
+services:
+  backend:
+    environment:
+      RUN_MIGRATIONS: "false"

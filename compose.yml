@@ -1,60 +1,117 @@
 name: comutitres
 
 services:
+  proxy:
+    image: nginx:1.29-alpine
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
+      backoffice:
+        condition: service_started
+    networks:
+      - web
+      - api
+    restart: unless-stopped
+
+  frontend:
+    image: comutitres/frontend:latest
+    build:
+      context: ./frontend
+      target: production
+      args:
+        VITE_API_URL: /api
+    expose:
+      - "80"
+    networks:
+      - web
+    restart: unless-stopped
+
+  backoffice:
+    image: comutitres/backoffice:latest
+    build:
+      context: ./backoffice
+      target: production
+      args:
+        VITE_API_URL: /api
+    expose:
+      - "80"
+    networks:
+      - web
+    restart: unless-stopped
+
   backend:
+    image: comutitres/backend:latest
     build:
       context: ./backend
-      target: development
+      target: production
     env_file:
       - ./backend/.env
-    ports:
-      - "${API_PORT:-3001}:3000"
-    volumes:
-      - ./backend:/app
-      - backend_node_modules:/app/node_modules
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: "${DATABASE_URL:-postgresql://comutitres:comutitres@database:5432/comutitres}"
+      RUN_MIGRATIONS: "${RUN_MIGRATIONS:-true}"
+      CORS_ORIGIN: "http://localhost:${HTTP_PORT:-8080},http://admin.localhost:${HTTP_PORT:-8080}"
+    command:
+      - sh
+      - -c
+      - |
+        if [ "$${RUN_MIGRATIONS:-true}" = "true" ]; then
+          node dist/db/migrate.js
+        fi
+        exec node dist/server.js
+    expose:
+      - "3000"
+    networks:
+      - api
+      - data
+    restart: unless-stopped
     healthcheck:
       test:
         [
           "CMD",
           "node",
           "-e",
-          "fetch('http://localhost:3000/api/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))",
+          "fetch('http://127.0.0.1:3000/api/health').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))",
         ]
-      interval: 5s
+      interval: 10s
       timeout: 3s
       retries: 10
+      start_period: 15s
 
-  frontend:
-    build:
-      context: ./frontend
-      target: development
+  database:
+    image: postgres:17-alpine
     environment:
-      VITE_API_URL: http://localhost:${API_PORT:-3001}/api
-    ports:
-      - "5173:5173"
+      POSTGRES_USER: comutitres
+      POSTGRES_PASSWORD: comutitres
+      POSTGRES_DB: comutitres
     volumes:
-      - ./frontend:/app
-      - frontend_node_modules:/app/node_modules
-    depends_on:
-      backend:
-        condition: service_healthy
+      - postgres_data:/var/lib/postgresql/data
+    expose:
+      - "5432"
+    networks:
+      - data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U comutitres -d comutitres"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
 
-  backoffice:
-    build:
-      context: ./backoffice
-      target: development
-    environment:
-      VITE_API_URL: http://localhost:${API_PORT:-3001}/api
-    ports:
-      - "5174:5173"
-    volumes:
-      - ./backoffice:/app
-      - backoffice_node_modules:/app/node_modules
-    depends_on:
-      backend:
-        condition: service_healthy
+networks:
+  web:
+    driver: bridge
+  api:
+    driver: bridge
+  data:
+    driver: bridge
+    internal: true
 
 volumes:
-  backend_node_modules:
-  frontend_node_modules:
-  backoffice_node_modules:
+  postgres_data:

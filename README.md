@@ -34,8 +34,8 @@ npm run dev:backoffice
 
 ## Docker
 
-Renseigner d'abord `backend/.env`, puis lancer tout l'environnement de
-developpement avec hot reload :
+La stack Docker démarre le frontend, le backoffice, le backend, PostgreSQL et
+un reverse proxy Nginx :
 
 ```bash
 docker compose up --build
@@ -43,9 +43,22 @@ docker compose up --build
 
 Les services sont disponibles sur :
 
-- frontend : http://localhost:5173
-- backend : http://localhost:3001/api/health
-- backoffice : http://localhost:5174
+- frontend : http://localhost:8080
+- backoffice : http://admin.localhost:8080
+- API : http://localhost:8080/api/health
+
+La base PostgreSQL locale n'expose pas son port sur la machine.
+
+Pour utiliser personnellement la base Supabase Production renseignée dans
+`backend/.env` au lieu de la base locale, lancer :
+
+```bash
+npm run docker:up:supabase
+```
+
+`RUN_MIGRATIONS=false` protège la base de production contre l'exécution
+automatique des migrations depuis la machine locale. Le conteneur PostgreSQL
+local reste présent dans la stack mais n'est alors pas utilisé par le backend.
 
 Pour arreter et supprimer les conteneurs :
 
@@ -53,21 +66,17 @@ Pour arreter et supprimer les conteneurs :
 docker compose down
 ```
 
-Pour tester les images de production :
+Le fichier `deploy.yaml` constitue l'ébauche Docker Swarm. Les Docker Secrets
+déclarés dans ce fichier sont utilisés uniquement par Swarm.
+
+Exemple de simulation des secrets avant `docker stack deploy` :
 
 ```bash
-docker compose -f compose.prod.yml up --build
-```
-
-Le frontend est alors disponible sur http://localhost:8080 et le backoffice
-sur http://localhost:8081. L'API Docker utilise le port hote `3001` pour
-eviter les conflits avec un backend lance localement sur `3000`.
-
-Les ports peuvent etre modifies avant le lancement :
-
-```powershell
-$env:API_PORT=4000
-docker compose up --build
+printf '%s' 'mot-de-passe-postgres' | docker secret create postgres_password -
+printf '%s' 'secret-jwt' | docker secret create jwt_secret -
+printf '%s' 'https://projet.supabase.co' | docker secret create supabase_url -
+printf '%s' 'cle-anon' | docker secret create supabase_anon_key -
+printf '%s' 'cle-service-role' | docker secret create supabase_service_role_key -
 ```
 
 ## Base de donnees
