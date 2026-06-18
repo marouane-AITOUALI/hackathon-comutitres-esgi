@@ -72,6 +72,9 @@ export function CommunicationsPage() {
       <Alert severity="info" sx={{ borderRadius: 3 }}>
         Publiez ici une annonce générale, un rappel de renouvellement, une maintenance ou une consigne importante. Chaque destinataire la reçoit immédiatement dans sa cloche.
       </Alert>
+      <Alert severity="warning" sx={{ borderRadius: 3 }}>
+        Mode prototype : la publication crée actuellement une notification par destinataire. Pour une diffusion à grande échelle, la communication restera unique et seuls les états lu/masqué seront stockés par utilisateur.
+      </Alert>
       {error && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
 

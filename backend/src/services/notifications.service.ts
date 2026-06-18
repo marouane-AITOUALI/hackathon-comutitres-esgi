@@ -60,6 +60,28 @@ function actionData(actionPath: string, actionLabel: string, extra: Record<strin
   return { actionPath, actionLabel, ...extra }
 }
 
+export async function notifyAccountCreated(input: {
+  userId: string
+  firstName: string
+  subscriptionId?: string | null
+}) {
+  const hasSubscription = Boolean(input.subscriptionId)
+  return createNotification({
+    userId: input.userId,
+    subscriptionId: input.subscriptionId,
+    type: 'account_created',
+    category: 'system',
+    title: `Bienvenue ${input.firstName} !`,
+    message: hasSubscription
+      ? 'Votre compte et votre premier dossier sont prêts. Vous pouvez maintenant compléter les étapes demandées.'
+      : 'Votre compte est prêt. Commencez le parcours pour trouver le forfait adapté à votre situation.',
+    data: actionData(
+      hasSubscription ? `/subscriptions/${input.subscriptionId}` : '/onboarding',
+      hasSubscription ? 'Voir mon dossier' : 'Commencer mon parcours',
+    ),
+  })
+}
+
 export async function createNotification(input: {
   userId: string
   subscriptionId?: string | null
@@ -122,15 +144,36 @@ export async function notifySubscriptionStatusChanged(input: {
 }) {
   if (input.previousStatus === input.status) return null
 
+  const copy = input.status === 'pending_documents'
+    ? {
+        title: 'Documents nécessaires',
+        message: 'Votre dossier est créé. Ajoutez maintenant les justificatifs demandés pour poursuivre.',
+        actionLabel: 'Ajouter mes documents',
+        priority: 'high' as const,
+      }
+    : input.status === 'pending_payment'
+      ? {
+          title: 'Paiement à finaliser',
+          message: 'Les documents requis sont prêts. Finalisez le paiement pour envoyer votre dossier en validation.',
+          actionLabel: 'Finaliser le paiement',
+          priority: 'high' as const,
+        }
+      : {
+          title: 'Statut de votre abonnement mis à jour',
+          message: `Votre dossier est maintenant : ${statusLabels[input.status]}.`,
+          actionLabel: 'Voir le dossier',
+          priority: ['rejected', 'suspended'].includes(input.status) ? 'high' as const : 'normal' as const,
+        }
+
   const clientNotification = await createNotification({
     userId: input.userId,
     subscriptionId: input.subscriptionId,
     type: 'subscription_status_changed',
     category: 'subscription',
-    priority: ['rejected', 'suspended'].includes(input.status) ? 'high' : 'normal',
-    title: 'Statut de votre abonnement mis à jour',
-    message: `Votre dossier est maintenant : ${statusLabels[input.status]}.`,
-    data: actionData(`/subscriptions/${input.subscriptionId}`, 'Voir le dossier', {
+    priority: copy.priority,
+    title: copy.title,
+    message: copy.message,
+    data: actionData(`/subscriptions/${input.subscriptionId}`, copy.actionLabel, {
       previousStatus: input.previousStatus,
       status: input.status,
     }),

@@ -86,3 +86,17 @@ signaux metier en actions :
 
 Cette logique montre comment reduire les appels support : l'equipe voit les
 blocages avant que l'usager ne se perde dans le parcours.
+
+## Diffusion des communications
+
+Dans le prototype, tout compte ayant le role `admin` peut agir comme manager et
+publier une communication. La publication cree une ligne `communications`, puis
+une ligne `notifications` par destinataire pour simplifier le temps reel, les
+compteurs non lus et la suppression individuelle.
+
+Pour une volumetrie importante, le modele recommande est different :
+
+- une seule ligne pour la communication generale ;
+- une table de recus legere par utilisateur uniquement pour les etats lu,
+  masque ou acquitte ;
+- les notifications metier individuelles restent dans `notifications`.
