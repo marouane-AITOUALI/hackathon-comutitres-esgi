@@ -1,4 +1,4 @@
-import { and, desc, eq, or } from 'drizzle-orm'
+import { and, desc, eq, notInArray, or } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
@@ -132,7 +132,19 @@ async function resolveSubscriptionValues(userId: string, input: SubscriptionInpu
   }
 }
 
+const TERMINAL_STATUSES = ['cancelled', 'rejected'] as const
+
 export async function createSubscription(userId: string, input: CreateSubscriptionInput) {
+  const [existing] = await requireDb()
+    .select({ id: subscriptions.id, status: subscriptions.status })
+    .from(subscriptions)
+    .where(and(eq(subscriptions.userId, userId), notInArray(subscriptions.status, [...TERMINAL_STATUSES])))
+    .limit(1)
+
+  if (existing) {
+    throw new AppError(409, 'Vous avez déjà une souscription en cours. Veuillez la finaliser ou l\'annuler avant d\'en créer une nouvelle.')
+  }
+
   const values = await resolveSubscriptionValues(userId, input)
   const [created] = await requireDb()
     .insert(subscriptions)

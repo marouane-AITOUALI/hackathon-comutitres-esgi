@@ -3,7 +3,7 @@ FROM node:24-alpine AS development
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci
+RUN npm install --ignore-scripts
 
 COPY . .
 

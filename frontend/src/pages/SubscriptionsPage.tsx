@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Chip, LinearProgress, Paper, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, LinearProgress, Paper, Stack, Tooltip, Typography } from '@mui/material'
 import { ArrowRight, BadgeCheck, CalendarClock, CreditCard, FileCheck2, FileWarning, FolderOpen, Layers3, Plus, UserRound } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
@@ -130,6 +130,10 @@ export function SubscriptionsPage() {
     () => subscriptions.filter((item) => activeFilter === 'all' || item.subscription.status === activeFilter),
     [activeFilter, subscriptions],
   )
+  const hasActiveSubscription = useMemo(
+    () => subscriptions.some((item) => !['cancelled', 'rejected'].includes(item.subscription.status)),
+    [subscriptions],
+  )
   const nextRenewal = subscriptions
     .filter((item) => item.subscription.status === 'accepted')
     .sort((a, b) => new Date(a.subscription.updatedAt).getTime() - new Date(b.subscription.updatedAt).getTime())[0]
@@ -154,9 +158,15 @@ export function SubscriptionsPage() {
               Une vue claire pour repérer les dossiers bloqués, vérifier les profils payeur/porteur et accéder rapidement au suivi détaillé.
             </Typography>
           </Box>
-          <Button component={Link} to="/onboarding" variant="contained" startIcon={<Plus size={18} />} sx={{ alignSelf: { xs: 'flex-start', md: 'center' } }}>
-            Nouveau
-          </Button>
+          <Tooltip title={hasActiveSubscription ? 'Vous avez déjà une souscription en cours. Finalisez-la ou annulez-la avant d\'en créer une nouvelle.' : ''} arrow>
+            <Box component="span" sx={{ alignSelf: { xs: 'flex-start', md: 'center' } }}>
+              {hasActiveSubscription ? (
+                <Button disabled variant="contained" startIcon={<Plus size={18} />}>Nouveau</Button>
+              ) : (
+                <Button component={Link} to="/onboarding" variant="contained" startIcon={<Plus size={18} />}>Nouveau</Button>
+              )}
+            </Box>
+          </Tooltip>
         </Stack>
       </Paper>
 

@@ -1,4 +1,4 @@
-import { Alert, Box, Button, Chip, LinearProgress, Paper, Stack, Typography } from '@mui/material'
+import { Alert, Box, Button, Chip, LinearProgress, Paper, Stack, Tooltip, Typography } from '@mui/material'
 import { ArrowRight, BadgeCheck, CalendarClock, CreditCard, FileWarning, Route, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useState } from 'react'
@@ -100,6 +100,10 @@ export function DashboardPage() {
 
   const counters = useMemo(() => countByStatus(subscriptions), [subscriptions])
   const urgentSubscription = useMemo(() => mostUrgentSubscription(subscriptions), [subscriptions])
+  const hasActiveSubscription = useMemo(
+    () => subscriptions.some((item) => !['cancelled', 'rejected'].includes(item.subscription.status)),
+    [subscriptions],
+  )
   const recentSubscriptions = subscriptions.slice(0, 4)
   const featuredOffers = offers.filter((offer) => offer.isActive).slice(0, 3)
   const documentsToReview = subscriptions.flatMap((item) => item.documents ?? []).filter((document) => document.status !== 'validated').length
@@ -192,17 +196,33 @@ export function DashboardPage() {
               alignItems: 'stretch',
             }}
           >
-            <Button
-              aria-label="Démarrer un nouveau parcours"
-              component={Link}
-              to="/onboarding"
-              state={{ mode: 'chat' }}
-              variant="contained"
-              endIcon={<ArrowRight size={18} />}
-              sx={{ width: { xs: '100%', sm: 'auto' }, minWidth: { sm: 144 }, whiteSpace: 'nowrap' }}
-            >
-              Démarrer
-            </Button>
+            <Tooltip title={hasActiveSubscription ? 'Vous avez déjà une souscription en cours' : ''} arrow>
+              <Box component="span" sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                {hasActiveSubscription ? (
+                  <Button
+                    aria-label="Démarrer un nouveau parcours"
+                    disabled
+                    variant="contained"
+                    endIcon={<ArrowRight size={18} />}
+                    sx={{ width: '100%', minWidth: { sm: 144 }, whiteSpace: 'nowrap' }}
+                  >
+                    Démarrer
+                  </Button>
+                ) : (
+                  <Button
+                    aria-label="Démarrer un nouveau parcours"
+                    component={Link}
+                    to="/onboarding"
+                    state={{ mode: 'chat' }}
+                    variant="contained"
+                    endIcon={<ArrowRight size={18} />}
+                    sx={{ width: '100%', minWidth: { sm: 144 }, whiteSpace: 'nowrap' }}
+                  >
+                    Démarrer
+                  </Button>
+                )}
+              </Box>
+            </Tooltip>
             <Button
               aria-label="Voir mes dossiers"
               component={Link}
