@@ -19,11 +19,11 @@ export const adminUpdateSubscriptionStatusSchema = z.object({
 })
 
 export const adminReviewDocumentSchema = z.object({
-  accepted: z.boolean(),
+  decision: z.enum(['validate', 'reject', 'manual_review']),
   rejectionReason: z.string().trim().min(3).max(500).optional(),
   note: optionalText,
 }).superRefine((value, context) => {
-  if (!value.accepted && !value.rejectionReason) {
+  if (value.decision === 'reject' && !value.rejectionReason) {
     context.addIssue({ code: 'custom', path: ['rejectionReason'], message: 'Un motif est requis en cas de refus.' })
   }
 })
@@ -38,6 +38,8 @@ export const adminCreateOfferSchema = z.object({
   description: z.string().trim().max(1000).optional(),
   target: z.string().trim().min(2).max(160),
   requiredDocuments: z.array(z.string().trim().min(2).max(120)).default([]),
+  priceCents: z.number().int().min(0).max(500000).default(0),
+  monthlyInstallmentCount: z.number().int().min(2).max(24).nullable().default(null),
   isActive: z.boolean().default(true),
 })
 

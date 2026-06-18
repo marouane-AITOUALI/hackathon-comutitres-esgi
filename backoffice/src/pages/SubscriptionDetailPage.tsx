@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { LoadingState } from '../components/common/LoadingState'
 import { StatusBadge } from '../components/common/StatusBadge'
-import { deleteDocument, getDocumentSignedUrl } from '../services/documents.service'
+import { deleteDocument, getDocumentSignedUrl, reviewDocument } from '../services/documents.service'
 import { regularizePayment } from '../services/payments.service'
 import { getAdminSubscription, getSubscriptionNextActions, updateAdminSubscriptionStatus } from '../services/subscriptions.service'
 import type { AdminDocument } from '../types/document'
@@ -67,6 +67,7 @@ function fallbackNextActions(item: AdminSubscriptionItem): SubscriptionNextActio
   if (item.documents.some((document) => document.status === 'pending' || document.status === 'needs_manual_review')) actions.push({ code: 'review_documents', priority: 'high', label: 'Verifier les justificatifs', detail: 'Un document attend une revue backoffice.' })
   if (item.documents.some((document) => document.status === 'rejected')) actions.push({ code: 'rejected_document', priority: 'medium', label: 'Informer le client', detail: 'Un justificatif a ete refuse.' })
   if (item.payments.some((payment) => payment.status === 'rejected' || payment.status === 'cancelled')) actions.push({ code: 'regularize_payment', priority: 'high', label: 'Regulariser le paiement', detail: 'Un paiement bloque le dossier.' })
+  if (item.terminationRequests.some((request) => request.status === 'requested')) actions.push({ code: 'review_termination', priority: 'high', label: 'Étudier la résiliation', detail: 'Une demande client attend une vérification des conditions et de la date d’effet.' })
   if (item.subscription.status === 'pending_validation') actions.push({ code: 'validate_subscription', priority: 'medium', label: 'Valider le dossier', detail: 'Le dossier attend une decision backoffice.' })
   if (actions.length === 0) actions.push({ code: 'no_action', priority: 'low', label: 'Aucune action prioritaire', detail: 'Le prototype ne detecte aucun blocage.' })
   return actions
@@ -112,6 +113,7 @@ export function SubscriptionDetailPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [documentActionId, setDocumentActionId] = useState<string | null>(null)
+  const [documentReasons, setDocumentReasons] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
 
@@ -148,21 +150,17 @@ export function SubscriptionDetailPage() {
   }
 
   async function regularize(id: string) {
-    if (!item) return
+    if (!item || !item.subscription.id) return
     setSaving(true)
     setError('')
     setSuccess('')
     try {
-      const response = await regularizePayment(id, 'Regularisation effectuee pendant la demo backoffice.')
-      const updated: AdminSubscriptionItem = {
-        ...item,
-        payments: item.payments.map((payment) => payment.id === id ? response.payment : payment),
-        subscription: { ...item.subscription, status: 'pending_validation' },
-      }
+      await regularizePayment(id, 'Regularisation effectuee pendant la demo backoffice.')
+      const updated = await getAdminSubscription(item.subscription.id)
       setItem(updated)
-      setSelectedStatus('pending_validation')
+      setSelectedStatus(updated.subscription.status)
       setActions(fallbackNextActions(updated))
-      setSuccess('Paiement regularise. Le dossier repasse en validation.')
+      setSuccess('Paiement regularise. Le workflow du dossier a été recalculé.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Regularisation impossible.')
     } finally {
@@ -186,24 +184,39 @@ export function SubscriptionDetailPage() {
     }
   }
 
+  async function reviewSubscriptionDocument(document: AdminDocument, decision: 'validate' | 'reject' | 'manual_review') {
+    if (!item || !id) return
+    setDocumentActionId(document.id)
+    setError('')
+    setSuccess('')
+    try {
+      const reason = decision === 'reject' ? documentReasons[document.id] : undefined
+      await reviewDocument(document.id, decision, reason, decision === 'manual_review' ? 'Revue manuelle demandée depuis la fiche dossier.' : undefined)
+      const updated = await getAdminSubscription(id)
+      setItem(updated)
+      setActions(fallbackNextActions(updated))
+      setSuccess(decision === 'validate' ? 'Document validé.' : decision === 'reject' ? 'Document refusé.' : 'Revue manuelle demandée.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Décision documentaire impossible.')
+    } finally {
+      setDocumentActionId(null)
+    }
+  }
+
   async function removeDocument(document: AdminDocument) {
-    if (!item) return
+    if (!item || !id) return
     const filename = document.originalFilename ?? document.fileUrl
-    const confirmed = window.confirm(`Supprimer le document "${filename}" du dossier et du bucket Supabase ?`)
-    if (!confirmed) return
+    if (!window.confirm(`Supprimer définitivement le document « ${filename} » du dossier et du stockage ?`)) return
 
     setDocumentActionId(document.id)
     setError('')
     setSuccess('')
     try {
       await deleteDocument(document.id)
-      const updated: AdminSubscriptionItem = {
-        ...item,
-        documents: item.documents.filter((current) => current.id !== document.id),
-      }
+      const updated = await getAdminSubscription(id)
       setItem(updated)
       setActions(fallbackNextActions(updated))
-      setSuccess('Document supprime du dossier et du stockage.')
+      setSuccess('Document supprimé du dossier et du stockage.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Suppression du document impossible.')
     } finally {
@@ -236,7 +249,7 @@ export function SubscriptionDetailPage() {
             </Typography>
           </Box>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ flexShrink: 0 }}>
-            <Button disabled={saving} onClick={() => changeStatus('accepted')} color="success" startIcon={<CheckCircle2 size={17} />} variant="contained">Accepter</Button>
+            <Button disabled={saving || item.workflow?.state !== 'under_review'} onClick={() => changeStatus('accepted')} color="success" startIcon={<CheckCircle2 size={17} />} variant="contained">Accepter</Button>
             <Button disabled={saving} onClick={() => changeStatus('rejected')} color="error" startIcon={<XCircle size={17} />} variant="outlined">Refuser</Button>
             <Button disabled={saving} onClick={() => changeStatus('suspended')} color="warning" startIcon={<PauseCircle size={17} />} variant="outlined">Suspendre</Button>
           </Stack>
@@ -276,7 +289,7 @@ export function SubscriptionDetailPage() {
                 Mettre a jour le statut
               </Button>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-                <Button disabled={saving} onClick={() => changeStatus('accepted')} color="success" variant="outlined">Accepter</Button>
+                <Button disabled={saving || item.workflow?.state !== 'under_review'} onClick={() => changeStatus('accepted')} color="success" variant="outlined">Accepter</Button>
                 <Button disabled={saving} onClick={() => changeStatus('rejected')} color="error" variant="outlined">Refuser</Button>
                 <Button disabled={saving} onClick={() => changeStatus('suspended')} color="warning" variant="outlined">Suspendre</Button>
               </Stack>
@@ -293,6 +306,23 @@ export function SubscriptionDetailPage() {
           ))}
         </Stack>
       </Paper>
+
+      {item.terminationRequests.some((request) => request.status === 'requested') && (
+        <Paper sx={{ borderRadius: 4, p: 3 }}>
+          <Typography variant="h6" sx={{ fontWeight: 900, mb: 2 }}>Demande de résiliation</Typography>
+          <Stack spacing={1.5}>
+            {item.terminationRequests.filter((request) => request.status === 'requested').map((request) => (
+              <Alert key={request.id} severity="warning">
+                <Typography sx={{ fontWeight: 850 }}>À étudier avant le {formatDate(request.effectiveAt)}</Typography>
+                <Typography variant="body2">Motif client : {request.reason ?? 'Non précisé'}</Typography>
+                {request.metadata?.requiresManualReview === true && (
+                  <Typography variant="body2">Imagine R : contrôle manuel des conditions obligatoire avant toute fin de droits.</Typography>
+                )}
+              </Alert>
+            ))}
+          </Stack>
+        </Paper>
+      )}
 
       <Grid container spacing={2}>
         <Grid size={{ xs: 12, md: 4 }}>
@@ -424,7 +454,15 @@ export function SubscriptionDetailPage() {
                   </TableCell>
                   <TableCell><StatusBadge status={document.status} /></TableCell>
                   <TableCell>{documentConfidence(document.analysisResult)}</TableCell>
-                  <TableCell>{document.rejectionReason ?? 'Aucun'}</TableCell>
+                  <TableCell>
+                    <TextField
+                      disabled={documentActionId === document.id}
+                      label="Motif si refus"
+                      onChange={(event) => setDocumentReasons((current) => ({ ...current, [document.id]: event.target.value }))}
+                      size="small"
+                      value={documentReasons[document.id] ?? document.rejectionReason ?? ''}
+                    />
+                  </TableCell>
                   <TableCell>{formatDate(document.createdAt)}</TableCell>
                   <TableCell align="right">
                     <Stack direction={{ xs: 'column', md: 'row' }} spacing={1} sx={{ justifyContent: 'flex-end' }}>
@@ -436,13 +474,22 @@ export function SubscriptionDetailPage() {
                       >
                         Visualiser
                       </Button>
+                      <Button disabled={documentActionId === document.id} onClick={() => reviewSubscriptionDocument(document, 'validate')} size="small" variant="contained">
+                        Accepter
+                      </Button>
                       <Button
                         color="error"
-                        disabled={documentActionId === document.id}
-                        onClick={() => removeDocument(document)}
+                        disabled={documentActionId === document.id || (documentReasons[document.id] ?? '').trim().length < 3}
+                        onClick={() => reviewSubscriptionDocument(document, 'reject')}
                         size="small"
                         variant="outlined"
                       >
+                        Refuser
+                      </Button>
+                      <Button disabled={documentActionId === document.id} onClick={() => reviewSubscriptionDocument(document, 'manual_review')} size="small" variant="outlined">
+                        Revue manuelle
+                      </Button>
+                      <Button color="error" disabled={documentActionId === document.id} onClick={() => removeDocument(document)} size="small" variant="text">
                         Supprimer
                       </Button>
                     </Stack>

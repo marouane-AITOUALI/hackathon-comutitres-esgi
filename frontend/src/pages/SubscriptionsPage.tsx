@@ -6,17 +6,7 @@ import { listSubscriptions } from '../services/subscriptions.service'
 import { colors } from '../theme/colors'
 import type { SubscriptionStatus, SubscriptionSummary } from '../types'
 import { useSubscriptionRealtime } from '../hooks/useSubscriptionRealtime'
-
-const statusLabel: Record<SubscriptionStatus, string> = {
-  draft: 'Brouillon',
-  pending_documents: 'Documents attendus',
-  pending_payment: 'Paiement attendu',
-  pending_validation: 'En validation',
-  accepted: 'Actif',
-  rejected: 'Refusé',
-  cancelled: 'Annulé',
-  suspended: 'Suspendu',
-}
+import { subscriptionStatusLabels } from '../utils/statusLabels'
 
 const statusTone: Record<SubscriptionStatus, 'default' | 'warning' | 'success' | 'error' | 'info'> = {
   draft: 'default',
@@ -126,6 +116,9 @@ export function SubscriptionsPage() {
   }, [])
 
   const counters = useMemo(() => countByStatus(subscriptions), [subscriptions])
+  const openSubscription = subscriptions.find((item) =>
+    ['draft', 'pending_documents', 'pending_payment', 'pending_validation', 'accepted', 'suspended'].includes(item.subscription.status),
+  )
   const filteredSubscriptions = useMemo(
     () => subscriptions.filter((item) => activeFilter === 'all' || item.subscription.status === activeFilter),
     [activeFilter, subscriptions],
@@ -154,8 +147,8 @@ export function SubscriptionsPage() {
               Une vue claire pour repérer les dossiers bloqués, vérifier les profils payeur/porteur et accéder rapidement au suivi détaillé.
             </Typography>
           </Box>
-          <Button component={Link} to="/onboarding" variant="contained" startIcon={<Plus size={18} />} sx={{ alignSelf: { xs: 'flex-start', md: 'center' } }}>
-            Nouveau
+          <Button component={Link} to={openSubscription ? `/subscriptions/${openSubscription.subscription.id}` : '/onboarding'} variant="contained" startIcon={openSubscription ? <FolderOpen size={18} /> : <Plus size={18} />} sx={{ alignSelf: { xs: 'flex-start', md: 'center' } }}>
+            {openSubscription ? 'Voir mon dossier en cours' : 'Nouveau'}
           </Button>
         </Stack>
       </Paper>
@@ -283,7 +276,7 @@ export function SubscriptionsPage() {
                         </Stack>
                       </Box>
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                        <Chip color={statusTone[item.subscription.status]} label={statusLabel[item.subscription.status]} sx={{ fontWeight: 700 }} />
+                        <Chip color={statusTone[item.subscription.status]} label={subscriptionStatusLabels[item.subscription.status]} sx={{ fontWeight: 700 }} />
                         <Button component={Link} to={`/subscriptions/${item.subscription.id}`} variant="outlined" endIcon={<ArrowRight size={16} />}>
                           Suivi
                         </Button>

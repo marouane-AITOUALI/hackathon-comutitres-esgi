@@ -6,6 +6,7 @@ import { analyzeDocumentWithRules, checkDocumentFraud } from './document-analysi
 import { notifyDocumentStatusChanged, notifyDocumentSubmitted } from './notifications.service.js'
 import { createPrivateSignedUrl, decodeStorageDocumentId, DOCUMENTS_BUCKET, removePrivateObject, parseSubscriptionDocumentStoragePath, uploadSubscriptionDocumentFile } from './storage.service.js'
 import type { CreateDocumentInput, ManualReviewInput, ResubmitDocumentInput, UpdateDocumentStatusInput } from '../validation/document.schemas.js'
+import { evaluateSubscriptionWorkflow, normalizeDocumentType, reconcileSubscriptionWorkflow } from './subscription-workflow.service.js'
 
 type DocumentRow = typeof documents.$inferSelect
 
@@ -113,7 +114,19 @@ export async function createDocument(
 ) {
   const subscription = await findSubscriptionForAccess(userId, role, subscriptionId)
   if (!file) throw new AppError(400, 'Aucun fichier fourni.')
+  if (role !== 'admin') {
+    const workflow = await evaluateSubscriptionWorkflow(subscriptionId)
+    if (!workflow.replaceableDocumentTypes.includes(normalizeDocumentType(input.type))) {
+      throw new AppError(409, "Ce document ne peut pas être déposé à cette étape du dossier.")
+    }
+  }
+  const [existing] = await requireDb().select({ id: documents.id }).from(documents)
+    .where(and(eq(documents.subscriptionId, subscriptionId), eq(documents.type, input.type)))
+    .limit(1)
+  if (existing) throw new AppError(409, 'Ce type de document existe déjà. Utilisez le remplacement.')
+
   const uploaded = await uploadSubscriptionDocumentFile(subscription.userId, subscriptionId, input.type, file)
+  const analysis = analyzeDocumentWithRules({ type: input.type, fileUrl: file.originalname })
   let created: DocumentRow
 
   try {
@@ -129,7 +142,10 @@ export async function createDocument(
         originalFilename: uploaded.originalFilename,
         mimeType: uploaded.mimeType,
         sizeBytes: uploaded.sizeBytes,
-        status: 'pending',
+        status: analysis.suggestedStatus,
+        analysisResult: analysis,
+        analyzedAt: new Date(analysis.analyzedAt),
+        rejectionReason: analysis.suggestedStatus === 'rejected' ? 'Document refusé par les règles automatiques.' : null,
       })
       .returning(documentSelection)
 
@@ -146,6 +162,7 @@ export async function createDocument(
     documentId: created.id,
     documentType: created.type,
   })
+  await reconcileSubscriptionWorkflow(subscriptionId)
   return publicDocument(created)
 }
 
@@ -190,6 +207,7 @@ export async function deleteDocument(userId: string, role: string, id: string) {
   const document = await findDocumentForAccess(userId, role, id)
   await requireDb().delete(documents).where(eq(documents.id, id))
   await removePrivateObject(document.storageBucket, document.storagePath)
+  await reconcileSubscriptionWorkflow(document.subscriptionId)
   return { deleted: true, id }
 }
 
@@ -215,6 +233,7 @@ export async function updateDocumentStatus(userId: string, role: string, id: str
     status: updated.status,
     rejectionReason: updated.rejectionReason,
   })
+  await reconcileSubscriptionWorkflow(updated.subscriptionId)
   return publicDocument(updated)
 }
 
@@ -227,15 +246,24 @@ export async function resubmitDocument(
 ) {
   const current = await findDocumentForAccess(userId, role, id)
   if (!file) throw new AppError(400, 'Aucun fichier fourni.')
+  const subscription = await findSubscriptionForAccess(userId, role, current.subscriptionId)
+  const nextType = input.type ?? current.type
+  if (role !== 'admin' && subscription.submittedAt) {
+    const workflow = await evaluateSubscriptionWorkflow(current.subscriptionId)
+    if (!workflow.replaceableDocumentTypes.includes(normalizeDocumentType(nextType))) {
+      throw new AppError(409, 'Seul un document refusé ou manquant peut être remplacé après envoi.')
+    }
+  }
   const ownerId = current.ownerId ?? userId
-  const uploaded = await uploadSubscriptionDocumentFile(ownerId, current.subscriptionId, input.type ?? current.type, file)
+  const uploaded = await uploadSubscriptionDocumentFile(ownerId, current.subscriptionId, nextType, file)
+  const analysis = analyzeDocumentWithRules({ type: nextType, fileUrl: file.originalname })
   let updated: DocumentRow
 
   try {
     const [row] = await requireDb()
       .update(documents)
       .set({
-        type: input.type ?? current.type,
+        type: nextType,
         ownerId,
         fileUrl: uploaded.path,
         storageBucket: uploaded.bucket,
@@ -243,10 +271,10 @@ export async function resubmitDocument(
         originalFilename: uploaded.originalFilename,
         mimeType: uploaded.mimeType,
         sizeBytes: uploaded.sizeBytes,
-        status: 'pending',
-        analysisResult: {},
-        analyzedAt: null,
-        rejectionReason: null,
+        status: analysis.suggestedStatus,
+        analysisResult: analysis,
+        analyzedAt: new Date(analysis.analyzedAt),
+        rejectionReason: analysis.suggestedStatus === 'rejected' ? 'Document refusé par les règles automatiques.' : null,
         updatedAt: new Date(),
       })
       .where(eq(documents.id, id))
@@ -267,6 +295,7 @@ export async function resubmitDocument(
     documentType: updated.type,
     resubmitted: true,
   })
+  await reconcileSubscriptionWorkflow(updated.subscriptionId)
   return publicDocument(updated)
 }
 
@@ -295,6 +324,7 @@ export async function analyzeDocument(userId: string, role: string, id: string) 
     status: updated.status,
     rejectionReason: updated.rejectionReason,
   })
+  await reconcileSubscriptionWorkflow(updated.subscriptionId)
   return { ...(await publicDocument(updated)), analysis }
 }
 
@@ -317,11 +347,16 @@ export async function fraudCheckDocument(userId: string, role: string, id: strin
 
 export async function manualReviewDocument(userId: string, role: string, id: string, input: ManualReviewInput) {
   const current = await findDocumentForAccess(userId, role, id)
+  const status = input.decision === 'validate'
+    ? 'validated'
+    : input.decision === 'reject'
+      ? 'rejected'
+      : 'needs_manual_review'
   const [updated] = await requireDb()
     .update(documents)
     .set({
-      status: input.accepted ? 'validated' : 'rejected',
-      rejectionReason: input.accepted ? null : input.rejectionReason,
+      status,
+      rejectionReason: input.decision === 'reject' ? input.rejectionReason : null,
       analysisResult: {
         provider: 'rules-prototype-free',
         manualReview: true,
@@ -343,5 +378,6 @@ export async function manualReviewDocument(userId: string, role: string, id: str
     status: updated.status,
     rejectionReason: updated.rejectionReason,
   })
+  await reconcileSubscriptionWorkflow(updated.subscriptionId)
   return publicDocument(updated)
 }

@@ -30,11 +30,11 @@ const selection = {
   profileUpdatedAt: users.profileUpdatedAt,
   updatedAt: users.updatedAt,
 }
-type DatabaseExecutor = Pick<ReturnType<typeof requireDb>, 'select' | 'insert'>
+type DatabaseExecutor = Pick<ReturnType<typeof requireDb>, 'select' | 'insert' | 'update'>
 
 async function getLatestSubscription(database: DatabaseExecutor, userId: string): Promise<SubscriptionSummary | null> {
   const [subscription] = await database
-    .select({ id: subscriptions.id, status: subscriptions.status, offerId: subscriptions.offerId, onboardingSessionId: subscriptions.onboardingSessionId })
+    .select({ id: subscriptions.id, status: subscriptions.status, offerId: subscriptions.offerId, onboardingSessionId: subscriptions.onboardingSessionId, submittedAt: subscriptions.submittedAt })
     .from(subscriptions)
     .where(eq(subscriptions.userId, userId))
     .orderBy(desc(subscriptions.createdAt))
@@ -130,7 +130,14 @@ export async function registerUser(input: RegisterInput) {
 
 export async function registerUserWithOnboarding(input: RegisterWithOnboardingInput) {
   const result = await requireDb().transaction(async (tx) => {
-    const user = await createUser(tx, input)
+    const createdUser = await createUser(tx, input)
+    const [user] = await tx.update(users).set({
+      ...input.onboarding.address,
+      addressLine2: input.onboarding.address.addressLine2 ?? null,
+      profileUpdatedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(users.id, createdUser.id)).returning(selection)
+    if (!user) throw new AppError(500, "L'adresse du compte n'a pas pu être enregistrée.")
     const bundle = await createOnboardingBundle(tx, user.id, input.onboarding)
     const offerConditions = [
       input.recommendedOffer.offerId ? eq(offers.id, input.recommendedOffer.offerId) : undefined,

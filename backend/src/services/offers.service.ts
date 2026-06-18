@@ -11,6 +11,8 @@ const offerSelection = {
   description: offers.description,
   target: offers.target,
   requiredDocuments: offers.requiredDocuments,
+  priceCents: offers.priceCents,
+  monthlyInstallmentCount: offers.monthlyInstallmentCount,
   isActive: offers.isActive,
   createdAt: offers.createdAt,
   updatedAt: offers.updatedAt,

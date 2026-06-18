@@ -3,7 +3,8 @@ import { requireDb } from '../db/client.js'
 import { offers, payments, subscriptions } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import type { DirectPaymentInput, MandatePaymentInput, PaymentSimulationInput, RegularizePaymentInput } from '../validation/payment.schemas.js'
-import { notifyPaymentStatus, notifySubscriptionStatusChanged } from './notifications.service.js'
+import { notifyPaymentStatus } from './notifications.service.js'
+import { reconcileSubscriptionWorkflow } from './subscription-workflow.service.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
 type PaymentRow = typeof payments.$inferSelect
@@ -33,21 +34,6 @@ const subscriptionSelection = {
   updatedAt: subscriptions.updatedAt,
 }
 
-const offerAmounts: Record<string, number> = {
-  NAVIGO_ANNUEL: 97600,
-  NAVIGO_SENIOR: 42000,
-  NAVIGO_MOIS: 8800,
-  NAVIGO_SEMAINE: 3080,
-  IMAGINE_R_JUNIOR: 2400,
-  IMAGINE_R_SCOLAIRE: 38240,
-  IMAGINE_R_ETUDIANT: 38240,
-  LIBERTE_PLUS: 0,
-  TST_50: 4400,
-  TST_75: 2200,
-  TST_GRATUITE: 0,
-  AMETHYSTE: 0,
-}
-
 function reference(prefix: string) {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -69,64 +55,68 @@ async function findPaymentForAccess(userId: string, role: string, id: string) {
   return payment
 }
 
-async function resolveOfferCode(subscription?: Pick<SubscriptionRow, 'offerId'> | null, explicitOfferCode?: string) {
-  if (explicitOfferCode) return explicitOfferCode
-  if (!subscription?.offerId) return null
-
-  const [offer] = await requireDb().select({ code: offers.code }).from(offers).where(eq(offers.id, subscription.offerId)).limit(1)
-  return offer?.code ?? null
+async function resolveOffer(subscription?: Pick<SubscriptionRow, 'offerId'> | null, explicitOfferCode?: string) {
+  const where = explicitOfferCode
+    ? eq(offers.code, explicitOfferCode)
+    : subscription?.offerId
+      ? eq(offers.id, subscription.offerId)
+      : undefined
+  if (!where) return null
+  const [offer] = await requireDb().select({
+    code: offers.code,
+    priceCents: offers.priceCents,
+    monthlyInstallmentCount: offers.monthlyInstallmentCount,
+  }).from(offers).where(where).limit(1)
+  return offer ?? null
 }
 
-async function resolveAmount(input: { amountCents?: number; offerCode?: string }, subscription?: Pick<SubscriptionRow, 'offerId'> | null) {
-  if (input.amountCents) return input.amountCents
-  const code = await resolveOfferCode(subscription, input.offerCode)
-  return code ? offerAmounts[code] ?? 5000 : 5000
-}
-
-function paymentResponse(payment: PaymentRow) {
-  return { payment }
-}
-
-async function markSubscriptionAfterPayment(subscriptionId: string, accepted: boolean) {
-  const [current] = await requireDb()
-    .select(subscriptionSelection)
-    .from(subscriptions)
-    .where(eq(subscriptions.id, subscriptionId))
-    .limit(1)
-  if (!current) throw new AppError(404, 'Souscription introuvable.')
-
-  const [updated] = await requireDb()
-    .update(subscriptions)
-    .set({ status: accepted ? 'pending_validation' : 'pending_payment', updatedAt: new Date() })
-    .where(eq(subscriptions.id, subscriptionId))
-    .returning(subscriptionSelection)
-
-  if (!updated) throw new AppError(500, "Le statut de la souscription n'a pas pu être mis à jour.")
-  await notifySubscriptionStatusChanged({
-    userId: updated.userId,
-    subscriptionId: updated.id,
-    previousStatus: current.status,
-    status: updated.status,
+export function createInstallmentSchedule(totalCents: number, installmentCount: number, start = new Date()) {
+  const safeCount = Math.max(1, installmentCount)
+  const installmentAmountCents = Math.floor(totalCents / safeCount)
+  const lastInstallmentAmountCents = totalCents - installmentAmountCents * (safeCount - 1)
+  const schedule = Array.from({ length: safeCount }, (_, index) => {
+    const dueDate = new Date(start)
+    dueDate.setUTCMonth(dueDate.getUTCMonth() + index)
+    return {
+      installmentNumber: index + 1,
+      dueDate: dueDate.toISOString().slice(0, 10),
+      amountCents: index === safeCount - 1 ? lastInstallmentAmountCents : installmentAmountCents,
+    }
   })
+  return { installmentCount: safeCount, installmentAmountCents, lastInstallmentAmountCents, schedule }
 }
 
-export async function simulatePayment(userId: string, input: PaymentSimulationInput) {
-  const subscription = input.subscriptionId ? await findOwnSubscription(userId, input.subscriptionId) : null
-  const offerCode = await resolveOfferCode(subscription, input.offerCode)
-  const amountCents = await resolveAmount({ amountCents: input.amountCents, offerCode: offerCode ?? undefined }, subscription)
+async function resolvePaymentPlan(
+  input: { amountCents?: number; offerCode?: string; paymentMode: 'one_time' | 'monthly' | 'weekly' | 'usage' },
+  subscription?: Pick<SubscriptionRow, 'offerId'> | null,
+) {
+  const offer = await resolveOffer(subscription, input.offerCode)
+  const amountCents = input.amountCents !== undefined ? input.amountCents : offer?.priceCents ?? 0
   const feesCents = input.paymentMode === 'monthly' && amountCents > 0 ? Math.round(amountCents * 0.01) : 0
   const totalCents = amountCents + feesCents
-
-  const simulation = {
+  if (input.paymentMode === 'monthly' && !offer?.monthlyInstallmentCount) {
+    throw new AppError(409, 'Cette offre ne propose pas la mensualisation.')
+  }
+  return {
     amountCents,
     feesCents,
     totalCents,
     currency: 'EUR',
     paymentMode: input.paymentMode,
     provider: 'prototype-free',
-    offerCode,
-    warnings: amountCents === 0 ? ['Aucun encaissement immediat estime pour ce forfait.'] : [],
+    offerCode: offer?.code ?? input.offerCode ?? null,
+    ...createInstallmentSchedule(totalCents, input.paymentMode === 'monthly' ? offer?.monthlyInstallmentCount ?? 1 : 1),
+    warnings: amountCents === 0 ? ['Aucun encaissement immédiat pour ce forfait.'] : [],
   }
+}
+
+function paymentResponse(payment: PaymentRow) {
+  return { payment }
+}
+
+export async function simulatePayment(userId: string, input: PaymentSimulationInput) {
+  const subscription = input.subscriptionId ? await findOwnSubscription(userId, input.subscriptionId) : null
+  const simulation = await resolvePaymentPlan(input, subscription)
 
   if (!subscription) return { simulation, payment: null }
 
@@ -137,7 +127,7 @@ export async function simulatePayment(userId: string, input: PaymentSimulationIn
       subscriptionId: subscription.id,
       type: 'simulation',
       status: 'simulated',
-      amountCents: totalCents,
+      amountCents: simulation.totalCents,
       metadata: simulation,
       processedAt: new Date(),
       externalReference: reference('SIM'),
@@ -150,7 +140,7 @@ export async function simulatePayment(userId: string, input: PaymentSimulationIn
 
 export async function createDirectPayment(userId: string, input: DirectPaymentInput) {
   const subscription = await findOwnSubscription(userId, input.subscriptionId)
-  const amountCents = await resolveAmount(input, subscription)
+  const plan = await resolvePaymentPlan(input, subscription)
   const accepted = !input.simulateFailure
 
   const [created] = await requireDb()
@@ -160,19 +150,20 @@ export async function createDirectPayment(userId: string, input: DirectPaymentIn
       subscriptionId: subscription.id,
       type: 'direct',
       status: accepted ? 'accepted' : 'rejected',
-      amountCents,
+      amountCents: plan.totalCents,
       externalReference: reference(accepted ? 'PAY' : 'FAIL'),
       metadata: {
         method: 'card',
         cardTokenPreview: input.cardToken ? `${input.cardToken.slice(0, 2)}***` : null,
         prototype: true,
+        ...plan,
       },
       processedAt: new Date(),
     })
     .returning(paymentSelection)
 
   if (!created) throw new AppError(500, "Le paiement direct n'a pas pu etre cree.")
-  await markSubscriptionAfterPayment(subscription.id, accepted)
+  await reconcileSubscriptionWorkflow(subscription.id)
   await notifyPaymentStatus({
     userId: created.userId,
     subscriptionId: created.subscriptionId,
@@ -186,7 +177,7 @@ export async function createDirectPayment(userId: string, input: DirectPaymentIn
 
 export async function createMandatePayment(userId: string, input: MandatePaymentInput) {
   const subscription = await findOwnSubscription(userId, input.subscriptionId)
-  const amountCents = await resolveAmount(input, subscription)
+  const plan = await resolvePaymentPlan(input, subscription)
   const accepted = input.mandateAccepted
 
   const [created] = await requireDb()
@@ -196,7 +187,7 @@ export async function createMandatePayment(userId: string, input: MandatePayment
       subscriptionId: subscription.id,
       type: 'mandate',
       status: accepted ? 'accepted' : 'rejected',
-      amountCents,
+      amountCents: plan.totalCents,
       externalReference: reference(accepted ? 'MANDATE' : 'MANDATE-REFUSED'),
       metadata: {
         method: 'sepa_mandate',
@@ -204,13 +195,14 @@ export async function createMandatePayment(userId: string, input: MandatePayment
         ibanLast4: input.ibanLast4,
         mandateAccepted: input.mandateAccepted,
         prototype: true,
+        ...plan,
       },
       processedAt: new Date(),
     })
     .returning(paymentSelection)
 
   if (!created) throw new AppError(500, "Le mandat de paiement n'a pas pu etre cree.")
-  await markSubscriptionAfterPayment(subscription.id, accepted)
+  await reconcileSubscriptionWorkflow(subscription.id)
   await notifyPaymentStatus({
     userId: created.userId,
     subscriptionId: created.subscriptionId,
@@ -274,7 +266,7 @@ export async function regularizePayment(userId: string, role: string, id: string
     .returning(paymentSelection)
 
   if (!updated) throw new AppError(500, "Le paiement n'a pas pu etre regularise.")
-  await markSubscriptionAfterPayment(payment.subscriptionId, true)
+  await reconcileSubscriptionWorkflow(payment.subscriptionId)
   await notifyPaymentStatus({
     userId: updated.userId,
     subscriptionId: updated.subscriptionId,

@@ -5,6 +5,8 @@ export interface AdminOffer {
   description?: string | null
   target: string
   requiredDocuments: string[]
+  priceCents: number
+  monthlyInstallmentCount: number | null
   isActive?: boolean
   createdAt?: string
   updatedAt?: string
@@ -16,5 +18,7 @@ export interface OfferPayload {
   description?: string
   target: string
   requiredDocuments: string[]
+  priceCents: number
+  monthlyInstallmentCount: number | null
   isActive: boolean
 }
