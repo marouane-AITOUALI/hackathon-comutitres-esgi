@@ -14,3 +14,11 @@ export const analyzeDocument = (id: string) =>
 
 export const getDocumentAnalysis = (id: string) =>
   apiRequest<{ documentId: string; analysis: AdminDocument['analysisResult']; analyzedAt: string | null }>(`/documents/${id}/analysis`)
+
+export const getDocumentSignedUrl = (id: string) =>
+  apiRequest<{ documentId: string; signedUrl: string | null }>(`/documents/${id}/signed-url`)
+
+export const deleteDocument = (id: string) =>
+  apiRequest<{ deleted: boolean; id: string }>(`/documents/${id}`, {
+    method: 'DELETE',
+  })

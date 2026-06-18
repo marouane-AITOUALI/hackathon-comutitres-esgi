@@ -28,19 +28,37 @@ export function SubscriptionsPage() {
   const [onlyDocuments, setOnlyDocuments] = useState(false)
   const [onlyPayments, setOnlyPayments] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null)
 
   useEffect(() => {
     let mounted = true
-    Promise.all([getAdminSubscriptions(), getSupportAlerts()])
-      .then(([subscriptionsResponse, alertsResponse]) => {
+    async function loadSubscriptions(silent = false) {
+      try {
+        if (silent) setRefreshing(true)
+        const [subscriptionsResponse, alertsResponse] = await Promise.all([getAdminSubscriptions(), getSupportAlerts()])
         if (!mounted) return
         setRows(subscriptionsResponse.subscriptions)
         setAlerts(alertsResponse.alerts)
-      })
-      .catch((caught) => setError(caught instanceof Error ? caught.message : 'Souscriptions indisponibles.'))
-      .finally(() => { if (mounted) setLoading(false) })
-    return () => { mounted = false }
+        setLastUpdatedAt(new Date())
+        setError('')
+      } catch (caught) {
+        if (!mounted) return
+        setError(caught instanceof Error ? caught.message : 'Souscriptions indisponibles.')
+      } finally {
+        if (mounted) {
+          setLoading(false)
+          setRefreshing(false)
+        }
+      }
+    }
+    loadSubscriptions()
+    const interval = window.setInterval(() => loadSubscriptions(true), 15_000)
+    return () => {
+      mounted = false
+      window.clearInterval(interval)
+    }
   }, [])
 
   const paymentIssueSubscriptionIds = useMemo(
@@ -63,6 +81,12 @@ export function SubscriptionsPage() {
     <Stack spacing={3}>
       {error && <Alert severity="error">{error}</Alert>}
       <Paper sx={{ borderRadius: 4, p: 3 }}>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 2 }}>
+          <span />
+          <span style={{ color: '#53606E', fontSize: 13 }}>
+            {refreshing ? 'Actualisation...' : lastUpdatedAt ? `Mis a jour a ${lastUpdatedAt.toLocaleTimeString('fr-FR')}` : 'Vue temps reel active'}
+          </span>
+        </Stack>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
           <TextField label="Recherche nom/email" onChange={(event) => setSearch(event.target.value)} value={search} />
           <TextField label="Statut" onChange={(event) => setStatus(event.target.value as SubscriptionStatus | '')} select value={status} sx={{ minWidth: 220 }}>

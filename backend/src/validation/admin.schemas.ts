@@ -10,6 +10,7 @@ export const adminIdParamsSchema = z.object({
 
 export const adminListSubscriptionsQuerySchema = z.object({
   status: z.enum(subscriptionStatuses).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
 }).default({})
 
 export const adminUpdateSubscriptionStatusSchema = z.object({

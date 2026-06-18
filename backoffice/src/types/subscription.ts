@@ -18,11 +18,14 @@ export interface AdminProfile {
   id: string
   userId?: string
   type: 'bearer' | 'payer'
+  status?: string
   firstName: string
   lastName: string
   email?: string | null
   birthDate?: string | null
   relationshipToBearer?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface AdminSubscription {
@@ -39,7 +42,16 @@ export interface AdminSubscription {
 
 export interface AdminSubscriptionItem {
   subscription: AdminSubscription
-  user: { firstName: string; lastName: string; email: string } | null
+  user: {
+    id?: string
+    firstName: string
+    lastName: string
+    email: string
+    role?: string
+    rgpdConsent?: boolean
+    createdAt?: string
+    updatedAt?: string
+  } | null
   offer: AdminOffer | null
   bearerProfile: AdminProfile | null
   payerProfile: AdminProfile | null

@@ -53,6 +53,10 @@ function requireStorageClient() {
   return storageClient
 }
 
+function hasStorageConfiguration() {
+  return Boolean(env.supabaseUrl && env.supabaseServiceRoleKey)
+}
+
 function safeOriginalFilename(value: string) {
   const basename = value.split(/[\\/]/).filter(Boolean).at(-1) ?? 'fichier'
   return basename.normalize('NFKC').replace(/[^\w.\- ]/g, '_').slice(0, 180) || 'fichier'
@@ -123,6 +127,7 @@ export async function uploadSubscriptionDocumentFile(
 
 export async function createPrivateSignedUrl(bucket: string | null | undefined, path: string | null | undefined) {
   if (!bucket || !path) return null
+  if (!hasStorageConfiguration()) return null
   const { data, error } = await requireStorageClient().storage.from(bucket).createSignedUrl(path, signedUrlTtlSeconds)
   if (error) {
     const message = error.message.toLowerCase()
@@ -134,6 +139,7 @@ export async function createPrivateSignedUrl(bucket: string | null | undefined, 
 
 export async function removePrivateObject(bucket: string | null | undefined, path: string | null | undefined) {
   if (!bucket || !path) return
+  if (!hasStorageConfiguration()) return
   const { error } = await requireStorageClient().storage.from(bucket).remove([path])
   if (error) throw new AppError(502, "L'ancien fichier n'a pas pu etre supprime.", error.message)
 }

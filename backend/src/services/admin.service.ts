@@ -7,6 +7,11 @@ import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDoc
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
 type DocumentRow = typeof documents.$inferSelect
+type PaymentRow = typeof payments.$inferSelect
+
+function uniqueValues(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))]
+}
 
 const publicUserSelection = {
   id: users.id,
@@ -120,6 +125,65 @@ async function enrichSubscription(subscription: SubscriptionRow) {
     documents: await withSignedDocuments(subscriptionDocuments),
     payments: subscriptionPayments,
   }
+}
+
+async function enrichSubscriptionList(subscriptionRows: SubscriptionRow[]) {
+  if (subscriptionRows.length === 0) return []
+
+  const database = requireDb()
+  const subscriptionIds = subscriptionRows.map((subscription) => subscription.id)
+  const userIds = uniqueValues(subscriptionRows.map((subscription) => subscription.userId))
+  const offerIds = uniqueValues(subscriptionRows.map((subscription) => subscription.offerId))
+  const profileIds = uniqueValues(subscriptionRows.flatMap((subscription) => [subscription.bearerProfileId, subscription.payerProfileId]))
+  const onboardingSessionIds = uniqueValues(subscriptionRows.map((subscription) => subscription.onboardingSessionId))
+
+  const [userRows, offerRows, profileRows, onboardingRows, documentRows, paymentRows] = await Promise.all([
+    userIds.length ? database.select(publicUserSelection).from(users).where(inArray(users.id, userIds)) : [],
+    offerIds.length ? database.select(offerSelection).from(offers).where(inArray(offers.id, offerIds)) : [],
+    profileIds.length ? database.select().from(profiles).where(inArray(profiles.id, profileIds)) : [],
+    onboardingSessionIds.length ? database.select().from(onboardingSessions).where(inArray(onboardingSessions.id, onboardingSessionIds)) : [],
+    database.select(documentSelection).from(documents).where(inArray(documents.subscriptionId, subscriptionIds)),
+    database.select(paymentSelection).from(payments).where(inArray(payments.subscriptionId, subscriptionIds)),
+  ])
+
+  const usersById = new Map(userRows.map((user) => [user.id, user]))
+  const offersById = new Map(offerRows.map((offer) => [offer.id, offer]))
+  const profilesById = new Map(profileRows.map((profile) => [profile.id, profile]))
+  const onboardingById = new Map(onboardingRows.map((session) => [session.id, session]))
+  const documentsBySubscriptionId = new Map<string, DocumentRow[]>()
+  const paymentsBySubscriptionId = new Map<string, PaymentRow[]>()
+
+  for (const document of documentRows) {
+    const rows = documentsBySubscriptionId.get(document.subscriptionId) ?? []
+    rows.push(document)
+    documentsBySubscriptionId.set(document.subscriptionId, rows)
+  }
+
+  for (const payment of paymentRows) {
+    const rows = paymentsBySubscriptionId.get(payment.subscriptionId) ?? []
+    rows.push(payment)
+    paymentsBySubscriptionId.set(payment.subscriptionId, rows)
+  }
+
+  return subscriptionRows.map((subscription) => {
+    const onboardingSession = subscription.onboardingSessionId ? onboardingById.get(subscription.onboardingSessionId) : null
+
+    return {
+      subscription,
+      user: usersById.get(subscription.userId) ?? null,
+      offer: subscription.offerId ? offersById.get(subscription.offerId) ?? null : null,
+      bearerProfile: subscription.bearerProfileId ? profilesById.get(subscription.bearerProfileId) ?? null : null,
+      payerProfile: subscription.payerProfileId ? profilesById.get(subscription.payerProfileId) ?? null : null,
+      onboardingSession: onboardingSession ? {
+        id: onboardingSession.id,
+        currentStep: onboardingSession.currentStep,
+        subscriptionFor: onboardingSession.subscriptionFor,
+        isBearerPayer: onboardingSession.isBearerPayer,
+      } : null,
+      documents: documentsBySubscriptionId.get(subscription.id) ?? [],
+      payments: paymentsBySubscriptionId.get(subscription.id) ?? [],
+    }
+  })
 }
 
 async function findSubscription(id: string) {
@@ -238,7 +302,10 @@ export async function getAdminStats() {
   const documentRows = await database.select({ status: documents.status }).from(documents)
   const offerRows = await database.select({ isActive: offers.isActive }).from(offers)
   const paymentRows = await database.select({ status: payments.status }).from(payments)
-  const supportAlerts = await loadSupportAlerts()
+  const supportAlertsCount =
+    subscriptionRows.filter((subscription) => ['pending_documents', 'pending_payment', 'rejected', 'suspended'].includes(subscription.status)).length
+    + documentRows.filter((document) => ['pending', 'needs_manual_review'].includes(document.status)).length
+    + paymentRows.filter((payment) => ['rejected', 'cancelled'].includes(payment.status)).length
 
   return {
     users: {
@@ -261,14 +328,15 @@ export async function getAdminStats() {
       total: paymentRows.length,
       ...countStatuses(paymentRows, ['simulated', 'pending', 'accepted', 'rejected', 'cancelled', 'regularized'] as const),
     },
-    supportAlerts: supportAlerts.length,
+    supportAlerts: supportAlertsCount,
   }
 }
 
 export async function listAdminSubscriptions(query: AdminListSubscriptionsQuery) {
   const where = query.status ? eq(subscriptions.status, query.status) : undefined
-  const rows = await requireDb().select(subscriptionSelection).from(subscriptions).where(where).orderBy(desc(subscriptions.updatedAt))
-  return Promise.all(rows.map(enrichSubscription))
+  const request = requireDb().select(subscriptionSelection).from(subscriptions).where(where).orderBy(desc(subscriptions.updatedAt))
+  const rows = query.limit ? await request.limit(query.limit) : await request
+  return enrichSubscriptionList(rows)
 }
 
 export async function getAdminSubscription(id: string) {
@@ -288,16 +356,26 @@ export async function updateAdminSubscriptionStatus(id: string, input: AdminUpda
 }
 
 export async function listPendingDocuments() {
-  const rows = await requireDb()
+  const database = requireDb()
+  const rows = await database
     .select(documentSelection)
     .from(documents)
     .where(inArray(documents.status, ['pending', 'analyzing', 'needs_manual_review']))
     .orderBy(asc(documents.createdAt))
+    .limit(50)
 
-  return Promise.all(rows.map(async (document) => ({
-    document: await withSignedDocument(document),
-    subscription: await enrichSubscription(await findSubscription(document.subscriptionId)),
-  })))
+  const subscriptionIds = uniqueValues(rows.map((document) => document.subscriptionId))
+  const subscriptionRows = subscriptionIds.length
+    ? await database.select(subscriptionSelection).from(subscriptions).where(inArray(subscriptions.id, subscriptionIds))
+    : []
+  const subscriptionsById = new Map((await enrichSubscriptionList(subscriptionRows)).map((item) => [item.subscription.id, item]))
+
+  return rows
+    .map((document) => {
+      const subscription = subscriptionsById.get(document.subscriptionId)
+      return subscription ? { document, subscription } : null
+    })
+    .filter((item): item is NonNullable<typeof item> => item !== null)
 }
 
 export async function reviewAdminDocument(id: string, input: AdminReviewDocumentInput) {

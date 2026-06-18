@@ -11,7 +11,9 @@ import {
   CreditCard,
   FileText,
   FolderOpen,
+  History,
   Landmark,
+  Pencil,
   RotateCcw,
   Send,
   ShieldCheck,
@@ -20,11 +22,11 @@ import {
 import { Link, useParams } from 'react-router-dom'
 import { analyzeDocument, createDocument, resubmitDocument } from '../services/documents.service'
 import { createDirectPayment, createMandatePayment, simulatePayment } from '../services/payments.service'
-import { getSubscriptionById } from '../services/subscriptions.service'
+import { acceptSubscriptionRenewal, getSubscriptionById, getSubscriptionRenewal, refuseSubscriptionRenewal, suspendSubscriptionRenewal } from '../services/subscriptions.service'
 import { CardPaymentFields } from '../components/payment/CardPaymentFields'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
 import { colors } from '../theme/colors'
-import type { DocumentSummary, DocumentType, SubscriptionStatus, SubscriptionSummary } from '../types'
+import type { DocumentSummary, DocumentType, RenewalSummary, SubscriptionStatus, SubscriptionSummary } from '../types'
 
 const statusLabel: Record<SubscriptionStatus, string> = {
   draft: 'Brouillon',
@@ -113,6 +115,10 @@ function formatEuros(cents: number, currency = 'EUR') {
   return new Intl.NumberFormat('fr-FR', { style: 'currency', currency }).format(cents / 100)
 }
 
+function formatDateTime(value: string) {
+  return new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
+}
+
 function uniqueDocumentTypes(types: DocumentType[]) {
   return types.filter((type, index, list) => list.indexOf(type) === index)
 }
@@ -130,6 +136,9 @@ export function SubscriptionDetailPage() {
   const [success, setSuccess] = useState('')
   const [paymentMode, setPaymentMode] = useState<'one_time' | 'monthly'>('one_time')
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'mandate'>('card')
+  const [renewal, setRenewal] = useState<RenewalSummary | null>(null)
+  const [renewalReason, setRenewalReason] = useState('')
+  const [renewing, setRenewing] = useState(false)
   const [cardNumber, setCardNumber] = useState('')
   const [cardExpiry, setCardExpiry] = useState('')
   const [cardCvv, setCardCvv] = useState('')
@@ -150,7 +159,12 @@ export function SubscriptionDetailPage() {
 
   async function refresh() {
     if (!id) return
-    setItem(await getSubscriptionById(id))
+    const [subscription, renewalResponse] = await Promise.all([
+      getSubscriptionById(id),
+      getSubscriptionRenewal(id).catch(() => null),
+    ])
+    setItem(subscription)
+    setRenewal(renewalResponse)
   }
 
   useEffect(() => {
@@ -160,8 +174,14 @@ export function SubscriptionDetailPage() {
 
     async function loadInitial() {
       try {
-        const subscription = await getSubscriptionById(subscriptionId)
-        if (mounted) setItem(subscription)
+        const [subscription, renewalResponse] = await Promise.all([
+          getSubscriptionById(subscriptionId),
+          getSubscriptionRenewal(subscriptionId).catch(() => null),
+        ])
+        if (mounted) {
+          setItem(subscription)
+          setRenewal(renewalResponse)
+        }
       } catch (caught) {
         if (mounted) setError(caught instanceof Error ? caught.message : 'Dossier indisponible.')
       } finally {
@@ -191,6 +211,47 @@ export function SubscriptionDetailPage() {
   const stepperItems = [...documentSteps, 'payment' as const, 'final' as const]
   const selectedDocumentFile = activeDocumentType ? preparedFiles[activeDocumentType] ?? null : null
   const hasCompletedPayment = (item?.payments ?? []).some((payment) => ['accepted', 'regularized'].includes(payment.status))
+  const historyItems = useMemo(() => {
+    if (!item) return []
+
+    return [
+      {
+        id: `subscription-created-${item.subscription.id}`,
+        date: item.subscription.createdAt,
+        title: 'Souscription creee',
+        detail: item.offer?.name ?? 'Offre non associee',
+        status: item.subscription.status,
+      },
+      ...item.documents.map((document) => ({
+        id: `document-${document.id}`,
+        date: document.updatedAt,
+        title: `Document ${documentStatusMeta(document).label.toLowerCase()}`,
+        detail: `${documentTypeLabels[document.type]} - ${displayDocumentName(document)}`,
+        status: document.status,
+      })),
+      ...item.payments.map((payment) => ({
+        id: `payment-${payment.id}`,
+        date: payment.updatedAt,
+        title: `Paiement ${payment.status}`,
+        detail: `${payment.type} - ${formatEuros(payment.amountCents, payment.currency)}`,
+        status: payment.status,
+      })),
+      ...(renewal?.events ?? []).map((event) => ({
+        id: `renewal-${event.id}`,
+        date: event.createdAt,
+        title: `Renouvellement ${event.action}`,
+        detail: event.reason ?? 'Decision de renouvellement enregistree',
+        status: event.action === 'accepted' ? 'accepted' : event.action === 'suspended' ? 'suspended' : 'cancelled',
+      })),
+      {
+        id: `subscription-updated-${item.subscription.id}`,
+        date: item.subscription.updatedAt,
+        title: 'Donnees synchronisees',
+        detail: `Statut actuel : ${statusLabel[item.subscription.status]}`,
+        status: item.subscription.status,
+      },
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+  }, [item, renewal])
 
   useEffect(() => {
     if (item?.bearerProfile) {
@@ -294,6 +355,25 @@ export function SubscriptionDetailPage() {
     }
   }
 
+  async function decideRenewal(action: 'accept' | 'refuse' | 'suspend') {
+    if (!id) return
+    setRenewing(true)
+    setError('')
+    setSuccess('')
+    try {
+      if (action === 'accept') await acceptSubscriptionRenewal(id, renewalReason || 'Renouvellement demande depuis l espace client.')
+      if (action === 'refuse') await refuseSubscriptionRenewal(id, renewalReason || 'Renouvellement refuse depuis l espace client.')
+      if (action === 'suspend') await suspendSubscriptionRenewal(id, renewalReason || 'Suspension demandee depuis l espace client.')
+      await refresh()
+      setRenewalReason('')
+      setSuccess(action === 'accept' ? 'Renouvellement lance.' : action === 'refuse' ? 'Renouvellement refuse.' : 'Abonnement suspendu.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Action de renouvellement impossible.')
+    } finally {
+      setRenewing(false)
+    }
+  }
+
   async function submitFullDossier() {
     if (!id) return
     setSaving(true)
@@ -336,6 +416,72 @@ export function SubscriptionDetailPage() {
             <Typography color="text.secondary">Porteur : {profileName(item.bearerProfile)} - Payeur : {profileName(item.payerProfile)}</Typography>
           </Box>
           <Chip color={statusTone[item.subscription.status]} label={statusLabel[item.subscription.status]} />
+        </Stack>
+      </Paper>
+
+      <Paper sx={{ p: 3, borderRadius: 3 }}>
+        <Stack direction={{ xs: 'column', lg: 'row' }} spacing={3}>
+          <Box sx={{ flex: 1 }}>
+            <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', mb: 1 }}>
+              <History size={20} color={colors.blueInteraction} />
+              <Typography variant="h6" sx={{ fontWeight: 850 }}>Historique & abonnement</Typography>
+            </Stack>
+            <Typography color="text.secondary" sx={{ mb: 2 }}>
+              Les statuts, documents, paiements et decisions de renouvellement sont synchronises avec votre dossier.
+            </Typography>
+            <Stack spacing={1.25}>
+              {historyItems.slice(0, 6).map((entry) => (
+                <Paper key={entry.id} variant="outlined" sx={{ borderRadius: 2, p: 1.75 }}>
+                  <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between' }}>
+                    <Box>
+                      <Typography sx={{ fontWeight: 800 }}>{entry.title}</Typography>
+                      <Typography color="text.secondary" variant="body2">{entry.detail}</Typography>
+                    </Box>
+                    <Stack spacing={0.75} sx={{ alignItems: { sm: 'flex-end' }, minWidth: 150 }}>
+                      <Chip color={statusTone[entry.status] ?? 'default'} label={statusLabel[entry.status as SubscriptionStatus] ?? entry.status} size="small" />
+                      <Typography color="text.secondary" variant="caption">{formatDateTime(entry.date)}</Typography>
+                    </Stack>
+                  </Stack>
+                </Paper>
+              ))}
+            </Stack>
+          </Box>
+
+          <Box sx={{ width: { xs: '100%', lg: 360 }, flexShrink: 0 }}>
+            <Paper variant="outlined" sx={{ borderRadius: 2, p: 2.5 }}>
+              <Typography sx={{ fontWeight: 850, mb: 1 }}>Actions possibles</Typography>
+              {renewal ? (
+                <Stack spacing={1.5}>
+                  <Alert severity={renewal.renewal.canRenew ? 'info' : 'warning'}>
+                    Prochaine date estimee : {formatDateTime(renewal.renewal.nextRenewalDate)}
+                  </Alert>
+                  {renewal.renewal.warnings.map((warning) => <Alert key={warning} severity="warning">{warning}</Alert>)}
+                  <TextField
+                    label="Motif ou precision"
+                    onChange={(event) => setRenewalReason(event.target.value)}
+                    size="small"
+                    value={renewalReason}
+                  />
+                  <Stack direction={{ xs: 'column', sm: 'row', lg: 'column' }} spacing={1}>
+                    <Button disabled={renewing || !renewal.renewal.canRenew} onClick={() => void decideRenewal('accept')} startIcon={<RotateCcw size={17} />} variant="contained">
+                      Renouveler
+                    </Button>
+                    <Button color="warning" disabled={renewing || !renewal.renewal.canRenew} onClick={() => void decideRenewal('suspend')} variant="outlined">
+                      Suspendre
+                    </Button>
+                    <Button color="error" disabled={renewing || !renewal.renewal.canRenew} onClick={() => void decideRenewal('refuse')} variant="outlined">
+                      Refuser
+                    </Button>
+                  </Stack>
+                </Stack>
+              ) : (
+                <Alert severity="info">Les donnees de renouvellement ne sont pas disponibles pour ce dossier.</Alert>
+              )}
+              <Button component={Link} startIcon={<Pencil size={17} />} sx={{ mt: 1.5 }} to="/onboarding" variant="text">
+                Modifier les informations
+              </Button>
+            </Paper>
+          </Box>
         </Stack>
       </Paper>
 
