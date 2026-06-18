@@ -36,6 +36,41 @@
       "when": 1781619315329,
       "tag": "0004_payments-renewal-lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781702830072,
+      "tag": "0005_user-profile-preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781703613015,
+      "tag": "0005_supabase-storage-files",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1781704010487,
+      "tag": "0006_user-address-fields",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1781704300000,
+      "tag": "0006_apply-storage-files-idempotent",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1781709100000,
+      "tag": "0009_documents-storage-required",
+      "breakpoints": true
     }
   ]
 }

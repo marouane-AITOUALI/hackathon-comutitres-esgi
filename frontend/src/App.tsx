@@ -4,11 +4,14 @@ import { ClientLayout } from './components/ClientLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { DashboardPage } from './pages/DashboardPage'
 import { DocumentsPage } from './pages/DocumentsPage'
+import { FooterInfoPage } from './pages/FooterInfoPage'
 import { HomePage } from './pages/HomePage'
 import { LoginPage } from './pages/LoginPage'
+import { MobileAppPage } from './pages/MobileAppPage'
 import { OnboardingChatPage } from './pages/OnboardingChatPage'
 import { OffersPage } from './pages/OffersPage'
 import { PaiementsPage } from './pages/PaiementsPage'
+import { PaymentFormPage } from './pages/PaymentFormPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { RegisterPage } from './pages/RegisterPage'
 import { SubscriptionDetailPage } from './pages/SubscriptionDetailPage'
@@ -20,6 +23,7 @@ function App() {
     <Routes>
       <Route path="auth/login" element={<LoginPage />} />
       <Route path="auth/register" element={<RegisterPage />} />
+      <Route path="mobile-app" element={<MobileAppPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<ClientLayout />}>
           <Route path="dashboard" element={<DashboardPage />} />
@@ -27,6 +31,7 @@ function App() {
           <Route path="subscriptions/:id" element={<SubscriptionDetailPage />} />
           <Route path="offers" element={<OffersPage />} />
           <Route path="paiements" element={<PaiementsPage />} />
+          <Route path="paiements/nouveau" element={<PaymentFormPage />} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="profil" element={<ProfilePage />} />
           <Route path="support" element={<SupportPage />} />
@@ -36,6 +41,7 @@ function App() {
       </Route>
       <Route element={<AppLayout />}>
         <Route index element={<HomePage />} />
+        <Route path="infos/:page" element={<FooterInfoPage />} />
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />
     </Routes>

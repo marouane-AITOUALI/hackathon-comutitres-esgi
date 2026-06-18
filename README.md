@@ -83,8 +83,10 @@ npm run db:seed:demo
 
 Le modele conceptuel est documente dans `docs/database-model.md`.
 
-`db:migrate` et `db:seed` ecrivent dans la base configuree. Ne lancer ces
-commandes sur Supabase qu'apres validation de la migration locale.
+Le backend lance aussi les migrations automatiquement au demarrage via
+`db:migrate:auto` avant `dev` et `start`. `db:migrate` et `db:seed` restent
+disponibles pour une execution manuelle et ecrivent dans la base configuree.
+Ne lancer ces commandes sur Supabase qu'apres validation de la migration locale.
 
 Les seeds de demo sont idempotents :
 

@@ -1,4 +1,6 @@
 export type UserRole = 'user' | 'admin'
+export type ContactPreference = 'email' | 'phone' | 'sms'
+export type AccessibilityPreference = 'none' | 'screen_reader' | 'large_text' | 'reduced_motion' | 'plain_language' | 'human_support'
 export type ProfileStatus = 'junior' | 'school' | 'student' | 'active' | 'senior' | 'solidarity' | 'other'
 export type SubscriptionStatus = 'draft' | 'pending_documents' | 'pending_payment' | 'pending_validation' | 'accepted' | 'rejected' | 'cancelled' | 'suspended'
 export type DocumentStatus = 'pending' | 'analyzing' | 'validated' | 'rejected' | 'needs_manual_review'
@@ -18,6 +20,21 @@ export interface User {
   lastName: string
   email: string
   role: UserRole
+  phone: string | null
+  addressLine1: string | null
+  addressLine2: string | null
+  postalCode: string | null
+  city: string | null
+  country: string
+  preferredContact: ContactPreference
+  accessibilityPreference: AccessibilityPreference
+  marketingOptIn: boolean
+  marketingOptInAt: string | null
+  rgpdConsent: boolean
+  rgpdConsentedAt: string | null
+  profileUpdatedAt: string | null
+  updatedAt: string
+  avatarUrl?: string | null
 }
 
 export type AuthUser = User
@@ -142,8 +159,15 @@ export interface DocumentAnalysisResult {
 export interface DocumentSummary {
   id: string
   subscriptionId: string
+  ownerId?: string | null
   type: DocumentType
   fileUrl: string
+  storageBucket?: string | null
+  storagePath?: string | null
+  originalFilename?: string | null
+  mimeType?: string | null
+  sizeBytes?: number | null
+  signedUrl?: string | null
   status: DocumentStatus
   analysisResult?: DocumentAnalysisResult | Record<string, unknown>
   analyzedAt?: string | null

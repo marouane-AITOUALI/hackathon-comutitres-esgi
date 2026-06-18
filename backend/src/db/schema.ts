@@ -2,6 +2,8 @@ import { relations } from 'drizzle-orm'
 import { boolean, date, index, integer, jsonb, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 export const userRole = pgEnum('user_role', ['user', 'admin'])
+export const contactPreference = pgEnum('contact_preference', ['email', 'phone', 'sms'])
+export const accessibilityPreference = pgEnum('accessibility_preference', ['none', 'screen_reader', 'large_text', 'reduced_motion', 'plain_language', 'human_support'])
 export const profileType = pgEnum('profile_type', ['bearer', 'payer'])
 export const profileStatus = pgEnum('profile_status', ['junior', 'school', 'student', 'active', 'senior', 'solidarity', 'other'])
 export const relationshipToBearer = pgEnum('relationship_to_bearer', ['parent', 'guardian', 'association', 'employer', 'other'])
@@ -37,10 +39,36 @@ export const users = pgTable('users', {
   email: text('email').notNull(),
   passwordHash: text('password_hash').notNull(),
   role: userRole('role').default('user').notNull(),
+  phone: text('phone'),
+  addressLine1: text('address_line1'),
+  addressLine2: text('address_line2'),
+  postalCode: text('postal_code'),
+  city: text('city'),
+  country: text('country').default('FR').notNull(),
+  preferredContact: contactPreference('preferred_contact').default('email').notNull(),
+  accessibilityPreference: accessibilityPreference('accessibility_preference').default('none').notNull(),
+  marketingOptIn: boolean('marketing_opt_in').default(false).notNull(),
+  marketingOptInAt: timestamp('marketing_opt_in_at', { withTimezone: true }),
   rgpdConsent: boolean('rgpd_consent').notNull(),
   rgpdConsentedAt: timestamp('rgpd_consented_at', { withTimezone: true }),
+  profileUpdatedAt: timestamp('profile_updated_at', { withTimezone: true }),
   ...timestamps,
 }, (table) => [uniqueIndex('users_email_idx').on(table.email)])
+
+export const userAvatars = pgTable('user_avatars', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  storageBucket: text('storage_bucket').default('user-avatars').notNull(),
+  storagePath: text('storage_path').notNull(),
+  originalFilename: text('original_filename').notNull(),
+  mimeType: text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
+  status: text('status').default('active').notNull(),
+  ...timestamps,
+}, (table) => [
+  uniqueIndex('user_avatars_owner_id_idx').on(table.ownerId),
+  index('user_avatars_storage_path_idx').on(table.storagePath),
+])
 
 export const profiles = pgTable('profiles', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -103,14 +131,24 @@ export const subscriptions = pgTable('subscriptions', {
 export const documents = pgTable('documents', {
   id: uuid('id').defaultRandom().primaryKey(),
   subscriptionId: uuid('subscription_id').notNull().references(() => subscriptions.id, { onDelete: 'cascade' }),
+  ownerId: uuid('owner_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   type: documentType('type').default('other').notNull(),
   fileUrl: text('file_url').notNull(),
+  storageBucket: text('storage_bucket').default('subscription-documents').notNull(),
+  storagePath: text('storage_path').notNull(),
+  originalFilename: text('original_filename').notNull(),
+  mimeType: text('mime_type').notNull(),
+  sizeBytes: integer('size_bytes').notNull(),
   status: documentStatus('status').default('pending').notNull(),
   analysisResult: jsonb('analysis_result').$type<DocumentAnalysisResult | Record<string, unknown>>().default({}).notNull(),
   analyzedAt: timestamp('analyzed_at', { withTimezone: true }),
   rejectionReason: text('rejection_reason'),
   ...timestamps,
-}, (table) => [index('documents_subscription_id_idx').on(table.subscriptionId)])
+}, (table) => [
+  index('documents_subscription_id_idx').on(table.subscriptionId),
+  index('documents_owner_id_idx').on(table.ownerId),
+  index('documents_storage_path_idx').on(table.storagePath),
+])
 
 export const payments = pgTable('payments', {
   id: uuid('id').defaultRandom().primaryKey(),
@@ -146,10 +184,21 @@ export const renewalEvents = pgTable('renewal_events', {
   index('renewal_events_action_idx').on(table.action),
 ])
 
-export const usersRelations = relations(users, ({ many }) => ({ profiles: many(profiles), onboardingSessions: many(onboardingSessions), subscriptions: many(subscriptions), payments: many(payments), renewalEvents: many(renewalEvents) }))
+export const usersRelations = relations(users, ({ many, one }) => ({
+  profiles: many(profiles),
+  onboardingSessions: many(onboardingSessions),
+  subscriptions: many(subscriptions),
+  payments: many(payments),
+  renewalEvents: many(renewalEvents),
+  avatar: one(userAvatars, { fields: [users.id], references: [userAvatars.ownerId] }),
+}))
+export const userAvatarsRelations = relations(userAvatars, ({ one }) => ({ owner: one(users, { fields: [userAvatars.ownerId], references: [users.id] }) }))
 export const profilesRelations = relations(profiles, ({ one }) => ({ user: one(users, { fields: [profiles.userId], references: [users.id] }) }))
 export const offersRelations = relations(offers, ({ many }) => ({ subscriptions: many(subscriptions) }))
-export const documentsRelations = relations(documents, ({ one }) => ({ subscription: one(subscriptions, { fields: [documents.subscriptionId], references: [subscriptions.id] }) }))
+export const documentsRelations = relations(documents, ({ one }) => ({
+  owner: one(users, { fields: [documents.ownerId], references: [users.id] }),
+  subscription: one(subscriptions, { fields: [documents.subscriptionId], references: [subscriptions.id] }),
+}))
 export const paymentsRelations = relations(payments, ({ one }) => ({
   user: one(users, { fields: [payments.userId], references: [users.id] }),
   subscription: one(subscriptions, { fields: [payments.subscriptionId], references: [subscriptions.id] }),

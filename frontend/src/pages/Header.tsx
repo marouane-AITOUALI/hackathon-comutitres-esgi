@@ -1,5 +1,6 @@
 import {
   AppBar,
+  Avatar,
   Box,
   Collapse,
   Divider,
@@ -18,6 +19,7 @@ import { colors } from '../theme/colors'
 
 interface HeaderProps {
   userName?: string
+  avatarUrl?: string | null
   greeting?: string
   onMenuToggle?: () => void
   onLogout?: () => void
@@ -26,6 +28,7 @@ interface HeaderProps {
 
 export function Header({
   userName = 'Alice Dupont',
+  avatarUrl,
   greeting = 'Bonjour Alice',
   onMenuToggle,
   onLogout,
@@ -194,9 +197,17 @@ export function Header({
                 }}
                 onClick={handleProfileToggle}
               >
-                <Typography sx={{ fontSize: 13, fontWeight: 700, color: colors.anthracite, lineHeight: 1 }}>
-                  {userInitials}
-                </Typography>
+                {avatarUrl ? (
+                  <Avatar
+                    alt={userName}
+                    src={avatarUrl}
+                    sx={{ height: 36, width: 36 }}
+                  />
+                ) : (
+                  <Typography sx={{ fontSize: 13, fontWeight: 700, color: colors.anthracite, lineHeight: 1 }}>
+                    {userInitials}
+                  </Typography>
+                )}
               </Box>
 
               <Box

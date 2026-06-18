@@ -4,6 +4,7 @@ const documentTypes = ['identity', 'proof_of_address', 'eligibility', 'school_ce
 const reviewStatuses = ['pending', 'validated', 'rejected', 'needs_manual_review'] as const
 
 const fileUrl = z.string().trim().min(3).max(2048)
+const documentTypeSchema = z.enum(documentTypes)
 
 export const subscriptionDocumentsParamsSchema = z.object({
   subscriptionId: z.uuid(),
@@ -14,15 +15,16 @@ export const documentIdParamsSchema = z.object({
 })
 
 export const createDocumentSchema = z.object({
-  type: z.enum(documentTypes),
+  type: documentTypeSchema,
+})
+
+export const analyzeDocumentDemoSchema = z.object({
+  type: documentTypeSchema,
   fileUrl,
 })
 
-export const analyzeDocumentDemoSchema = createDocumentSchema
-
 export const resubmitDocumentSchema = z.object({
-  type: z.enum(documentTypes).optional(),
-  fileUrl,
+  type: documentTypeSchema.optional(),
 })
 
 export const updateDocumentStatusSchema = z.object({

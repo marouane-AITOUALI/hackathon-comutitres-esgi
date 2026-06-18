@@ -1,6 +1,6 @@
 import type { RequestHandler } from 'express'
 import { AppError } from '../utils/app-error.js'
-import { createDocument, deleteDocument, analyzeDocument, fraudCheckDocument, getDocument, getDocumentAnalysis, listDocumentsForSubscription, manualReviewDocument, resubmitDocument, updateDocumentStatus } from '../services/documents.service.js'
+import { createDocument, deleteDocument, analyzeDocument, fraudCheckDocument, getDocument, getDocumentAnalysis, getDocumentSignedUrl, listDocumentsForSubscription, manualReviewDocument, resubmitDocument, updateDocumentStatus } from '../services/documents.service.js'
 import { analyzeDemoDocument } from '../services/document-analysis.service.js'
 import { analyzeDocumentDemoSchema, createDocumentSchema, documentIdParamsSchema, manualReviewSchema, resubmitDocumentSchema, subscriptionDocumentsParamsSchema, updateDocumentStatusSchema } from '../validation/document.schemas.js'
 
@@ -13,7 +13,7 @@ export const createForSubscription: RequestHandler = async (req, res) => {
   const { subscriptionId } = subscriptionDocumentsParamsSchema.parse(req.params)
   const body = createDocumentSchema.parse(req.body)
   const session = authSession(req)
-  res.status(201).json(await createDocument(session.sub, session.role, subscriptionId, body))
+  res.status(201).json(await createDocument(session.sub, session.role, subscriptionId, body, req.file))
 }
 
 export const analyzeDemo: RequestHandler = async (req, res) => {
@@ -33,6 +33,12 @@ export const getById: RequestHandler = async (req, res) => {
   res.json(await getDocument(session.sub, session.role, id))
 }
 
+export const signedUrl: RequestHandler = async (req, res) => {
+  const { id } = documentIdParamsSchema.parse(req.params)
+  const session = authSession(req)
+  res.json(await getDocumentSignedUrl(session.sub, session.role, id))
+}
+
 export const remove: RequestHandler = async (req, res) => {
   const { id } = documentIdParamsSchema.parse(req.params)
   const session = authSession(req)
@@ -50,7 +56,14 @@ export const resubmit: RequestHandler = async (req, res) => {
   const { id } = documentIdParamsSchema.parse(req.params)
   const body = resubmitDocumentSchema.parse(req.body)
   const session = authSession(req)
-  res.json(await resubmitDocument(session.sub, session.role, id, body))
+  res.json(await resubmitDocument(session.sub, session.role, id, body, req.file))
+}
+
+export const replaceFile: RequestHandler = async (req, res) => {
+  const { id } = documentIdParamsSchema.parse(req.params)
+  const body = resubmitDocumentSchema.parse(req.body)
+  const session = authSession(req)
+  res.json(await resubmitDocument(session.sub, session.role, id, body, req.file))
 }
 
 export const analyze: RequestHandler = async (req, res) => {

@@ -4,6 +4,8 @@ import { closeDb, requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions, users } from '../db/schema.js'
 import { seedAdmin } from './admin.seed.js'
 
+const storageDemoUserId = 'feb4f4b8-ea46-4e06-95d2-c8ede6059e3e'
+
 const demoOffers = [
   { code: 'NAVIGO_ANNUEL', name: 'Navigo Annuel', target: 'Adulte voyageant quotidiennement', requiredDocuments: ['identity', 'proof_of_address'] },
   { code: 'NAVIGO_SENIOR', name: 'Navigo Annuel Senior', target: 'Personne de 62 ans ou plus', requiredDocuments: ['identity', 'tax_notice'] },
@@ -192,6 +194,8 @@ async function ensureSubscription(userId: string, bearerProfileId: string, payer
 
 async function ensureDocument(subscriptionId: string, type: 'identity' | 'school_certificate', status: 'pending' | 'validated', fileUrl: string) {
   const database = requireDb()
+  const [subscription] = await database.select().from(subscriptions).where(eq(subscriptions.id, subscriptionId)).limit(1)
+  if (!subscription) throw new Error(`La souscription ${subscriptionId} est introuvable pour le document demo.`)
   const analysisResult = status === 'validated'
     ? {
         provider: 'rules-prototype-free',
@@ -210,7 +214,20 @@ async function ensureDocument(subscriptionId: string, type: 'identity' | 'school
   if (existing) {
     const [updated] = await database
       .update(documents)
-      .set({ status, fileUrl, analysisResult, analyzedAt: status === 'validated' ? new Date() : null, rejectionReason: null, updatedAt: new Date() })
+      .set({
+        ownerId: subscription.userId,
+        status,
+        fileUrl,
+        storageBucket: 'subscription-documents',
+        storagePath: fileUrl,
+        originalFilename: fileUrl.split('/').at(-1) ?? fileUrl,
+        mimeType: 'application/pdf',
+        sizeBytes: 0,
+        analysisResult,
+        analyzedAt: status === 'validated' ? new Date() : null,
+        rejectionReason: null,
+        updatedAt: new Date(),
+      })
       .where(eq(documents.id, existing.id))
       .returning()
     if (!updated) throw new Error(`Le document demo ${type} n'a pas pu etre mis a jour.`)
@@ -219,11 +236,143 @@ async function ensureDocument(subscriptionId: string, type: 'identity' | 'school
 
   const [created] = await database
     .insert(documents)
-    .values({ subscriptionId, type, status, fileUrl, analysisResult, analyzedAt: status === 'validated' ? new Date() : null })
+    .values({
+      subscriptionId,
+      ownerId: subscription.userId,
+      type,
+      status,
+      fileUrl,
+      storageBucket: 'subscription-documents',
+      storagePath: fileUrl,
+      originalFilename: fileUrl.split('/').at(-1) ?? fileUrl,
+      mimeType: 'application/pdf',
+      sizeBytes: 0,
+      analysisResult,
+      analyzedAt: status === 'validated' ? new Date() : null,
+    })
     .returning()
 
   if (!created) throw new Error(`Le document demo ${type} n'a pas pu etre cree.`)
   return created
+}
+
+async function ensureStorageDemoUser() {
+  const database = requireDb()
+  const passwordHash = await bcrypt.hash('Demo123!', 12)
+  const [existing] = await database.select().from(users).where(eq(users.id, storageDemoUserId)).limit(1)
+
+  if (existing) {
+    const [updated] = await database
+      .update(users)
+      .set({
+        firstName: 'Storage',
+        lastName: 'Demo',
+        email: 'storage.demo@example.com',
+        passwordHash,
+        role: 'user',
+        rgpdConsent: true,
+        rgpdConsentedAt: existing.rgpdConsentedAt ?? new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, storageDemoUserId))
+      .returning()
+
+    if (!updated) throw new Error("L'utilisateur storage demo n'a pas pu etre mis a jour.")
+    return updated
+  }
+
+  const [created] = await database
+    .insert(users)
+    .values({
+      id: storageDemoUserId,
+      firstName: 'Storage',
+      lastName: 'Demo',
+      email: 'storage.demo@example.com',
+      passwordHash,
+      role: 'user',
+      rgpdConsent: true,
+      rgpdConsentedAt: new Date(),
+    })
+    .returning()
+
+  if (!created) throw new Error("L'utilisateur storage demo n'a pas pu etre cree.")
+  return created
+}
+
+async function ensureStorageDemoSubscription(userId: string, offerId: string) {
+  const database = requireDb()
+  const [existing] = await database
+    .select()
+    .from(subscriptions)
+    .where(and(eq(subscriptions.userId, userId), eq(subscriptions.offerId, offerId)))
+    .limit(1)
+
+  if (existing) {
+    const [updated] = await database
+      .update(subscriptions)
+      .set({ status: 'pending_documents', updatedAt: new Date() })
+      .where(eq(subscriptions.id, existing.id))
+      .returning()
+
+    if (!updated) throw new Error('La souscription storage demo n a pas pu etre mise a jour.')
+    return updated
+  }
+
+  const [created] = await database
+    .insert(subscriptions)
+    .values({ userId, offerId, status: 'pending_documents' })
+    .returning()
+
+  if (!created) throw new Error('La souscription storage demo n a pas pu etre creee.')
+  return created
+}
+
+async function resetStorageDemoDocuments(userId: string, subscriptionId: string) {
+  const database = requireDb()
+  await database.delete(documents)
+
+  const basePath = `users/${userId}/subscriptions/${subscriptionId}`
+  const rows = [
+    {
+      subscriptionId,
+      ownerId: userId,
+      type: 'identity' as const,
+      status: 'pending' as const,
+      fileUrl: `${basePath}/identity/demo-identite.pdf`,
+      storageBucket: 'subscription-documents',
+      storagePath: `${basePath}/identity/demo-identite.pdf`,
+      originalFilename: 'demo-identite.pdf',
+      mimeType: 'application/pdf',
+      sizeBytes: 184320,
+      analysisResult: {},
+    },
+    {
+      subscriptionId,
+      ownerId: userId,
+      type: 'proof_of_address' as const,
+      status: 'needs_manual_review' as const,
+      fileUrl: `${basePath}/proof_of_address/demo-justificatif-domicile.png`,
+      storageBucket: 'subscription-documents',
+      storagePath: `${basePath}/proof_of_address/demo-justificatif-domicile.png`,
+      originalFilename: 'demo-justificatif-domicile.png',
+      mimeType: 'image/png',
+      sizeBytes: 356000,
+      analysisResult: {
+        provider: 'rules-prototype-free',
+        detectedDocumentType: 'proof_of_address',
+        confidence: 62,
+        suggestedStatus: 'needs_manual_review',
+        extractedFields: {},
+        reasons: ['Document de test pour la revue backoffice.'],
+        warnings: ['Objet Storage de demonstration a remplacer par un vrai upload.'],
+        fraudSignals: [],
+        analyzedAt: new Date().toISOString(),
+      },
+      analyzedAt: new Date(),
+    },
+  ]
+
+  await database.insert(documents).values(rows)
 }
 
 async function ensurePayment(userId: string, subscriptionId: string, status: 'accepted' | 'rejected', externalReference: string) {
@@ -266,6 +415,9 @@ async function seedDemo() {
   await ensureDocument(subscription.id, 'identity', 'validated', 'demo/identite_adam_demo.pdf')
   await ensurePayment(user.id, subscription.id, 'accepted', 'DEMO-PAID-IMAGINE-R')
   await ensurePayment(user.id, subscription.id, 'rejected', 'DEMO-FAILED-IMAGINE-R')
+  const storageUser = await ensureStorageDemoUser()
+  const storageSubscription = await ensureStorageDemoSubscription(storageUser.id, offer.id)
+  await resetStorageDemoDocuments(storageUser.id, storageSubscription.id)
 
   return { admin, user, offer, subscription }
 }

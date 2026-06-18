@@ -2,6 +2,7 @@ import { asc, desc, eq, inArray } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
+import { createPrivateSignedUrl } from './storage.service.js'
 import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput } from '../validation/admin.schemas.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
@@ -33,14 +34,31 @@ const subscriptionSelection = {
 const documentSelection = {
   id: documents.id,
   subscriptionId: documents.subscriptionId,
+  ownerId: documents.ownerId,
   type: documents.type,
   fileUrl: documents.fileUrl,
+  storageBucket: documents.storageBucket,
+  storagePath: documents.storagePath,
+  originalFilename: documents.originalFilename,
+  mimeType: documents.mimeType,
+  sizeBytes: documents.sizeBytes,
   status: documents.status,
   analysisResult: documents.analysisResult,
   analyzedAt: documents.analyzedAt,
   rejectionReason: documents.rejectionReason,
   createdAt: documents.createdAt,
   updatedAt: documents.updatedAt,
+}
+
+async function withSignedDocument(document: DocumentRow) {
+  return {
+    ...document,
+    signedUrl: await createPrivateSignedUrl(document.storageBucket, document.storagePath),
+  }
+}
+
+async function withSignedDocuments(rows: DocumentRow[]) {
+  return Promise.all(rows.map(withSignedDocument))
 }
 
 const offerSelection = {
@@ -99,7 +117,7 @@ async function enrichSubscription(subscription: SubscriptionRow) {
       subscriptionFor: onboardingSession.subscriptionFor,
       isBearerPayer: onboardingSession.isBearerPayer,
     } : null,
-    documents: subscriptionDocuments,
+    documents: await withSignedDocuments(subscriptionDocuments),
     payments: subscriptionPayments,
   }
 }
@@ -277,7 +295,7 @@ export async function listPendingDocuments() {
     .orderBy(asc(documents.createdAt))
 
   return Promise.all(rows.map(async (document) => ({
-    document,
+    document: await withSignedDocument(document),
     subscription: await enrichSubscription(await findSubscription(document.subscriptionId)),
   })))
 }
@@ -302,7 +320,7 @@ export async function reviewAdminDocument(id: string, input: AdminReviewDocument
     .returning(documentSelection)
 
   if (!updated) throw new AppError(500, "La revue du document n'a pas pu etre enregistree.")
-  return { document: updated }
+  return { document: await withSignedDocument(updated) }
 }
 
 export async function listAdminUsers() {
