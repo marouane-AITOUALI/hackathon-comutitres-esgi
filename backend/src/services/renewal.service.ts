@@ -3,6 +3,7 @@ import { requireDb } from '../db/client.js'
 import { offers, payments, renewalEvents, subscriptions } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import type { RenewalDecisionInput } from '../validation/renewal.schemas.js'
+import { notifyRenewalDecision, notifySubscriptionStatusChanged } from './notifications.service.js'
 
 type RenewalSubscriptionStatus = (typeof subscriptions.$inferSelect)['status']
 
@@ -130,11 +131,15 @@ export async function acceptSubscriptionRenewal(userId: string, subscriptionId: 
   const subscription = await findOwnSubscription(userId, subscriptionId)
   const event = await insertRenewalEvent(userId, subscriptionId, 'accepted', input)
 
-  await requireDb()
+  const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: 'pending_payment', updatedAt: new Date() })
     .where(eq(subscriptions.id, subscription.id))
+    .returning(subscriptionSelection)
 
+  if (!updated) throw new AppError(500, "Le renouvellement n'a pas pu mettre à jour la souscription.")
+  await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
+  await notifyRenewalDecision({ userId, subscriptionId, action: 'accepted', reason: input.reason })
   return { event, renewal: await getSubscriptionRenewal(userId, subscriptionId) }
 }
 
@@ -142,11 +147,15 @@ export async function refuseSubscriptionRenewal(userId: string, subscriptionId: 
   const subscription = await findOwnSubscription(userId, subscriptionId)
   const event = await insertRenewalEvent(userId, subscriptionId, 'refused', input)
 
-  await requireDb()
+  const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: 'cancelled', updatedAt: new Date() })
     .where(eq(subscriptions.id, subscription.id))
+    .returning(subscriptionSelection)
 
+  if (!updated) throw new AppError(500, "Le refus de renouvellement n'a pas pu mettre à jour la souscription.")
+  await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
+  await notifyRenewalDecision({ userId, subscriptionId, action: 'refused', reason: input.reason })
   return { event, renewal: await getSubscriptionRenewal(userId, subscriptionId) }
 }
 
@@ -154,10 +163,14 @@ export async function suspendSubscriptionRenewal(userId: string, subscriptionId:
   const subscription = await findOwnSubscription(userId, subscriptionId)
   const event = await insertRenewalEvent(userId, subscriptionId, 'suspended', input)
 
-  await requireDb()
+  const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: 'suspended', updatedAt: new Date() })
     .where(eq(subscriptions.id, subscription.id))
+    .returning(subscriptionSelection)
 
+  if (!updated) throw new AppError(500, "La suspension du renouvellement n'a pas pu mettre à jour la souscription.")
+  await notifySubscriptionStatusChanged({ userId, subscriptionId, previousStatus: subscription.status, status: updated.status })
+  await notifyRenewalDecision({ userId, subscriptionId, action: 'suspended', reason: input.reason })
   return { event, renewal: await getSubscriptionRenewal(userId, subscriptionId) }
 }

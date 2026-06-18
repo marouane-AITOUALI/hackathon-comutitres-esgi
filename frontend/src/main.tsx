@@ -5,6 +5,7 @@ import './index.css'
 import App from './App'
 import { AccessibilityProvider } from './accessibility/AccessibilityContext'
 import { AuthProvider } from './hooks/AuthProvider'
+import { NotificationsProvider } from './hooks/NotificationsProvider'
 import { AppThemeProvider } from './styles/AppThemeProvider'
 
 createRoot(document.getElementById('root')!).render(
@@ -13,7 +14,9 @@ createRoot(document.getElementById('root')!).render(
       <AppThemeProvider>
         <AuthProvider>
           <BrowserRouter>
-            <App />
+            <NotificationsProvider>
+              <App />
+            </NotificationsProvider>
           </BrowserRouter>
         </AuthProvider>
       </AppThemeProvider>

@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { auditLogs, createOffer, offers, patchDocumentReview, patchOffer, patchSubscriptionStatus, pendingDocuments, stats, subscriptionById, subscriptions, supportAlerts, users } from '../controllers/admin.controller.js'
+import { auditLogs, communications, createOffer, offers, patchDocumentReview, patchOffer, patchSubscriptionStatus, pendingDocuments, publishCommunication, stats, subscriptionById, subscriptions, supportAlerts, users } from '../controllers/admin.controller.js'
 import { adminMiddleware } from '../middleware/admin.middleware.js'
 import { authMiddleware } from '../middleware/auth.middleware.js'
 
@@ -18,3 +18,5 @@ adminRouter.post('/offers', createOffer)
 adminRouter.patch('/offers/:id', patchOffer)
 adminRouter.get('/support-alerts', supportAlerts)
 adminRouter.get('/audit-logs', auditLogs)
+adminRouter.get('/communications', communications)
+adminRouter.post('/communications', publishCommunication)

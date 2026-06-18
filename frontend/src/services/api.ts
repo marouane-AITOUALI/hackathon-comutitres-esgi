@@ -1,7 +1,16 @@
 import type { ApiError } from '../types'
 
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
+export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
 export const AUTH_TOKEN_KEY = 'comutitres_auth_token'
+
+export function getWebSocketUrl() {
+  const url = new URL(API_URL, window.location.origin)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  url.pathname = '/ws'
+  url.search = ''
+  url.hash = ''
+  return url.toString()
+}
 
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem(AUTH_TOKEN_KEY)

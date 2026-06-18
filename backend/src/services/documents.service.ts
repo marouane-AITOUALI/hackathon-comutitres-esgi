@@ -3,6 +3,7 @@ import { documents, subscriptions } from '../db/schema.js'
 import { requireDb } from '../db/client.js'
 import { AppError } from '../utils/app-error.js'
 import { analyzeDocumentWithRules, checkDocumentFraud } from './document-analysis.service.js'
+import { notifyDocumentStatusChanged, notifyDocumentSubmitted } from './notifications.service.js'
 import { createPrivateSignedUrl, removePrivateObject, uploadSubscriptionDocumentFile } from './storage.service.js'
 import type { CreateDocumentInput, ManualReviewInput, ResubmitDocumentInput, UpdateDocumentStatusInput } from '../validation/document.schemas.js'
 
@@ -80,9 +81,10 @@ export async function createDocument(
   const subscription = await findSubscriptionForAccess(userId, role, subscriptionId)
   if (!file) throw new AppError(400, 'Aucun fichier fourni.')
   const uploaded = await uploadSubscriptionDocumentFile(subscription.userId, subscriptionId, input.type, file)
+  let created: DocumentRow
 
   try {
-    const [created] = await requireDb()
+    const [row] = await requireDb()
       .insert(documents)
       .values({
         subscriptionId,
@@ -98,12 +100,20 @@ export async function createDocument(
       })
       .returning(documentSelection)
 
-    if (!created) throw new AppError(500, "Le document n'a pas pu etre cree.")
-    return publicDocument(created)
+    if (!row) throw new AppError(500, "Le document n'a pas pu etre cree.")
+    created = row
   } catch (error) {
     await removePrivateObject(uploaded.bucket, uploaded.path)
     throw error
   }
+
+  await notifyDocumentSubmitted({
+    userId: subscription.userId,
+    subscriptionId,
+    documentId: created.id,
+    documentType: created.type,
+  })
+  return publicDocument(created)
 }
 
 export async function listDocumentsForSubscription(userId: string, role: string, subscriptionId: string) {
@@ -137,7 +147,7 @@ export async function deleteDocument(userId: string, role: string, id: string) {
 }
 
 export async function updateDocumentStatus(userId: string, role: string, id: string, input: UpdateDocumentStatusInput) {
-  await findDocumentForAccess(userId, role, id)
+  const current = await findDocumentForAccess(userId, role, id)
   const [updated] = await requireDb()
     .update(documents)
     .set({
@@ -149,6 +159,15 @@ export async function updateDocumentStatus(userId: string, role: string, id: str
     .returning(documentSelection)
 
   if (!updated) throw new AppError(500, "Le statut du document n'a pas pu etre mis a jour.")
+  await notifyDocumentStatusChanged({
+    userId: updated.ownerId,
+    subscriptionId: updated.subscriptionId,
+    documentId: updated.id,
+    documentType: updated.type,
+    previousStatus: current.status,
+    status: updated.status,
+    rejectionReason: updated.rejectionReason,
+  })
   return publicDocument(updated)
 }
 
@@ -163,9 +182,10 @@ export async function resubmitDocument(
   if (!file) throw new AppError(400, 'Aucun fichier fourni.')
   const ownerId = current.ownerId ?? userId
   const uploaded = await uploadSubscriptionDocumentFile(ownerId, current.subscriptionId, input.type ?? current.type, file)
+  let updated: DocumentRow
 
   try {
-    const [updated] = await requireDb()
+    const [row] = await requireDb()
       .update(documents)
       .set({
         type: input.type ?? current.type,
@@ -185,13 +205,22 @@ export async function resubmitDocument(
       .where(eq(documents.id, id))
       .returning(documentSelection)
 
-    if (!updated) throw new AppError(500, "Le document n'a pas pu etre renvoye.")
-    await removePrivateObject(current.storageBucket, current.storagePath)
-    return publicDocument(updated)
+    if (!row) throw new AppError(500, "Le document n'a pas pu etre renvoye.")
+    updated = row
   } catch (error) {
     await removePrivateObject(uploaded.bucket, uploaded.path)
     throw error
   }
+
+  await removePrivateObject(current.storageBucket, current.storagePath)
+  await notifyDocumentSubmitted({
+    userId: ownerId,
+    subscriptionId: updated.subscriptionId,
+    documentId: updated.id,
+    documentType: updated.type,
+    resubmitted: true,
+  })
+  return publicDocument(updated)
 }
 
 export async function analyzeDocument(userId: string, role: string, id: string) {
@@ -210,6 +239,15 @@ export async function analyzeDocument(userId: string, role: string, id: string) 
     .returning(documentSelection)
 
   if (!updated) throw new AppError(500, "Le document n'a pas pu etre analyse.")
+  await notifyDocumentStatusChanged({
+    userId: updated.ownerId,
+    subscriptionId: updated.subscriptionId,
+    documentId: updated.id,
+    documentType: updated.type,
+    previousStatus: document.status,
+    status: updated.status,
+    rejectionReason: updated.rejectionReason,
+  })
   return { ...(await publicDocument(updated)), analysis }
 }
 
@@ -231,7 +269,7 @@ export async function fraudCheckDocument(userId: string, role: string, id: strin
 }
 
 export async function manualReviewDocument(userId: string, role: string, id: string, input: ManualReviewInput) {
-  await findDocumentForAccess(userId, role, id)
+  const current = await findDocumentForAccess(userId, role, id)
   const [updated] = await requireDb()
     .update(documents)
     .set({
@@ -249,5 +287,14 @@ export async function manualReviewDocument(userId: string, role: string, id: str
     .returning(documentSelection)
 
   if (!updated) throw new AppError(500, "La revue manuelle n'a pas pu etre enregistree.")
+  await notifyDocumentStatusChanged({
+    userId: updated.ownerId,
+    subscriptionId: updated.subscriptionId,
+    documentId: updated.id,
+    documentType: updated.type,
+    previousStatus: current.status,
+    status: updated.status,
+    rejectionReason: updated.rejectionReason,
+  })
   return publicDocument(updated)
 }
