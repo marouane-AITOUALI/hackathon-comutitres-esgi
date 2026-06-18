@@ -3,6 +3,7 @@ import { requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import { createPrivateSignedUrl } from './storage.service.js'
+import { notifyDocumentStatusChanged, notifySubscriptionStatusChanged } from './notifications.service.js'
 import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput } from '../validation/admin.schemas.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
@@ -344,7 +345,7 @@ export async function getAdminSubscription(id: string) {
 }
 
 export async function updateAdminSubscriptionStatus(id: string, input: AdminUpdateSubscriptionStatusInput) {
-  await findSubscription(id)
+  const current = await findSubscription(id)
   const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: input.status, updatedAt: new Date() })
@@ -352,6 +353,12 @@ export async function updateAdminSubscriptionStatus(id: string, input: AdminUpda
     .returning(subscriptionSelection)
 
   if (!updated) throw new AppError(500, "Le statut de la souscription n'a pas pu etre mis a jour.")
+  await notifySubscriptionStatusChanged({
+    userId: updated.userId,
+    subscriptionId: updated.id,
+    previousStatus: current.status,
+    status: updated.status,
+  })
   return enrichSubscription(updated)
 }
 
@@ -379,7 +386,7 @@ export async function listPendingDocuments() {
 }
 
 export async function reviewAdminDocument(id: string, input: AdminReviewDocumentInput) {
-  await findDocument(id)
+  const current = await findDocument(id)
   const [updated] = await requireDb()
     .update(documents)
     .set({
@@ -398,6 +405,15 @@ export async function reviewAdminDocument(id: string, input: AdminReviewDocument
     .returning(documentSelection)
 
   if (!updated) throw new AppError(500, "La revue du document n'a pas pu etre enregistree.")
+  await notifyDocumentStatusChanged({
+    userId: updated.ownerId,
+    subscriptionId: updated.subscriptionId,
+    documentId: updated.id,
+    documentType: updated.type,
+    previousStatus: current.status,
+    status: updated.status,
+    rejectionReason: updated.rejectionReason,
+  })
   return { document: await withSignedDocument(updated) }
 }
 

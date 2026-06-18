@@ -1,22 +1,30 @@
-Dashboardimport {
+import {
   AppBar,
   Avatar,
+  Badge,
   Box,
+  Button,
   Collapse,
   Divider,
   IconButton,
   MenuItem,
   MenuList,
   Paper,
+  Popover,
+  Stack,
   Toolbar,
+  Tooltip,
   Typography,
   useMediaQuery,
   useTheme,
 } from '@mui/material'
+import { Bell, Check, ChevronDown, LogOut, Mail, Menu, Search, Trash2, User } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../hooks/useAuth'
+import { useNotifications } from '../../hooks/useNotifications'
 import { colors } from '../../theme/colors'
+import type { AdminNotification } from '../../types/notification'
 
 const pageTitles: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -25,59 +33,13 @@ const pageTitles: Record<string, string> = {
   '/support-alerts': 'Alertes support',
   '/users': 'Utilisateurs',
   '/offers': 'Offres',
-  '/audit-logs': 'Audit logs',
-}
-
-function MenuGlyph() {
-  return (
-    <Box aria-hidden sx={{ display: 'grid', gap: '4px', width: 18 }}>
-      {[0, 1, 2].map((item) => (
-        <Box key={item} sx={{ bgcolor: 'currentColor', borderRadius: 99, height: 2 }} />
-      ))}
-    </Box>
-  )
-}
-
-function SearchGlyph() {
-  return (
-    <Box aria-hidden sx={{ height: 18, position: 'relative', width: 18 }}>
-      <Box sx={{ border: '2px solid currentColor', borderRadius: '50%', height: 12, left: 1, position: 'absolute', top: 1, width: 12 }} />
-      <Box sx={{ bgcolor: 'currentColor', borderRadius: 99, height: 7, left: 12, position: 'absolute', top: 12, transform: 'rotate(-45deg)', transformOrigin: 'top', width: 2 }} />
-    </Box>
-  )
-}
-
-function BellGlyph() {
-  return (
-    <Box aria-hidden sx={{ height: 18, position: 'relative', width: 18 }}>
-      <Box sx={{ border: '2px solid currentColor', borderBottom: 0, borderRadius: '10px 10px 3px 3px', height: 12, left: 4, position: 'absolute', top: 2, width: 10 }} />
-      <Box sx={{ bgcolor: 'currentColor', borderRadius: 99, bottom: 1, height: 2, left: 7, position: 'absolute', width: 4 }} />
-      <Box sx={{ bgcolor: 'currentColor', borderRadius: 99, bottom: 3, height: 2, left: 3, position: 'absolute', width: 12 }} />
-    </Box>
-  )
-}
-
-function UserGlyph() {
-  return (
-    <Box aria-hidden sx={{ height: 16, position: 'relative', width: 16 }}>
-      <Box sx={{ border: '2px solid currentColor', borderRadius: '50%', height: 6, left: 4, position: 'absolute', top: 1, width: 6 }} />
-      <Box sx={{ border: '2px solid currentColor', borderRadius: '8px 8px 0 0', borderBottom: 0, bottom: 1, height: 7, left: 2, position: 'absolute', width: 12 }} />
-    </Box>
-  )
-}
-
-function LogoutGlyph() {
-  return (
-    <Box aria-hidden sx={{ height: 16, position: 'relative', width: 16 }}>
-      <Box sx={{ border: '2px solid currentColor', borderRadius: 0.75, height: 12, left: 1, position: 'absolute', top: 2, width: 8 }} />
-      <Box sx={{ bgcolor: 'currentColor', height: 2, position: 'absolute', right: 1, top: 7, width: 9 }} />
-      <Box sx={{ borderRight: '2px solid currentColor', borderTop: '2px solid currentColor', height: 6, position: 'absolute', right: 1, top: 5, transform: 'rotate(45deg)', width: 6 }} />
-    </Box>
-  )
+  '/communications': 'Communications',
+  '/audit-logs': "Journal d'activite",
 }
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const { user, logout } = useAuth()
+  const { connected, markAllRead, markRead, markUnread, notifications, remove, unreadCount } = useNotifications()
   const location = useLocation()
   const navigate = useNavigate()
   const theme = useTheme()
@@ -86,6 +48,8 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const [profileOpen, setProfileOpen] = useState(false)
+  const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null)
+  const [notificationFilter, setNotificationFilter] = useState<'all' | 'unread'>('all')
 
   const title = pageTitles[location.pathname] ?? (location.pathname.startsWith('/subscriptions/') ? 'Detail dossier' : 'Backoffice')
   const userName = user ? `${user.firstName} ${user.lastName}` : 'Administrateur'
@@ -95,6 +59,9 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('') || 'A'
+  const visibleNotifications = notificationFilter === 'unread'
+    ? notifications.filter((notification) => !notification.readAt)
+    : notifications
 
   function handleLogout() {
     setProfileOpen(false)
@@ -104,6 +71,13 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
 
   function handleSearchBlur() {
     if (!searchValue) setSearchOpen(false)
+  }
+
+  function openNotification(notification: AdminNotification) {
+    if (!notification.readAt) void markRead(notification.id)
+    setNotificationAnchor(null)
+    const actionPath = typeof notification.data.actionPath === 'string' ? notification.data.actionPath : null
+    navigate(actionPath ?? (notification.subscriptionId ? `/subscriptions/${notification.subscriptionId}` : '/dashboard'))
   }
 
   return (
@@ -132,7 +106,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         <Box sx={{ alignItems: 'center', display: 'flex', flex: 1, gap: 1, minWidth: 0 }}>
           {isMobile && (
             <IconButton aria-label="Ouvrir le menu" onClick={onMenuClick} size="small" sx={{ color: colors.anthracite }}>
-              <MenuGlyph />
+              <Menu size={20} />
             </IconButton>
           )}
 
@@ -179,7 +153,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
             }}
           >
             <Box sx={{ alignItems: 'center', display: 'flex', flexShrink: 0, height: 40, justifyContent: 'center', width: 40 }}>
-              <SearchGlyph />
+              <Search size={18} />
             </Box>
             <Collapse in={searchOpen} orientation="horizontal" timeout={200}>
               <Box
@@ -204,21 +178,118 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
             </Collapse>
           </Box>
 
-          <IconButton
-            aria-label="Notifications"
-            size="small"
-            sx={{
-              bgcolor: colors.white,
-              border: `1.5px solid ${colors.greyMedium}`,
-              borderRadius: 99,
-              color: colors.greyDark,
-              height: 40,
-              width: 40,
-              '&:hover': { bgcolor: colors.greyLight },
-            }}
+          <Badge badgeContent={unreadCount} color="error" max={99}>
+            <IconButton
+              aria-label={`${unreadCount} notification(s) non lue(s)`}
+              onClick={(event) => setNotificationAnchor(event.currentTarget)}
+              size="small"
+              sx={{
+                bgcolor: colors.white,
+                border: `1.5px solid ${colors.greyMedium}`,
+                borderRadius: 99,
+                color: colors.greyDark,
+                height: 40,
+                width: 40,
+                '&:hover': { bgcolor: colors.greyLight },
+              }}
+            >
+              <Bell size={18} />
+            </IconButton>
+          </Badge>
+
+          <Popover
+            anchorEl={notificationAnchor}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            onClose={() => setNotificationAnchor(null)}
+            open={Boolean(notificationAnchor)}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
           >
-            <BellGlyph />
-          </IconButton>
+            <Box sx={{ maxHeight: 520, maxWidth: 'calc(100vw - 24px)', overflowY: 'auto', width: { xs: 330, sm: 420 } }}>
+              <Stack direction="row" sx={{ alignItems: 'center', borderBottom: `1px solid ${colors.greyMedium}`, justifyContent: 'space-between', p: 2 }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 900 }}>Notifications equipe</Typography>
+                  <Typography color="text.secondary" variant="caption">
+                    {connected ? 'Temps reel actif' : 'Reconnexion en cours'}
+                  </Typography>
+                </Box>
+                {unreadCount > 0 && <Button onClick={() => void markAllRead()} size="small">Tout lire</Button>}
+              </Stack>
+              <Stack direction="row" spacing={1} sx={{ borderBottom: `1px solid ${colors.greyMedium}`, p: 1.5 }}>
+                <Button onClick={() => setNotificationFilter('all')} size="small" variant={notificationFilter === 'all' ? 'contained' : 'text'}>Toutes</Button>
+                <Button onClick={() => setNotificationFilter('unread')} size="small" variant={notificationFilter === 'unread' ? 'contained' : 'text'}>Non lues ({unreadCount})</Button>
+              </Stack>
+              {visibleNotifications.length === 0 ? (
+                <Typography color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
+                  {notificationFilter === 'unread' ? 'Aucune notification non lue.' : 'Aucune notification.'}
+                </Typography>
+              ) : visibleNotifications.map((notification) => (
+                <Box
+                  key={notification.id}
+                  onClick={() => openNotification(notification)}
+                  onKeyDown={(event) => {
+                    if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' ')) return
+                    event.preventDefault()
+                    openNotification(notification)
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  sx={{
+                    bgcolor: notification.readAt ? colors.white : colors.blueLight,
+                    borderBottom: `1px solid ${colors.greyMedium}`,
+                    cursor: 'pointer',
+                    p: 2,
+                    '&:hover': { bgcolor: colors.greyLight40 },
+                  }}
+                >
+                  <Stack direction="row" spacing={1.25}>
+                    <Box sx={{
+                      bgcolor: notification.readAt ? colors.greyMedium : notification.priority === 'high' ? colors.redDark : colors.blueInteraction,
+                      borderRadius: 99,
+                      height: 8,
+                      mt: 0.75,
+                      width: 8,
+                    }} />
+                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                      <Typography sx={{ fontSize: 14, fontWeight: notification.readAt ? 700 : 900 }}>{notification.title}</Typography>
+                      <Typography color="text.secondary" variant="body2">{notification.message}</Typography>
+                      <Typography color="text.secondary" variant="caption">
+                        {new Date(notification.createdAt).toLocaleString('fr-FR')}
+                      </Typography>
+                      {typeof notification.data.actionLabel === 'string' && (
+                        <Typography color="primary" sx={{ display: 'block', fontWeight: 800 }} variant="caption">
+                          {notification.data.actionLabel}
+                        </Typography>
+                      )}
+                    </Box>
+                    <Stack direction="row" sx={{ alignSelf: 'flex-start' }}>
+                      <Tooltip title={notification.readAt ? 'Marquer non lue' : 'Marquer comme lue'}>
+                        <IconButton
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void (notification.readAt ? markUnread(notification.id) : markRead(notification.id))
+                          }}
+                          size="small"
+                        >
+                          {notification.readAt ? <Mail size={15} /> : <Check size={15} />}
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Supprimer">
+                        <IconButton
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void remove(notification.id)
+                          }}
+                          size="small"
+                        >
+                          <Trash2 size={15} />
+                        </IconButton>
+                      </Tooltip>
+                    </Stack>
+                  </Stack>
+                </Box>
+              ))}
+            </Box>
+          </Popover>
 
           <Box ref={profileRef} sx={{ position: 'relative' }}>
             <Box sx={{ alignItems: 'center', display: 'flex', gap: 1 }}>
@@ -246,7 +317,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                 }}
                 tabIndex={0}
               >
-                <Avatar sx={{ bgcolor: colors.blueInteraction, fontSize: 13, fontWeight: 800, height: 34, width: 34 }}>
+                <Avatar alt={userName} src={user?.avatarUrl ?? undefined} sx={{ bgcolor: colors.blueInteraction, fontSize: 13, fontWeight: 800, height: 34, width: 34 }}>
                   {initials}
                 </Avatar>
               </Box>
@@ -280,9 +351,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
                 <Typography sx={{ color: colors.anthracite, fontSize: 14, fontWeight: 500, whiteSpace: 'nowrap' }}>
                   {userName}
                 </Typography>
-                <Typography aria-hidden sx={{ color: colors.greyDark, fontSize: 14, lineHeight: 1 }}>
-                  {profileOpen ? 'v' : '>'}
-                </Typography>
+                <ChevronDown size={16} style={{ transform: profileOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </Box>
             </Box>
 
@@ -302,12 +371,12 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
               >
                 <MenuList dense>
                   <MenuItem disabled sx={{ gap: 1.5, px: 2, py: 1.2 }}>
-                    <UserGlyph />
-                    Profil admin
+                    <User size={16} />
+                    {user?.role === 'admin' ? 'Administrateur' : 'Utilisateur'}
                   </MenuItem>
                   <Divider sx={{ my: 0.5 }} />
                   <MenuItem onClick={handleLogout} sx={{ color: colors.redDark, gap: 1.5, px: 2, py: 1.2 }}>
-                    <LogoutGlyph />
+                    <LogOut size={16} />
                     Se deconnecter
                   </MenuItem>
                 </MenuList>

@@ -1,5 +1,5 @@
 import { Box, Button, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Typography, useMediaQuery, useTheme } from '@mui/material'
-import { BellRing, ClipboardList, FileText, FolderOpen, LayoutDashboard, Package, Users } from 'lucide-react'
+import { BellRing, ClipboardList, FileText, FolderOpen, LayoutDashboard, MessageSquare, Package, Users } from 'lucide-react'
 import { NavLink, useLocation } from 'react-router-dom'
 import logoUrl from '../../assets/comutitres_v_blanc.svg'
 import { colors } from '../../theme/colors'
@@ -14,6 +14,7 @@ const navItems = [
   { label: 'Alertes support', to: '/support-alerts', icon: BellRing },
   { label: 'Utilisateurs', to: '/users', icon: Users },
   { label: 'Offres', to: '/offers', icon: Package },
+  { label: 'Communications', to: '/communications', icon: MessageSquare },
   { label: 'Audit logs', to: '/audit-logs', icon: FileText },
 ] as const
 

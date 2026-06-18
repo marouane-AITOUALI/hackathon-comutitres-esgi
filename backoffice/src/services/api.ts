@@ -1,6 +1,15 @@
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
+export const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
 
 export const ADMIN_TOKEN_KEY = 'comutitres_admin_token'
+
+export function getWebSocketUrl() {
+  const url = new URL(API_URL, window.location.origin)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  url.pathname = '/ws'
+  url.search = ''
+  url.hash = ''
+  return url.toString()
+}
 
 export function clearAdminToken() {
   localStorage.removeItem(ADMIN_TOKEN_KEY)
