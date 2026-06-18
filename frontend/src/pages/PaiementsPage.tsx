@@ -1,7 +1,7 @@
 import { Alert, Box, Button, Chip, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from '@mui/material'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { regularizePayment } from '../services/payments.service'
+import { cancelPayment, regularizePayment } from '../services/payments.service'
 import { listSubscriptions } from '../services/subscriptions.service'
 import type { PaymentSummary, SubscriptionSummary } from '../types'
 
@@ -56,9 +56,24 @@ export function PaiementsPage() {
     try {
       await regularizePayment(id)
       await load()
-      setSuccess('Paiement regularise.')
+      setSuccess('Paiement régularisé.')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Regularisation impossible.')
+      setError(caught instanceof Error ? caught.message : 'Régularisation impossible.')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function cancel(id: string) {
+    setSavingId(id)
+    setError('')
+    setSuccess('')
+    try {
+      await cancelPayment(id)
+      await load()
+      setSuccess('Paiement annulé.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Annulation impossible.')
     } finally {
       setSavingId(null)
     }
@@ -101,9 +116,28 @@ export function PaiementsPage() {
                   <TableCell>{formatAmount(payment)}</TableCell>
                   <TableCell><Chip color={statusTone[payment.status]} label={payment.status} size="small" /></TableCell>
                   <TableCell align="right">
-                    <Button disabled={savingId === payment.id || !['rejected', 'cancelled', 'pending'].includes(payment.status)} onClick={() => regularize(payment.id)} size="small" variant="outlined">
-                      Regulariser
-                    </Button>
+                    <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                      <Button component={Link} size="small" to={`/paiements/${payment.id}`} variant="text">
+                        Détail
+                      </Button>
+                      <Button
+                        color="error"
+                        disabled={savingId === payment.id || !['pending', 'simulated'].includes(payment.status)}
+                        onClick={() => void cancel(payment.id)}
+                        size="small"
+                        variant="outlined"
+                      >
+                        Annuler
+                      </Button>
+                      <Button
+                        disabled={savingId === payment.id || !['rejected', 'cancelled', 'pending'].includes(payment.status)}
+                        onClick={() => void regularize(payment.id)}
+                        size="small"
+                        variant="outlined"
+                      >
+                        Régulariser
+                      </Button>
+                    </Stack>
                   </TableCell>
                 </TableRow>
               ))}

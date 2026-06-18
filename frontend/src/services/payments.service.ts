@@ -19,6 +19,14 @@ export const createMandatePayment = (payload: { subscriptionId: string; holderNa
     body: JSON.stringify(payload),
   })
 
+export const getPayment = (id: string) =>
+  apiRequest<{ payment: PaymentSummary }>(`/payments/${id}`)
+
+export const cancelPayment = (id: string) =>
+  apiRequest<{ payment: PaymentSummary }>(`/payments/${id}/cancel`, {
+    method: 'POST',
+  })
+
 export const regularizePayment = (id: string, note?: string) =>
   apiRequest<{ payment: PaymentSummary }>(`/payments/${id}/regularize`, {
     method: 'POST',
