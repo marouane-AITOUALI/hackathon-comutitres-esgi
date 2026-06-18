@@ -6,7 +6,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { Header } from '../components/Header'
 import { Footer } from '../components/Footer'
 import { LandmarkStepper } from '../components/onboarding/LandmarkStepper'
-import { getRecommendation } from '../services/onboarding.service'
+import { createOnboarding, getRecommendation, saveRecommendationResult } from '../services/onboarding.service'
+import { createSubscription } from '../services/subscriptions.service'
 import { useAuth } from '../hooks/useAuth'
 import type { OfferRecommendation, OnboardingAnswer, OnboardingDraft } from '../types'
 
@@ -290,7 +291,10 @@ export function OnboardingChatPage() {
   const [error,          setError]          = useState('')
   const [loading,        setLoading]        = useState(false)
   const [isDone,         setIsDone]         = useState(false)
-  const [recommendation, setRecommendation] = useState<OfferRecommendation | null>(null)
+  const [recommendation,    setRecommendation]    = useState<OfferRecommendation | null>(null)
+  const [onboardingSessionId, setOnboardingSessionId] = useState<string | null>(null)
+  const [subscribing,       setSubscribing]       = useState(false)
+  const [subscribeError,    setSubscribeError]    = useState('')
 
   const step           = STEPS[stepIdx] as ChatStep | undefined
   const currentSection = isDone ? 5 : step?.section ?? 1
@@ -300,21 +304,44 @@ export function OnboardingChatPage() {
   function reset() {
     setDraft({}); setStepIdx(0); setInputValue(''); setError('')
     setLoading(false); setIsDone(false); setRecommendation(null)
+    setOnboardingSessionId(null); setSubscribeError('')
   }
 
-  // ── Submit (get recommendation) ───────────────────────────────────────────
+  // ── Submit : recommandation + persistance session ─────────────────────────
 
   async function handleSubmit(finalDraft: OnboardingDraft) {
     setLoading(true)
     try {
       const answer = finalDraft as OnboardingAnswer
-      const rec    = await getRecommendation(answer)
+      // Les deux appels en parallèle : recommandation + création session en DB
+      const [rec, session] = await Promise.all([
+        getRecommendation(answer),
+        createOnboarding(answer),
+      ])
+      saveRecommendationResult(rec)
       setRecommendation(rec)
+      setOnboardingSessionId(session.id)
       setIsDone(true)
     } catch (err) {
       setError(err instanceof Error ? `Oups ! ${err.message}` : 'Désolé, une erreur inattendue est survenue.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function handleSubscribeNow() {
+    if (!recommendation) return
+    setSubscribing(true)
+    setSubscribeError('')
+    try {
+      const sub = await createSubscription({
+        offerCode: recommendation.offerCode,
+        ...(onboardingSessionId ? { onboardingSessionId } : {}),
+      })
+      navigate(`/subscriptions/${sub.subscription.id}`)
+    } catch (err) {
+      setSubscribeError(err instanceof Error ? err.message : 'Impossible de créer le dossier.')
+      setSubscribing(false)
     }
   }
 
@@ -825,36 +852,53 @@ export function OnboardingChatPage() {
               </Box>
             </Paper>
 
-            {/* Action buttons */}
-            <Stack spacing={1.5}>
-              <Button
-                variant="contained" fullWidth
-                onClick={() => navigate('/subscriptions')}
-                sx={{
-                  borderRadius: 50, py: 1.25, fontWeight: 700, fontSize: 14, textTransform: 'none',
-                  background: 'linear-gradient(135deg, #2563eb, #1a56db)',
-                  boxShadow: '0 4px 14px rgba(26,86,219,0.35)',
-                  '&:hover': { background: 'linear-gradient(135deg, #1d4ed8, #1a4fcc)' },
-                }}
-              >
-                Voir mes dossiers →
-              </Button>
-              <Button
-                variant="outlined" fullWidth
-                onClick={() => navigate('/dashboard')}
-                sx={{ borderRadius: 50, py: 1.25, fontWeight: 700, fontSize: 14, textTransform: 'none' }}
-              >
-                Retourner au tableau de bord
-              </Button>
-              <Button
-                onClick={reset}
-                size="small"
-                startIcon={<RefreshIcon sx={{ fontSize: 14 }} />}
-                sx={{ textTransform: 'none', color: 'text.secondary', fontSize: 12, alignSelf: 'center' }}
-              >
-                Recommencer
-              </Button>
-            </Stack>
+            {/* Subscribe now or later */}
+            <Paper sx={{ borderRadius: 4, overflow: 'hidden', boxShadow: '0 8px 48px rgba(26,86,219,0.13)' }}>
+              <Box sx={{ px: 3, py: 2, bgcolor: '#f0fdf4', borderBottom: '1px solid #bbf7d0' }}>
+                <Typography sx={{ fontWeight: 800, color: '#166534', fontSize: 14 }}>
+                  Souhaitez-vous souscrire à cette offre ?
+                </Typography>
+                <Typography sx={{ fontSize: 12.5, color: '#15803d', mt: 0.4 }}>
+                  Si vous souscrivez maintenant, nous vous guidons pour déposer vos documents justificatifs.
+                </Typography>
+              </Box>
+              <Box sx={{ p: 3 }}>
+                {subscribeError && (
+                  <Alert severity="error" sx={{ mb: 2, fontSize: 13 }}>{subscribeError}</Alert>
+                )}
+                <Stack spacing={1.5}>
+                  <Button
+                    variant="contained" fullWidth
+                    onClick={handleSubscribeNow}
+                    disabled={subscribing}
+                    sx={{
+                      borderRadius: 50, py: 1.4, fontWeight: 700, fontSize: 14, textTransform: 'none',
+                      background: 'linear-gradient(135deg, #16a34a, #15803d)',
+                      boxShadow: '0 4px 14px rgba(22,163,74,0.35)',
+                      '&:hover': { background: 'linear-gradient(135deg, #15803d, #166534)' },
+                    }}
+                  >
+                    {subscribing ? 'Création du dossier…' : 'Souscrire maintenant — déposer mes documents →'}
+                  </Button>
+                  <Button
+                    variant="outlined" fullWidth
+                    onClick={() => navigate('/dashboard')}
+                    sx={{ borderRadius: 50, py: 1.25, fontWeight: 600, fontSize: 14, textTransform: 'none', borderColor: 'rgba(26,86,219,0.3)' }}
+                  >
+                    Je le ferai plus tard
+                  </Button>
+                </Stack>
+              </Box>
+            </Paper>
+
+            <Button
+              onClick={reset}
+              size="small"
+              startIcon={<RefreshIcon sx={{ fontSize: 14 }} />}
+              sx={{ textTransform: 'none', color: 'text.secondary', fontSize: 12, alignSelf: 'center' }}
+            >
+              Recommencer
+            </Button>
           </Stack>
         )}
 
