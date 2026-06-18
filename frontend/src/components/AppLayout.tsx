@@ -16,7 +16,7 @@ export function AppLayout() {
       <Box sx={{ bgcolor: '#0d1b2a', pb: 1 }}>
         <Header />
       </Box>
-      <Container component="main" maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
+      <Container id="main-content" component="main" tabIndex={-1} maxWidth="lg" sx={{ py: { xs: 4, sm: 6 } }}>
         <Outlet />
       </Container>
       <Footer />

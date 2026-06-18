@@ -464,3 +464,50 @@ documents a revoir, dossiers bloques.
 
 Retourne un journal prototype derive des changements de statut souscriptions et
 documents. Une table dediee pourra etre ajoutee plus tard si le besoin augmente.
+
+## Notifications temps reel
+
+### `GET /notifications`
+
+Liste les notifications de l'utilisateur connecte. Les parametres disponibles
+sont `limit`, `status=all|unread|read` et `category`.
+
+### `PATCH /notifications/:id/read`
+
+Marque une notification comme lue.
+
+### `PATCH /notifications/:id/unread`
+
+Replace une notification dans les non lues.
+
+### `PATCH /notifications/read-all`
+
+Marque toutes les notifications du compte comme lues.
+
+### `DELETE /notifications/:id`
+
+Supprime une notification du compte.
+
+Le WebSocket `/ws` pousse les nouvelles notifications avec l'evenement
+`notification.created`. Il accepte le JWT client via sous-protocole et la
+session backoffice via cookie `HttpOnly`.
+
+### `GET /admin/communications`
+
+Liste l'historique des communications generales publiees par le backoffice.
+
+### `POST /admin/communications`
+
+Publie une communication vers `clients`, `admins` ou `everyone` et cree une
+notification temps reel par destinataire.
+
+```json
+{
+  "audience": "clients",
+  "title": "Pensez a votre renouvellement",
+  "message": "Verifiez vos justificatifs avant la date de fin de droits.",
+  "priority": "high",
+  "actionLabel": "Voir mes abonnements",
+  "actionPath": "/subscriptions"
+}
+```

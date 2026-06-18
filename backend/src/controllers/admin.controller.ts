@@ -1,6 +1,9 @@
 import type { RequestHandler } from 'express'
 import { createAdminOffer, getAdminStats, getAdminSubscription, getAuditLogs, getSupportAlerts, listAdminOffers, listAdminSubscriptions, listAdminUsers, listPendingDocuments, reviewAdminDocument, updateAdminOffer, updateAdminSubscriptionStatus } from '../services/admin.service.js'
+import { createCommunication, listCommunications } from '../services/notifications.service.js'
+import { AppError } from '../utils/app-error.js'
 import { adminCreateOfferSchema, adminIdParamsSchema, adminListSubscriptionsQuerySchema, adminReviewDocumentSchema, adminUpdateOfferSchema, adminUpdateSubscriptionStatusSchema } from '../validation/admin.schemas.js'
+import { createCommunicationSchema } from '../validation/notification.schemas.js'
 
 export const stats: RequestHandler = async (_req, res) => {
   res.json(await getAdminStats())
@@ -57,4 +60,14 @@ export const supportAlerts: RequestHandler = async (_req, res) => {
 
 export const auditLogs: RequestHandler = async (_req, res) => {
   res.json({ logs: await getAuditLogs() })
+}
+
+export const communications: RequestHandler = async (_req, res) => {
+  res.json(await listCommunications())
+}
+
+export const publishCommunication: RequestHandler = async (req, res) => {
+  if (!req.auth) throw new AppError(401, 'Authentification requise.')
+  const body = createCommunicationSchema.parse(req.body)
+  res.status(201).json(await createCommunication(req.auth.sub, body))
 }

@@ -2,23 +2,19 @@ import {
   Alert,
   Box,
   Button,
-  Checkbox,
   Divider,
-  FormControlLabel,
   MenuItem,
   Paper,
   Stack,
-  Tab,
-  Tabs,
   TextField,
   Typography,
 } from '@mui/material'
-import { ArrowLeft, CreditCard, Landmark } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { createDirectPayment, createMandatePayment, simulatePayment } from '../services/payments.service'
 import { listSubscriptions } from '../services/subscriptions.service'
-import { CardPaymentFields } from '../components/payment/CardPaymentFields'
+import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
 import { colors } from '../theme/colors'
 import type { SubscriptionSummary } from '../types'
@@ -268,53 +264,26 @@ export function PaymentFormPage() {
 
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 800, mb: 2 }}>3. Moyen de paiement</Typography>
-            <Tabs
-              value={method}
-              onChange={(_, value: PaymentMethod) => setMethod(value)}
-              sx={{ mb: 2, borderBottom: 1, borderColor: 'divider' }}
-            >
-              <Tab icon={<CreditCard size={16} />} iconPosition="start" label="Carte bancaire" value="card" sx={{ fontWeight: 700, textTransform: 'none' }} />
-              <Tab icon={<Landmark size={16} />} iconPosition="start" label="Prélèvement SEPA" value="mandate" sx={{ fontWeight: 700, textTransform: 'none' }} />
-            </Tabs>
-
-            {method === 'card' ? (
-              <Stack spacing={2}>
-                <CardPaymentFields
-                  cardNumber={cardNumber}
-                  onCardNumberChange={setCardNumber}
-                  expiry={cardExpiry}
-                  onExpiryChange={setCardExpiry}
-                  cvv={cardCvv}
-                  onCvvChange={setCardCvv}
-                  cardholderName={cardholderName}
-                  onCardholderNameChange={setCardholderName}
-                />
-                <FormControlLabel
-                  control={<Checkbox checked={simulateFailure} onChange={(event) => setSimulateFailure(event.target.checked)} />}
-                  label="Simuler un refus de paiement"
-                />
-              </Stack>
-            ) : (
-              <Stack spacing={2}>
-                <TextField
-                  label="Titulaire du compte"
-                  value={holderName}
-                  onChange={(event) => setHolderName(event.target.value)}
-                  fullWidth
-                />
-                <TextField
-                  label="4 derniers chiffres IBAN"
-                  value={ibanLast4}
-                  onChange={(event) => setIbanLast4(event.target.value.replace(/\D/g, '').slice(0, 4))}
-                  slotProps={{ htmlInput: { inputMode: 'numeric', maxLength: 4 } }}
-                  fullWidth
-                />
-                <FormControlLabel
-                  control={<Checkbox checked={mandateAccepted} onChange={(event) => setMandateAccepted(event.target.checked)} />}
-                  label="J’autorise le prélèvement SEPA pour ce forfait (mandat prototype)"
-                />
-              </Stack>
-            )}
+            <PaymentMethodSection
+              method={method}
+              onMethodChange={setMethod}
+              cardNumber={cardNumber}
+              onCardNumberChange={setCardNumber}
+              expiry={cardExpiry}
+              onExpiryChange={setCardExpiry}
+              cvv={cardCvv}
+              onCvvChange={setCardCvv}
+              cardholderName={cardholderName}
+              onCardholderNameChange={setCardholderName}
+              simulateFailure={simulateFailure}
+              onSimulateFailureChange={setSimulateFailure}
+              holderName={holderName}
+              onHolderNameChange={setHolderName}
+              ibanLast4={ibanLast4}
+              onIbanLast4Change={setIbanLast4}
+              mandateAccepted={mandateAccepted}
+              onMandateAcceptedChange={setMandateAccepted}
+            />
           </Box>
 
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1.5, flexWrap: 'wrap' }}>

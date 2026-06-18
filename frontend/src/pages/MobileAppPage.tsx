@@ -1,26 +1,10 @@
 import { Box, Button, Chip, Paper, Stack, Typography } from '@mui/material'
 import { CreditCard, Download, ShieldCheck, Smartphone } from 'lucide-react'
 import { useEffect } from 'react'
+import { AccessibilityMenu } from '../accessibility/AccessibilityMenu'
+import { useAccessibility } from '../accessibility/useAccessibility'
 import appPreviewUrl from '../assets/mobile-app-img.png'
 import { colors } from '../theme/colors'
-
-const benefits = [
-  {
-    icon: <CreditCard size={18} />,
-    title: 'Titres',
-    text: 'Vos forfaits à portée de main.',
-  },
-  {
-    icon: <ShieldCheck size={18} />,
-    title: 'Espace sécurisé',
-    text: 'Vos données restent protégées.',
-  },
-  {
-    icon: <Smartphone size={18} />,
-    title: 'Rapide',
-    text: 'Documents, paiements et support en un geste.',
-  },
-]
 
 function StoreButton({ label, sublabel, href }: { label: string; sublabel: string; href: string }) {
   return (
@@ -59,17 +43,40 @@ function StoreButton({ label, sublabel, href }: { label: string; sublabel: strin
 }
 
 export function MobileAppPage() {
+  const { language } = useAccessibility()
+  const isFrench = language === 'fr'
+  const benefits = [
+    {
+      icon: <CreditCard size={18} />,
+      title: isFrench ? 'Titres' : 'Travel passes',
+      text: isFrench ? 'Vos forfaits à portée de main.' : 'Your travel passes always within reach.',
+    },
+    {
+      icon: <ShieldCheck size={18} />,
+      title: isFrench ? 'Espace sécurisé' : 'Secure space',
+      text: isFrench ? 'Vos données restent protégées.' : 'Your personal data remains protected.',
+    },
+    {
+      icon: <Smartphone size={18} />,
+      title: isFrench ? 'Rapide' : 'Fast',
+      text: isFrench ? 'Documents, paiements et support en un geste.' : 'Documents, payments and support in one tap.',
+    },
+  ]
+
   useEffect(() => {
     const previousTitle = document.title
-    document.title = 'Comutitres App mobile'
+    document.title = isFrench ? 'Comutitres App mobile' : 'Comutitres mobile app'
 
     return () => {
       document.title = previousTitle
     }
-  }, [])
+  }, [isFrench])
 
   return (
     <Box
+      id="main-content"
+      component="main"
+      tabIndex={-1}
       sx={{
         minHeight: '100vh',
         bgcolor: colors.appBackground,
@@ -80,6 +87,9 @@ export function MobileAppPage() {
         justifyContent: 'center',
       }}
     >
+      <Box sx={{ position: 'fixed', top: 18, right: 18, zIndex: 2 }}>
+        <AccessibilityMenu />
+      </Box>
       <Box sx={{ maxWidth: 1180, mx: 'auto' }}>
         <Box
           sx={{
@@ -93,7 +103,7 @@ export function MobileAppPage() {
             <Box>
               <Chip
                 icon={<Smartphone size={15} />}
-                label="Application mobile"
+                label={isFrench ? 'Application mobile' : 'Mobile app'}
                 sx={{
                   mb: 2,
                   bgcolor: colors.blueMedium,
@@ -111,10 +121,12 @@ export function MobileAppPage() {
                   maxWidth: 520,
                 }}
               >
-                Comutitres sur mobile
+                {isFrench ? 'Comutitres sur mobile' : 'Comutitres on mobile'}
               </Typography>
               <Typography sx={{ color: colors.greyDark, fontSize: 17, lineHeight: 1.55, mt: 2, maxWidth: 520 }}>
-                Suivez vos titres, documents et paiements depuis votre téléphone.
+                {isFrench
+                  ? 'Suivez vos titres, documents et paiements depuis votre téléphone.'
+                  : 'Track your travel passes, documents and payments from your phone.'}
               </Typography>
             </Box>
 
@@ -126,12 +138,12 @@ export function MobileAppPage() {
               <StoreButton
                 href="https://www.apple.com/app-store/"
                 label="App Store"
-                sublabel="Télécharger sur"
+                sublabel={isFrench ? 'Télécharger sur' : 'Download on the'}
               />
               <StoreButton
                 href="https://play.google.com/store"
                 label="Google Play"
-                sublabel="Disponible sur"
+                sublabel={isFrench ? 'Disponible sur' : 'Get it on'}
               />
             </Stack>
 
@@ -181,7 +193,7 @@ export function MobileAppPage() {
             <Box
               component="img"
               src={appPreviewUrl}
-              alt="Aperçu de l'application mobile Comutitres"
+              alt={isFrench ? "Aperçu de l'application mobile Comutitres" : 'Preview of the Comutitres mobile app'}
               sx={{
                 display: 'block',
                 width: '100%',

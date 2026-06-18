@@ -7,6 +7,7 @@ import { listSubscriptions } from '../services/subscriptions.service'
 import { clearRecommendationResult, getRecommendationResult } from '../services/onboarding.service'
 import { colors } from '../theme/colors'
 import type { OfferSummary, SubscriptionSummary } from '../types'
+import { useSubscriptionRealtime } from '../hooks/useSubscriptionRealtime'
 
 const statusLabel: Record<string, string> = {
   draft: 'Brouillon',
@@ -69,6 +70,12 @@ export function DashboardPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [pendingRec, setPendingRec] = useState(() => getRecommendationResult())
+
+  useSubscriptionRealtime(() => {
+    void listSubscriptions()
+      .then(setSubscriptions)
+      .catch((caught) => setError(caught instanceof Error ? caught.message : 'Les données client sont indisponibles.'))
+  })
 
   useEffect(() => {
     let cancelled = false
@@ -181,6 +188,7 @@ export function DashboardPage() {
               aria-label="Démarrer un nouveau parcours"
               component={Link}
               to="/onboarding"
+              state={{ mode: 'chat' }}
               variant="contained"
               endIcon={<ArrowRight size={18} />}
               sx={{ minWidth: { xs: 132, sm: 144 }, whiteSpace: 'nowrap' }}

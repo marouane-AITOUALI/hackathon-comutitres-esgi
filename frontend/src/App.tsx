@@ -1,4 +1,6 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { useAccessibility } from './accessibility/useAccessibility'
+import { DocumentTranslationBridge } from './i18n/DocumentTranslationBridge'
 import { AppLayout } from './components/AppLayout'
 import { ClientLayout } from './components/ClientLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -11,6 +13,7 @@ import { MobileAppPage } from './pages/MobileAppPage'
 import { OnboardingChatPage } from './pages/OnboardingChatPage'
 import { OffersPage } from './pages/OffersPage'
 import { PaiementsPage } from './pages/PaiementsPage'
+import { PaymentDetailPage } from './pages/PaymentDetailPage'
 import { PaymentFormPage } from './pages/PaymentFormPage'
 import { ProfilePage } from './pages/ProfilePage'
 import { RegisterPage } from './pages/RegisterPage'
@@ -19,8 +22,15 @@ import { SubscriptionsPage } from './pages/SubscriptionsPage'
 import { SupportPage } from './pages/SupportPage'
 
 function App() {
+  const { language } = useAccessibility()
+
   return (
-    <Routes>
+    <>
+      <DocumentTranslationBridge />
+      <a className="skip-link" href="#main-content">
+        {language === 'fr' ? 'Aller au contenu principal' : 'Skip to main content'}
+      </a>
+      <Routes>
       <Route path="auth/login" element={<LoginPage />} />
       <Route path="auth/register" element={<RegisterPage />} />
       <Route path="mobile-app" element={<MobileAppPage />} />
@@ -32,6 +42,7 @@ function App() {
           <Route path="offers" element={<OffersPage />} />
           <Route path="paiements" element={<PaiementsPage />} />
           <Route path="paiements/nouveau" element={<PaymentFormPage />} />
+          <Route path="paiements/:id" element={<PaymentDetailPage />} />
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="profil" element={<ProfilePage />} />
           <Route path="support" element={<SupportPage />} />
@@ -44,7 +55,8 @@ function App() {
         <Route path="infos/:page" element={<FooterInfoPage />} />
       </Route>
       <Route path="*" element={<Navigate replace to="/" />} />
-    </Routes>
+      </Routes>
+    </>
   )
 }
 
