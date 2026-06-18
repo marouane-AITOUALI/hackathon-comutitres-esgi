@@ -5,6 +5,21 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import {
+  ArrowRight,
+  BadgeCheck,
+  CircleHelp,
+  CreditCard,
+  FileCheck2,
+  GraduationCap,
+  HeartHandshake,
+  MapPin,
+  SearchCheck,
+  ShieldCheck,
+  Smartphone,
+  UserRound,
+  WalletCards,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Footer } from '../components/Footer'
 import { Header } from '../components/Header'
@@ -30,6 +45,67 @@ const accessibility = [
   { title: 'Senior', desc: 'Taille de texte adaptée', icon: 'person' },
   { title: 'Handicap', desc: 'Conforme aux normes d’accessibilité', icon: 'wheelchair' },
   { title: 'Mobile First', desc: 'Optimisé mobile et tablette', icon: 'phone' },
+]
+
+const journeySteps = [
+  {
+    number: '01',
+    title: 'Décris ton besoin',
+    desc: 'Profil, fréquence des trajets, porteur, payeur et situation particulière.',
+    icon: SearchCheck,
+  },
+  {
+    number: '02',
+    title: 'Reçois une recommandation',
+    desc: 'Le questionnaire compare les offres et explique pourquoi un forfait te correspond.',
+    icon: BadgeCheck,
+  },
+  {
+    number: '03',
+    title: 'Ajoute tes justificatifs',
+    desc: 'La plateforme demande uniquement les documents utiles et suit leur validation.',
+    icon: FileCheck2,
+  },
+  {
+    number: '04',
+    title: 'Finalise et suis ton dossier',
+    desc: 'Paiement, réception du titre, état de la demande et support restent au même endroit.',
+    icon: CreditCard,
+  },
+]
+
+const aidCards = [
+  {
+    title: 'Imagine R et bourse',
+    desc: 'Des réductions peuvent s’appliquer aux élèves et étudiants boursiers selon leur situation et leur département.',
+    note: 'Attestation de scolarité ou de bourse à prévoir.',
+    icon: GraduationCap,
+    color: '#7c3aed',
+    bg: '#f3e8ff',
+  },
+  {
+    title: 'Tarification Solidarité',
+    desc: 'Selon les droits sociaux, la TST peut ouvrir accès à une réduction de 50 %, Solidarité 75 % ou à la gratuité.',
+    note: 'Les droits et justificatifs sont vérifiés régulièrement.',
+    icon: HeartHandshake,
+    color: '#ea580c',
+    bg: '#ffedd5',
+  },
+  {
+    title: 'Senior et Améthyste',
+    desc: 'Les personnes de 65 ans et plus ou en situation de handicap peuvent bénéficier d’offres adaptées.',
+    note: 'Les conditions varient selon le département.',
+    icon: MapPin,
+    color: '#db2777',
+    bg: '#fce7f3',
+  },
+]
+
+const supportCases = [
+  'J’ai perdu ma carte',
+  'Mon paiement a été refusé',
+  'Je veux résilier',
+  'Je souhaite modifier mon adresse',
 ]
 
 function ForfaitIcon({ type, color }: { type: string; color: string }) {
@@ -161,7 +237,7 @@ export function HomePage() {
           </Typography>
 
           <Typography sx={{ color: '#475569', fontSize: { xs: 15, md: 17 }, maxWidth: 620 }}>
-            Navigo, Imagine R, TST, Améthyste — on t’oriente vers le bon forfait en 2 minutes.
+            Navigo, Imagine R, TST ou Améthyste : trouve le forfait qui te correspond en 2 minutes.
           </Typography>
 
           <Stack
@@ -169,26 +245,88 @@ export function HomePage() {
             spacing={1}
             sx={{
               mt: 1,
+              position: 'relative',
               width: '100%',
               maxWidth: 560,
-              p: 0.5,
-              bgcolor: '#fff',
-              borderRadius: 999,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-              border: '1px solid #e2e8f0',
+              p: 0.75,
+              bgcolor: 'rgba(255,255,255,0.88)',
+              backdropFilter: 'blur(14px)',
+              borderRadius: { xs: 4, sm: 999 },
+              boxShadow: '0 12px 38px rgba(15,23,42,0.14)',
+              border: '1px solid rgba(255,255,255,0.8)',
               alignItems: 'center',
+              transition: 'transform 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                inset: -2,
+                zIndex: -1,
+                borderRadius: 'inherit',
+                background: 'linear-gradient(110deg, rgba(25,114,210,0.2), rgba(96,165,250,0.7), rgba(255,255,255,0.25))',
+                opacity: 0,
+                transition: 'opacity 0.25s ease',
+              },
+              '&:hover': {
+                transform: 'translateY(-2px)',
+                boxShadow: '0 16px 42px rgba(25,114,210,0.2)',
+              },
+              '&:focus-within': {
+                transform: 'translateY(-2px)',
+                borderColor: 'rgba(96,165,250,0.9)',
+                boxShadow: '0 16px 44px rgba(25,114,210,0.24), 0 0 0 4px rgba(96,165,250,0.14)',
+                '&::before': {
+                  opacity: 1,
+                },
+                '& .profile-search-icon': {
+                  color: BRAND_BLUE,
+                  bgcolor: '#dbeafe',
+                  transform: 'scale(1.06)',
+                },
+              },
             }}
           >
             <TextField
               placeholder="Ton profil…"
               variant="standard"
               fullWidth
-              slotProps={{ input: { disableUnderline: true } }}
+              slotProps={{
+                input: {
+                  disableUnderline: true,
+                  startAdornment: (
+                    <Box
+                      className="profile-search-icon"
+                      sx={{
+                        width: 36,
+                        height: 36,
+                        mr: 1.25,
+                        borderRadius: '50%',
+                        color: '#64748b',
+                        bgcolor: '#f1f5f9',
+                        display: 'grid',
+                        placeItems: 'center',
+                        flexShrink: 0,
+                        transition: 'color 0.25s ease, background-color 0.25s ease, transform 0.25s ease',
+                      }}
+                    >
+                      <UserRound size={18} strokeWidth={2.1} aria-hidden="true" />
+                    </Box>
+                  ),
+                },
+              }}
               sx={{
-                px: 2,
+                px: { xs: 1, sm: 1.5 },
                 flex: 1,
                 '& .MuiInputBase-root': { height: 48 },
-                '& input': { fontSize: 15, py: 0 },
+                '& input': {
+                  fontSize: 15,
+                  fontWeight: 500,
+                  color: DARK_TEXT,
+                  py: 0,
+                  '&::placeholder': {
+                    color: '#64748b',
+                    opacity: 1,
+                  },
+                },
               }}
             />
             <Button
@@ -206,13 +344,88 @@ export function HomePage() {
                 '&:hover': { bgcolor: '#1565c0' },
               }}
             >
-              Trouver mon forfait →
+              Trouver mon forfait
+              <ArrowRight size={18} aria-hidden="true" />
             </Button>
           </Stack>
         </Stack>
       </Box>
 
-      <Box sx={{ px: { xs: 2, md: 5 }, py: { xs: 6, md: 8 } }}>
+      <Box
+        id="comment-ca-marche"
+        sx={{
+          px: { xs: 2, md: 5 },
+          py: { xs: 7, md: 10 },
+          bgcolor: '#f8fbff',
+          scrollMarginTop: 24,
+        }}
+      >
+        <Box sx={{ maxWidth: 1180, mx: 'auto' }}>
+          <Stack spacing={1.5} sx={{ alignItems: 'center', textAlign: 'center', mb: { xs: 5, md: 7 } }}>
+            <Typography sx={{ color: BRAND_BLUE, fontWeight: 800, fontSize: 12, letterSpacing: 1.2 }}>
+              COMMENT ÇA MARCHE
+            </Typography>
+            <Typography component="h2" sx={{ fontWeight: 900, fontSize: { xs: 28, md: 38 }, color: DARK_TEXT }}>
+              Un seul parcours, du choix au suivi
+            </Typography>
+            <Typography sx={{ color: '#64748b', maxWidth: 660, lineHeight: 1.7 }}>
+              Plus besoin de chercher où souscrire, quels documents fournir ou comment suivre ta demande.
+            </Typography>
+          </Stack>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+              gap: 2,
+            }}
+          >
+            {journeySteps.map((step) => {
+              const StepIcon = step.icon
+              return (
+                <Box
+                  key={step.number}
+                  sx={{
+                    position: 'relative',
+                    bgcolor: '#fff',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 4,
+                    p: 3,
+                    minHeight: 230,
+                    boxShadow: '0 10px 30px rgba(15,23,42,0.05)',
+                  }}
+                >
+                  <Typography sx={{ position: 'absolute', top: 18, right: 22, color: '#dbeafe', fontWeight: 900, fontSize: 30 }}>
+                    {step.number}
+                  </Typography>
+                  <Box
+                    sx={{
+                      width: 52,
+                      height: 52,
+                      borderRadius: 3,
+                      bgcolor: '#dbeafe',
+                      color: BRAND_BLUE,
+                      display: 'grid',
+                      placeItems: 'center',
+                      mb: 3,
+                    }}
+                  >
+                    <StepIcon size={25} strokeWidth={2} />
+                  </Box>
+                  <Typography sx={{ fontWeight: 850, color: DARK_TEXT, fontSize: 17, mb: 1 }}>
+                    {step.title}
+                  </Typography>
+                  <Typography sx={{ color: '#64748b', fontSize: 14, lineHeight: 1.65 }}>
+                    {step.desc}
+                  </Typography>
+                </Box>
+              )
+            })}
+          </Box>
+        </Box>
+      </Box>
+
+      <Box id="nos-forfaits" sx={{ px: { xs: 2, md: 5 }, py: { xs: 6, md: 8 }, scrollMarginTop: 24 }}>
         <Stack direction={{ xs: 'column', lg: 'row' }} spacing={{ xs: 4, lg: 6 }} sx={{ maxWidth: 1280, mx: 'auto' }}>
           <Box sx={{ flex: '0 0 auto', maxWidth: 320 }}>
             <Typography sx={{ color: BRAND_BLUE, fontWeight: 800, fontSize: 12, letterSpacing: 1.2, mb: 1.5 }}>
@@ -234,7 +447,8 @@ export function HomePage() {
                 '&:hover': { borderColor: '#1565c0', bgcolor: 'rgba(25,114,210,0.04)' },
               }}
             >
-              Comparer les forfaits →
+              Comparer les forfaits
+              <ArrowRight size={18} aria-hidden="true" />
             </Button>
           </Box>
 
@@ -266,9 +480,21 @@ export function HomePage() {
                   border: '1px solid #e2e8f0',
                   display: 'flex',
                   flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  textAlign: 'center',
                   minHeight: 220,
-                  transition: 'box-shadow 0.2s, transform 0.2s',
-                  '&:hover': { boxShadow: '0 8px 24px rgba(0,0,0,0.08)', transform: 'translateY(-2px)' },
+                  cursor: 'pointer',
+                  transition: 'border-color 0.2s, box-shadow 0.2s, transform 0.2s',
+                  '&:hover': {
+                    borderColor: `${f.color}55`,
+                    boxShadow: `0 12px 28px ${f.color}1f`,
+                    transform: 'translateY(-4px)',
+                  },
+                  '&:focus-visible': {
+                    outline: `3px solid ${f.color}55`,
+                    outlineOffset: 3,
+                  },
                 }}
               >
                 <Box
@@ -286,12 +512,80 @@ export function HomePage() {
                   <ForfaitIcon type={f.icon} color={f.color} />
                 </Box>
                 <Typography sx={{ fontWeight: 800, fontSize: 16, color: DARK_TEXT, mb: 0.75 }}>{f.title}</Typography>
-                <Typography sx={{ fontSize: 13, color: '#64748b', lineHeight: 1.4, flexGrow: 1 }}>{f.desc}</Typography>
-                <Typography sx={{ color: BRAND_BLUE, fontWeight: 800, fontSize: 18, mt: 2 }}>→</Typography>
+                <Typography sx={{ fontSize: 13, color: '#64748b', lineHeight: 1.5 }}>{f.desc}</Typography>
               </Box>
             ))}
           </Box>
         </Stack>
+      </Box>
+
+      <Box
+        id="tarifs-et-aides"
+        sx={{ px: { xs: 2, md: 5 }, py: { xs: 7, md: 10 }, bgcolor: '#f8fbff', scrollMarginTop: 24 }}
+      >
+        <Box sx={{ maxWidth: 1180, mx: 'auto' }}>
+          <Stack spacing={1.5} sx={{ alignItems: 'center', textAlign: 'center', mb: { xs: 5, md: 7 } }}>
+            <Typography sx={{ color: BRAND_BLUE, fontWeight: 800, fontSize: 12, letterSpacing: 1.2 }}>
+              TARIFS & AIDES
+            </Typography>
+            <Typography component="h2" sx={{ fontWeight: 900, fontSize: { xs: 28, md: 38 }, color: DARK_TEXT }}>
+              Les aides qui peuvent changer ton tarif
+            </Typography>
+            <Typography sx={{ color: '#64748b', maxWidth: 700, lineHeight: 1.7 }}>
+              Le parcours identifie les dispositifs possibles, puis te demande les justificatifs nécessaires pour confirmer tes droits.
+            </Typography>
+          </Stack>
+
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+              gap: 2.5,
+            }}
+          >
+            {aidCards.map((aid) => {
+              const AidIcon = aid.icon
+              return (
+              <Box
+                key={aid.title}
+                sx={{
+                  bgcolor: '#fff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 4,
+                  p: 3,
+                  boxShadow: '0 10px 30px rgba(15,23,42,0.05)',
+                  textAlign: 'center',
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 3,
+                    bgcolor: aid.bg,
+                    color: aid.color,
+                    display: 'grid',
+                    placeItems: 'center',
+                    mb: 2.5,
+                    mx: 'auto',
+                  }}
+                >
+                  <AidIcon size={25} strokeWidth={2} />
+                </Box>
+                <Typography sx={{ fontWeight: 850, fontSize: 18, color: DARK_TEXT, mb: 1 }}>
+                  {aid.title}
+                </Typography>
+                <Typography sx={{ color: '#64748b', fontSize: 14, lineHeight: 1.65, mb: 2 }}>
+                  {aid.desc}
+                </Typography>
+                <Typography sx={{ color: aid.color, fontWeight: 700, fontSize: 13, lineHeight: 1.5 }}>
+                  {aid.note}
+                </Typography>
+              </Box>
+              )
+            })}
+          </Box>
+        </Box>
       </Box>
 
       <Box sx={{ px: { xs: 2, md: 5 }, py: { xs: 6, md: 8 }, textAlign: 'center' }}>
@@ -343,6 +637,101 @@ export function HomePage() {
       </Box>
 
       <Box
+        id="aide"
+        sx={{
+          px: { xs: 2, md: 5 },
+          py: { xs: 7, md: 9 },
+          bgcolor: '#0d1b2a',
+          color: '#fff',
+          scrollMarginTop: 24,
+        }}
+      >
+        <Box
+          sx={{
+            maxWidth: 1180,
+            mx: 'auto',
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', md: '0.9fr 1.1fr' },
+            gap: { xs: 5, md: 8 },
+            alignItems: 'center',
+          }}
+        >
+          <Box>
+            <Box
+              sx={{
+                width: 56,
+                height: 56,
+                borderRadius: 3,
+                bgcolor: 'rgba(96,165,250,0.15)',
+                color: '#93c5fd',
+                display: 'grid',
+                placeItems: 'center',
+                mb: 3,
+              }}
+            >
+              <CircleHelp size={27} />
+            </Box>
+            <Typography sx={{ color: '#93c5fd', fontWeight: 800, fontSize: 12, letterSpacing: 1.2, mb: 1.5 }}>
+              AIDE & SAV
+            </Typography>
+            <Typography component="h2" sx={{ fontWeight: 900, fontSize: { xs: 28, md: 38 }, lineHeight: 1.15, mb: 2 }}>
+              Un support intégré à ton parcours
+            </Typography>
+            <Typography sx={{ color: 'rgba(255,255,255,0.68)', lineHeight: 1.75, maxWidth: 520 }}>
+              Consulte le suivi de ta demande, retrouve tes documents et obtiens une réponse sans repartir de zéro.
+            </Typography>
+          </Box>
+
+          <Box
+            sx={{
+              bgcolor: 'rgba(255,255,255,0.07)',
+              border: '1px solid rgba(255,255,255,0.12)',
+              borderRadius: 4,
+              p: { xs: 2.5, sm: 3.5 },
+            }}
+          >
+            <Stack spacing={1.5}>
+              {supportCases.map((supportCase) => (
+                <Stack
+                  key={supportCase}
+                  direction="row"
+                  spacing={1.5}
+                  sx={{
+                    alignItems: 'center',
+                    bgcolor: 'rgba(255,255,255,0.06)',
+                    borderRadius: 2.5,
+                    p: 1.5,
+                  }}
+                >
+                  <ShieldCheck size={20} color="#93c5fd" />
+                  <Typography sx={{ fontWeight: 650, fontSize: 14 }}>{supportCase}</Typography>
+                </Stack>
+              ))}
+            </Stack>
+            <Button
+              component={Link}
+              to={user ? '/support' : '/auth/register'}
+              variant="contained"
+              startIcon={<WalletCards size={18} />}
+              sx={{
+                mt: 3,
+                display: 'flex',
+                mx: 'auto',
+                borderRadius: 999,
+                bgcolor: '#fff',
+                color: BRAND_BLUE,
+                fontWeight: 800,
+                px: 3,
+                '&:hover': { bgcolor: '#dbeafe' },
+              }}
+            >
+              Accéder au support
+            </Button>
+          </Box>
+        </Box>
+      </Box>
+
+      <Box
         sx={{
           position: 'relative',
           minHeight: { xs: 320, md: 380 },
@@ -364,24 +753,49 @@ export function HomePage() {
           <Typography sx={{ color: 'rgba(255,255,255,0.9)', fontSize: { xs: 15, md: 17 } }}>
             En moins de 2 minutes, découvrez l’abonnement adapté à votre situation.
           </Typography>
-          <Button
-            component={Link}
-            to={ctaTo}
-            variant="contained"
-            size="large"
-            sx={{
-              mt: 1,
-              borderRadius: 999,
-              px: 4,
-              py: 1.5,
-              fontWeight: 700,
-              bgcolor: BRAND_BLUE,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
-              '&:hover': { bgcolor: '#1565c0' },
-            }}
-          >
-            Commencer maintenant →
-          </Button>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ mt: 1 }}>
+            <Button
+              component={Link}
+              to={ctaTo}
+              variant="contained"
+              size="large"
+              sx={{
+                borderRadius: 999,
+                px: 4,
+                py: 1.5,
+                fontWeight: 700,
+                bgcolor: BRAND_BLUE,
+                boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+                '&:hover': { bgcolor: '#1565c0' },
+              }}
+            >
+              Commencer maintenant
+              <ArrowRight size={19} aria-hidden="true" />
+            </Button>
+            <Button
+              component={Link}
+              to="/mobile-app"
+              variant="outlined"
+              size="large"
+              startIcon={<Smartphone size={19} />}
+              sx={{
+                borderRadius: 999,
+                px: 3.5,
+                py: 1.5,
+                color: '#fff',
+                borderColor: 'rgba(255,255,255,0.72)',
+                fontWeight: 700,
+                backdropFilter: 'blur(8px)',
+                bgcolor: 'rgba(255,255,255,0.08)',
+                '&:hover': {
+                  borderColor: '#fff',
+                  bgcolor: 'rgba(255,255,255,0.16)',
+                },
+              }}
+            >
+              Découvrir l’app mobile
+            </Button>
+          </Stack>
         </Stack>
       </Box>
 
