@@ -6,6 +6,7 @@ import { listOffers } from '../services/offers.service'
 import { listSubscriptions } from '../services/subscriptions.service'
 import { colors } from '../theme/colors'
 import type { OfferSummary, SubscriptionSummary } from '../types'
+import { useSubscriptionRealtime } from '../hooks/useSubscriptionRealtime'
 
 const statusLabel: Record<string, string> = {
   draft: 'Brouillon',
@@ -67,6 +68,12 @@ export function DashboardPage() {
   const [offers, setOffers] = useState<OfferSummary[]>([])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+
+  useSubscriptionRealtime(() => {
+    void listSubscriptions()
+      .then(setSubscriptions)
+      .catch((caught) => setError(caught instanceof Error ? caught.message : 'Les données client sont indisponibles.'))
+  })
 
   useEffect(() => {
     let cancelled = false

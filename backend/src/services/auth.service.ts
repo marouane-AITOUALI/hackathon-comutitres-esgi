@@ -6,6 +6,7 @@ import type { AuthSession, PublicUser, SubscriptionSummary } from '../types/auth
 import type { LoginInput, RegisterInput, RegisterWithOnboardingInput, UpdateCurrentUserInput } from '../validation/auth.schemas.js'
 import { AppError } from '../utils/app-error.js'
 import { createAuthToken } from '../utils/jwt.js'
+import { notifyAccountCreated } from './notifications.service.js'
 import { createPrivateSignedUrl } from './storage.service.js'
 
 const selection = {
@@ -120,11 +121,15 @@ async function createOnboardingBundle(
 export async function registerUser(input: RegisterInput) {
   const database = requireDb()
   const user = await createUser(database, input)
-  return session(database, user)
+  const result = await session(database, user)
+  await notifyAccountCreated({ userId: user.id, firstName: user.firstName }).catch((error) => {
+    console.error('[notifications] Notification de bienvenue non créée.', error)
+  })
+  return result
 }
 
 export async function registerUserWithOnboarding(input: RegisterWithOnboardingInput) {
-  return requireDb().transaction(async (tx) => {
+  const result = await requireDb().transaction(async (tx) => {
     const user = await createUser(tx, input)
     const bundle = await createOnboardingBundle(tx, user.id, input.onboarding)
     const offerConditions = [
@@ -151,6 +156,16 @@ export async function registerUserWithOnboarding(input: RegisterWithOnboardingIn
       subscription,
     }
   })
+
+  await notifyAccountCreated({
+    userId: result.user.id,
+    firstName: result.user.firstName,
+    subscriptionId: result.subscription.id,
+  }).catch((error) => {
+    console.error('[notifications] Notification de bienvenue non créée.', error)
+  })
+
+  return result
 }
 
 export async function loginUser(input: LoginInput) {

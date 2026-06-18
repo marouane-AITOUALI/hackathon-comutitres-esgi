@@ -1,23 +1,30 @@
 import {
   AppBar,
   Avatar,
+  Badge,
   Box,
+  Button,
   Collapse,
   Divider,
   IconButton,
   MenuItem,
   MenuList,
   Paper,
+  Popover,
+  Stack,
   Toolbar,
   Typography,
+  Tooltip,
   useMediaQuery,
   useTheme,
 } from '@mui/material'
-import { Bell, ChevronDown, LogOut, Menu, Search, User } from 'lucide-react'
+import { Bell, Check, ChevronDown, LogOut, Mail, Menu, Search, Trash2, User } from 'lucide-react'
 import { useRef, useState } from 'react'
 import { AccessibilityMenu } from '../accessibility/AccessibilityMenu'
 import { useAccessibility } from '../accessibility/useAccessibility'
 import { colors } from '../theme/colors'
+import { useNotifications } from '../hooks/useNotifications'
+import type { UserNotification } from '../types'
 
 interface HeaderProps {
   userName?: string
@@ -26,6 +33,7 @@ interface HeaderProps {
   onMenuToggle?: () => void
   onLogout?: () => void
   onProfileClick?: () => void
+  onNotificationClick?: (notification: UserNotification) => void
 }
 
 export function Header({
@@ -35,6 +43,7 @@ export function Header({
   onMenuToggle,
   onLogout,
   onProfileClick,
+  onNotificationClick,
 }: HeaderProps) {
   const { language } = useAccessibility()
   const theme = useTheme()
@@ -43,7 +52,13 @@ export function Header({
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchValue, setSearchValue] = useState('')
   const [profileOpen, setProfileOpen] = useState(false)
+  const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null)
+  const [notificationFilter, setNotificationFilter] = useState<'all' | 'unread'>('all')
   const profileRef = useRef<HTMLDivElement>(null)
+  const { connected, markAllRead, markRead, markUnread, notifications, remove, unreadCount } = useNotifications()
+  const visibleNotifications = notificationFilter === 'unread'
+    ? notifications.filter((notification) => !notification.readAt)
+    : notifications
 
   const handleSearchBlur = () => {
     setSearchOpen(false)
@@ -235,21 +250,156 @@ export function Header({
           </Box>
 
           {/* Bell */}
-          <IconButton
-            aria-label={labels.notifications}
-            size="small"
-            sx={{
-              width: 40,
-              height: 40,
-              border: `1.5px solid ${colors.greyMedium}`,
-              borderRadius: 99,
-              bgcolor: colors.white,
-              color: colors.greyDark,
-              '&:hover': { bgcolor: colors.greyLight },
-            }}
+          <Badge badgeContent={unreadCount} color="error" max={99}>
+            <IconButton
+              aria-label={`${labels.notifications} : ${unreadCount} non lue(s)`}
+              onClick={(event) => setNotificationAnchor(event.currentTarget)}
+              size="small"
+              sx={{
+                width: 40,
+                height: 40,
+                border: `1.5px solid ${colors.greyMedium}`,
+                borderRadius: 99,
+                bgcolor: colors.white,
+                color: colors.greyDark,
+                '&:hover': { bgcolor: colors.greyLight },
+              }}
+            >
+              <Bell size={18} />
+            </IconButton>
+          </Badge>
+          <Popover
+            anchorEl={notificationAnchor}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            onClose={() => setNotificationAnchor(null)}
+            open={Boolean(notificationAnchor)}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
           >
-            <Bell size={18} />
-          </IconButton>
+            <Box sx={{ width: { xs: 320, sm: 390 }, maxWidth: 'calc(100vw - 24px)', maxHeight: 480, overflowY: 'auto' }}>
+              <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', p: 2, borderBottom: `1px solid ${colors.greyMedium}` }}>
+                <Box>
+                  <Typography sx={{ fontWeight: 800 }}>Notifications</Typography>
+                  <Typography color="text.secondary" variant="caption">
+                    {connected ? 'Temps réel actif' : 'Reconnexion en cours'}
+                  </Typography>
+                </Box>
+                {unreadCount > 0 && (
+                  <Button onClick={() => void markAllRead()} size="small">
+                    Tout lire
+                  </Button>
+                )}
+              </Stack>
+              <Stack direction="row" spacing={1} sx={{ p: 1.5, borderBottom: `1px solid ${colors.greyMedium}` }}>
+                <Button
+                  onClick={() => setNotificationFilter('all')}
+                  size="small"
+                  variant={notificationFilter === 'all' ? 'contained' : 'text'}
+                >
+                  Toutes
+                </Button>
+                <Button
+                  onClick={() => setNotificationFilter('unread')}
+                  size="small"
+                  variant={notificationFilter === 'unread' ? 'contained' : 'text'}
+                >
+                  Non lues ({unreadCount})
+                </Button>
+              </Stack>
+              {visibleNotifications.length === 0 ? (
+                <Typography color="text.secondary" sx={{ p: 3, textAlign: 'center' }}>
+                  {notificationFilter === 'unread' ? 'Aucune notification non lue.' : 'Aucune notification pour le moment.'}
+                </Typography>
+              ) : (
+                visibleNotifications.slice(0, 50).map((notification) => (
+                  <Box
+                    key={notification.id}
+                    onClick={() => {
+                      if (!notification.readAt) void markRead(notification.id)
+                      setNotificationAnchor(null)
+                      onNotificationClick?.(notification)
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.target !== event.currentTarget) return
+                      if (event.key !== 'Enter' && event.key !== ' ') return
+                      event.preventDefault()
+                      if (!notification.readAt) void markRead(notification.id)
+                      setNotificationAnchor(null)
+                      onNotificationClick?.(notification)
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    sx={{
+                      bgcolor: notification.readAt ? colors.white : colors.blueLight,
+                      borderBottom: `1px solid ${colors.greyMedium}`,
+                      color: colors.anthracite,
+                      cursor: 'pointer',
+                      display: 'block',
+                      font: 'inherit',
+                      p: 2,
+                      textAlign: 'left',
+                      width: '100%',
+                      '&:hover': { bgcolor: colors.greyLight40 },
+                    }}
+                  >
+                    <Stack direction="row" spacing={1.25}>
+                      <Box sx={{
+                        bgcolor: notification.readAt
+                          ? colors.greyMedium
+                          : notification.priority === 'high' ? colors.redDark : notification.priority === 'low' ? colors.greyDark : colors.blueInteraction,
+                        borderRadius: 99,
+                        height: 8,
+                        mt: 0.75,
+                        width: 8,
+                        flexShrink: 0,
+                      }} />
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: notification.readAt ? 650 : 800, fontSize: 14 }}>
+                          {notification.title}
+                        </Typography>
+                        <Typography color="text.secondary" variant="body2">
+                          {notification.message}
+                        </Typography>
+                        <Typography color="text.secondary" variant="caption">
+                          {new Intl.DateTimeFormat('fr-FR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(notification.createdAt))}
+                        </Typography>
+                        {typeof notification.data.actionLabel === 'string' && (
+                          <Typography sx={{ color: colors.blueInteraction, display: 'block', fontWeight: 800, mt: 0.5 }} variant="caption">
+                            {notification.data.actionLabel}
+                          </Typography>
+                        )}
+                      </Box>
+                      <Stack direction="row" spacing={0.25} sx={{ alignSelf: 'flex-start' }}>
+                        <Tooltip title={notification.readAt ? 'Marquer non lue' : 'Marquer comme lue'}>
+                          <IconButton
+                            aria-label={notification.readAt ? 'Marquer non lue' : 'Marquer comme lue'}
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void (notification.readAt ? markUnread(notification.id) : markRead(notification.id))
+                            }}
+                            size="small"
+                          >
+                            {notification.readAt ? <Mail size={15} /> : <Check size={15} />}
+                          </IconButton>
+                        </Tooltip>
+                        <Tooltip title="Supprimer">
+                          <IconButton
+                            aria-label="Supprimer la notification"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              void remove(notification.id)
+                            }}
+                            size="small"
+                          >
+                            <Trash2 size={15} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    </Stack>
+                  </Box>
+                ))
+              )}
+            </Box>
+          </Popover>
 
           <AccessibilityMenu />
 

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { listSubscriptions } from '../services/subscriptions.service'
 import { colors } from '../theme/colors'
 import type { SubscriptionStatus, SubscriptionSummary } from '../types'
+import { useSubscriptionRealtime } from '../hooks/useSubscriptionRealtime'
 
 const statusLabel: Record<SubscriptionStatus, string> = {
   draft: 'Brouillon',
@@ -98,6 +99,12 @@ export function SubscriptionsPage() {
   const [activeFilter, setActiveFilter] = useState<'all' | SubscriptionStatus>('all')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+
+  useSubscriptionRealtime(() => {
+    void listSubscriptions()
+      .then(setSubscriptions)
+      .catch((caught) => setError(caught instanceof Error ? caught.message : 'Impossible de charger les souscriptions.'))
+  })
 
   useEffect(() => {
     let cancelled = false
