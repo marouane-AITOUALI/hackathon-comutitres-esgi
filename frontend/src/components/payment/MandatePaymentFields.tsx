@@ -102,13 +102,15 @@ export function MandatePaymentFields({
             sx={fieldSx}
             slotProps={{
               input: {
-                inputMode: 'numeric',
-                maxLength: 4,
                 startAdornment: (
                   <InputAdornment position="start">
                     <Hash size={18} color={colors.greyDark} />
                   </InputAdornment>
                 ),
+              },
+              htmlInput: {
+                inputMode: 'numeric',
+                maxLength: 4,
               },
             }}
           />

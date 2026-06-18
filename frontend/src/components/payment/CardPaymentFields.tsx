@@ -161,13 +161,15 @@ export function CardPaymentFields({
             sx={fieldSx}
             slotProps={{
               input: {
-                inputMode: 'numeric',
-                autoComplete: 'cc-number',
                 startAdornment: (
                   <InputAdornment position="start">
                     <CreditCard size={18} color={colors.greyDark} />
                   </InputAdornment>
                 ),
+              },
+              htmlInput: {
+                inputMode: 'numeric',
+                autoComplete: 'cc-number',
               },
             }}
           />
@@ -181,13 +183,15 @@ export function CardPaymentFields({
               sx={{ ...fieldSx, flex: 1 }}
               slotProps={{
                 input: {
-                  inputMode: 'numeric',
-                  autoComplete: 'cc-exp',
                   startAdornment: (
                     <InputAdornment position="start">
                       <Calendar size={18} color={colors.greyDark} />
                     </InputAdornment>
                   ),
+                },
+                htmlInput: {
+                  inputMode: 'numeric',
+                  autoComplete: 'cc-exp',
                 },
               }}
             />
@@ -199,14 +203,16 @@ export function CardPaymentFields({
               sx={{ ...fieldSx, flex: 1 }}
               slotProps={{
                 input: {
-                  inputMode: 'numeric',
-                  autoComplete: 'cc-csc',
-                  maxLength: 4,
                   startAdornment: (
                     <InputAdornment position="start">
                       <Lock size={18} color={colors.greyDark} />
                     </InputAdornment>
                   ),
+                },
+                htmlInput: {
+                  inputMode: 'numeric',
+                  autoComplete: 'cc-csc',
+                  maxLength: 4,
                 },
               }}
             />
@@ -221,12 +227,14 @@ export function CardPaymentFields({
             sx={fieldSx}
             slotProps={{
               input: {
-                autoComplete: 'cc-name',
                 startAdornment: (
                   <InputAdornment position="start">
                     <User size={18} color={colors.greyDark} />
                   </InputAdornment>
                 ),
+              },
+              htmlInput: {
+                autoComplete: 'cc-name',
               },
             }}
           />

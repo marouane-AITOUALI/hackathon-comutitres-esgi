@@ -154,7 +154,7 @@ export function PaymentDetailPage() {
       {payment && (
         <Paper sx={{ borderRadius: 3, p: 3 }}>
           <Stack spacing={2}>
-            <Stack alignItems={{ xs: 'flex-start', sm: 'center' }} direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { xs: 'flex-start', sm: 'center' } }}>
               <Box sx={{ flex: 1 }}>
                 <Typography sx={{ fontWeight: 700 }} variant="h6">
                   {payment.externalReference ?? payment.id.slice(0, 8).toUpperCase()}
