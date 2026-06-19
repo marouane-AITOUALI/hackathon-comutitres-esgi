@@ -79,7 +79,9 @@ export interface AdminSubscriptionItem {
     blockingReasons: string[]
     documentsReady: boolean
     documentsUploaded: boolean
+    requiresDocumentAnalysis: boolean
     requiresDocumentReview: boolean
+    pendingAnalysisDocumentTypes: string[]
     reviewDocumentTypes: string[]
     hasAcceptedPayment: boolean
     canSubmit: boolean

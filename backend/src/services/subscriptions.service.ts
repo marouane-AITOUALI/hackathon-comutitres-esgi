@@ -6,6 +6,7 @@ import { createPrivateSignedUrl } from './storage.service.js'
 import { notifySubscriptionStatusChanged } from './notifications.service.js'
 import type { CreateSubscriptionInput, UpdateSubscriptionInput } from '../validation/subscription.schemas.js'
 import { assertNoOpenSubscription, evaluateSubscriptionWorkflow, reconcileSubscriptionWorkflow } from './subscription-workflow.service.js'
+import { analyzeSubscriptionDocumentsForSubmission } from './documents.service.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
 type SubscriptionInput = CreateSubscriptionInput | UpdateSubscriptionInput
@@ -251,10 +252,18 @@ export async function submitSubscription(userId: string, id: string) {
   if (current.status !== 'draft' || current.submittedAt) throw new AppError(409, 'La souscription a déjà été soumise.')
   if (!current.offerId) throw new AppError(400, 'Une offre doit etre associee avant soumission.')
 
-  const workflow = await evaluateSubscriptionWorkflow(id)
-  if (!workflow.canSubmit) {
+  const preflightWorkflow = await evaluateSubscriptionWorkflow(id)
+  if (!preflightWorkflow.canSubmit) {
     throw new AppError(409, "Le dossier n'est pas prêt à être envoyé.", {
-      blockingReasons: workflow.blockingReasons,
+      blockingReasons: preflightWorkflow.blockingReasons,
+    })
+  }
+
+  await analyzeSubscriptionDocumentsForSubmission(userId, id)
+  const analyzedWorkflow = await evaluateSubscriptionWorkflow(id)
+  if (!analyzedWorkflow.canSubmit) {
+    throw new AppError(409, "L'analyse des justificatifs demande une correction avant l'envoi.", {
+      blockingReasons: analyzedWorkflow.blockingReasons,
     })
   }
 

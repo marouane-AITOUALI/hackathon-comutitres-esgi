@@ -20,7 +20,7 @@ import {
   X,
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
-import { analyzeDocument, createDocument, resubmitDocument } from '../services/documents.service'
+import { createDocument, resubmitDocument } from '../services/documents.service'
 import { createDirectPayment, createMandatePayment, simulatePayment } from '../services/payments.service'
 import { acceptSubscriptionRenewal, cancelSubscription, cancelSubscriptionRenewal, cancelSubscriptionTermination, getSubscriptionById, getSubscriptionRenewal, getSubscriptionTermination, requestSubscriptionTermination, submitSubscription } from '../services/subscriptions.service'
 import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
@@ -100,7 +100,7 @@ function documentStatusMeta(document?: DocumentSummary) {
   if (document.status === 'rejected') return { label: 'À remplacer', color: colors.redDark, icon: <AlertCircle size={18} /> }
   if (document.status === 'needs_manual_review') return { label: 'Revue humaine nécessaire', color: colors.orangeDark, icon: <AlertCircle size={18} /> }
   if (document.status === 'analyzing') return { label: 'Analyse en cours', color: colors.blueInteraction, icon: <RotateCcw size={18} /> }
-  return { label: 'Déposé', color: colors.orangeDark, icon: <FileText size={18} /> }
+  return { label: document.analyzedAt ? 'Déposé' : "Déposé · analyse à l'envoi", color: colors.orangeDark, icon: <FileText size={18} /> }
 }
 
 function formatEuros(cents: number, currency = 'EUR') {
@@ -130,9 +130,9 @@ function terminationMonthOptions(count = 13) {
 function workflowPresentation(item: SubscriptionSummary) {
   switch (item.workflow.state) {
     case 'documents_required':
-      return { title: 'Complétez les justificatifs', description: 'Déposez les pièces indiquées ci-dessous. Elles seront analysées automatiquement.', severity: 'warning' as const }
+      return { title: 'Complétez les justificatifs', description: "Déposez les pièces indiquées ci-dessous. L'analyse simulée sera lancée lors de l'envoi final.", severity: 'warning' as const }
     case 'payment_required':
-      return { title: 'Le dossier attend votre paiement', description: 'Les justificatifs bloquants sont prêts. Choisissez maintenant votre mode de règlement.', severity: 'warning' as const }
+      return { title: 'Le dossier attend votre paiement', description: 'Les justificatifs sont déposés. Choisissez maintenant votre mode de règlement.', severity: 'warning' as const }
     case 'ready_to_submit':
       return { title: 'Votre dossier est prêt', description: 'Vérifiez le récapitulatif puis envoyez le dossier à Comutitres.', severity: 'success' as const }
     case 'under_review':
@@ -247,7 +247,10 @@ export function SubscriptionDetailPage() {
   const stepperItems = [...documentSteps, 'payment' as const, 'final' as const]
   const selectedDocumentFile = activeDocumentType ? preparedFiles[activeDocumentType] ?? null : null
   const hasCompletedPayment = item?.workflow.hasAcceptedPayment ?? false
-  const activeCanReplace = activeDocumentType ? item?.workflow.replaceableDocumentTypes.includes(activeDocumentType) ?? false : false
+  const draftDocumentsEditable = item?.subscription.status === 'draft' && !item.subscription.submittedAt
+  const activeCanReplace = activeDocumentType
+    ? (item?.workflow.replaceableDocumentTypes?.includes(activeDocumentType) ?? false) || draftDocumentsEditable
+    : false
   const historyItems = useMemo(() => {
     if (!item) return []
 
@@ -320,21 +323,6 @@ export function SubscriptionDetailPage() {
     selectDocumentFile(event.dataTransfer.files[0])
   }
 
-  async function analyze(idToAnalyze: string) {
-    setSaving(true)
-    setError('')
-    setSuccess('')
-    try {
-      await analyzeDocument(idToAnalyze)
-      await refresh()
-      setSuccess('Analyse documentaire relancée.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Analyse impossible.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
   async function saveCurrentDocumentAndContinue() {
     if (!id || !activeDocumentType) return
     const file = preparedFiles[activeDocumentType]
@@ -364,7 +352,7 @@ export function SubscriptionDetailPage() {
       setItem(latest)
       const nextStep = activeStep === documentSteps.length - 1 ? paymentStepIndex : activeStep + 1
       goToStep(nextStep)
-      if (file) setSuccess('Document enregistré et analysé automatiquement.')
+      if (file) setSuccess("Document enregistré. Il sera analysé lors de l'envoi final.")
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Enregistrement du document impossible.')
     } finally {
@@ -596,7 +584,9 @@ export function SubscriptionDetailPage() {
               {
                 label: 'Justificatifs',
                 value: item.workflow.documentsUploaded
-                  ? item.workflow.requiresDocumentReview ? 'Déposés · contrôle BO' : 'Vérifiés'
+                  ? item.workflow.requiresDocumentAnalysis
+                    ? 'Déposés · analyse à l’envoi'
+                    : item.workflow.requiresDocumentReview ? 'Déposés · contrôle BO' : 'Vérifiés'
                   : `${item.workflow.requiredDocumentTypes.length - item.workflow.missingRequiredDocuments.length}/${item.workflow.requiredDocumentTypes.length} déposés`,
                 complete: item.workflow.documentsUploaded,
                 icon: <FileText size={21} />,
@@ -894,12 +884,13 @@ export function SubscriptionDetailPage() {
                   <Alert severity={activeDocument.status === 'validated' ? 'success' : activeDocument.status === 'rejected' ? 'error' : 'warning'} sx={{ mb: 2 }}>
                     <Typography sx={{ fontWeight: 800 }}>{documentStatusMeta(activeDocument).label}</Typography>
                     <Typography variant="body2">
-                      Confiance de l’analyse : {confidence(activeDocument)}.
-                      {activeDocument.status === 'needs_manual_review'
-                        ? ' Le document est bien enregistré et sera contrôlé par le backoffice.'
-                        : activeDocument.status === 'validated'
-                          ? ' Aucun contrôle supplémentaire n’est nécessaire avant l’étude du dossier.'
-                          : ''}
+                      {activeDocument.analyzedAt
+                        ? `Confiance de l’analyse : ${confidence(activeDocument)}.${activeDocument.status === 'needs_manual_review'
+                          ? ' Le document est bien enregistré et sera contrôlé par le backoffice.'
+                          : activeDocument.status === 'validated'
+                            ? ' Aucun contrôle supplémentaire n’est nécessaire avant l’étude du dossier.'
+                            : ''}`
+                        : "Le fichier est bien enregistré. L'analyse simulée sera lancée lors de l'envoi final."}
                     </Typography>
                     {activeDocument.signedUrl && (
                       <Button component="a" href={activeDocument.signedUrl} rel="noreferrer" size="small" sx={{ ml: 1 }} target="_blank">
@@ -907,11 +898,6 @@ export function SubscriptionDetailPage() {
                       </Button>
                     )}
                   </Alert>
-                )}
-                {activeDocument && activeDocument.status !== 'validated' && (
-                  <Button disabled={saving} onClick={() => void analyze(activeDocument.id)} startIcon={<ShieldCheck size={17} />} sx={{ mb: 2 }} variant="outlined">
-                    Relancer l’analyse
-                  </Button>
                 )}
 
                 {!activeCanReplace ? (
@@ -1219,12 +1205,12 @@ export function SubscriptionDetailPage() {
                   variant="contained"
                   sx={{ minHeight: 52, minWidth: { xs: '100%', sm: 280 }, px: 3 }}
                 >
-                  Envoyer pour validation
+                  Analyser et envoyer pour validation
                 </Button>
                 <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
                   <ShieldCheck size={18} color={allDocumentsDeposited && hasCompletedPayment ? colors.greenDark : colors.greyDark} />
                   <Typography color="text.secondary" variant="body2">
-                    Documents et paiement seront transmis à Comutitres.
+                    L'analyse simulée sera lancée, puis les documents et le paiement seront transmis à Comutitres.
                   </Typography>
                 </Stack>
               </Stack>

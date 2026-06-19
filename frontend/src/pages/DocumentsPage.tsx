@@ -1,8 +1,7 @@
 import { Accordion, AccordionDetails, AccordionSummary, Alert, Box, Button, Chip, Pagination, Paper, Stack, Typography } from '@mui/material'
 import { ArrowRight, BadgeCheck, ChevronDown, FileSearch, FileText, FileWarning, Layers3, RefreshCw, ShieldAlert } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { analyzeDocument } from '../services/documents.service'
 import { listSubscriptions } from '../services/subscriptions.service'
 import { colors } from '../theme/colors'
 import type { DocumentStatus, DocumentSummary, SubscriptionSummary } from '../types'
@@ -103,13 +102,6 @@ function filterCount(key: 'all' | DocumentStatus, rows: DocumentRow[]) {
   return rows.filter(({ document }) => document.status === key).length
 }
 
-function getDocumentAction(document: DocumentSummary) {
-  if (document.status === 'validated' || document.status === 'analyzing') return null
-  if (document.status === 'rejected') return 'Réanalyser'
-  if (document.status === 'needs_manual_review') return 'Réanalyser'
-  return 'Analyser'
-}
-
 function getDocumentName(document: DocumentSummary) {
   if (document.originalFilename) return document.originalFilename
   const cleanUrl = document.fileUrl.split('?')[0]
@@ -128,14 +120,7 @@ export function DocumentsPage() {
   const [activeFilter, setActiveFilter] = useState<'all' | DocumentStatus>('all')
   const [page, setPage] = useState(1)
   const [loading, setLoading] = useState(true)
-  const [savingId, setSavingId] = useState<string | null>(null)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState('')
-
-  const load = useCallback(async () => {
-    const data = await listSubscriptions()
-    setSubscriptions(data)
-  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -179,21 +164,6 @@ export function DocumentsPage() {
   const visibleGroups = groupedSubscriptions.slice((currentPage - 1) * groupsPerPage, currentPage * groupsPerPage)
   const blockingRows = rows.filter(({ document }) => ['pending', 'rejected', 'needs_manual_review'].includes(document.status)).slice(0, 4)
 
-  async function analyze(id: string) {
-    setSavingId(id)
-    setError('')
-    setSuccess('')
-    try {
-      await analyzeDocument(id)
-      await load()
-      setSuccess('Analyse documentaire terminée.')
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Analyse impossible.')
-    } finally {
-      setSavingId(null)
-    }
-  }
-
   return (
     <Stack spacing={3}>
       <Paper
@@ -211,7 +181,7 @@ export function DocumentsPage() {
               Suivez les pièces attendues, contrôlées et validées.
             </Typography>
             <Typography color="text.secondary">
-              Centralisez les justificatifs liés à vos dossiers et relancez une analyse dès qu'un document doit être vérifié.
+              Centralisez les justificatifs liés à vos dossiers. Leur analyse est lancée lors de l'envoi final, puis les éventuels contrôles sont réalisés par Comutitres.
             </Typography>
           </Box>
           <Button component={Link} to="/subscriptions" variant="contained" endIcon={<ArrowRight size={18} />} sx={{ alignSelf: { xs: 'flex-start', md: 'center' } }}>
@@ -221,7 +191,6 @@ export function DocumentsPage() {
       </Paper>
 
       {error && <Alert severity="error">{error}</Alert>}
-      {success && <Alert severity="success">{success}</Alert>}
       {loading && <Alert severity="info">Chargement des documents...</Alert>}
 
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(4, 1fr)' }, gap: 2 }}>
@@ -375,8 +344,6 @@ export function DocumentsPage() {
                     {documents.map((document, index) => {
                       const confidence = getConfidence(document)
                       const issue = getDocumentIssue(document)
-                      const action = getDocumentAction(document)
-
                       return (
                         <Box
                           key={document.id}
@@ -425,18 +392,9 @@ export function DocumentsPage() {
                                 )}
                               </Box>
                             </Stack>
-                            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-                              {action && (
-                                <Button
-                                  disabled={savingId === document.id}
-                                  onClick={() => analyze(document.id)}
-                                  startIcon={<RefreshCw size={16} />}
-                                  variant={document.status === 'pending' ? 'contained' : 'outlined'}
-                                >
-                                  {savingId === document.id ? 'Analyse...' : action}
-                                </Button>
-                              )}
-                            </Stack>
+                            <Button component={Link} to={`/subscriptions/${subscription.subscription.id}`} variant="outlined">
+                              Voir le dossier
+                            </Button>
                           </Stack>
                         </Box>
                       )

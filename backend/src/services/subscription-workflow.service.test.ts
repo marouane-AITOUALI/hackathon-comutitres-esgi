@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildSubscriptionWorkflow, isSchoolCertificateBlocking } from './subscription-workflow.service.js'
+import { buildSubscriptionWorkflow, isSchoolCertificateBlocking, normalizeDocumentType } from './subscription-workflow.service.js'
 import { createInstallmentSchedule } from './payments.service.js'
 import { onboardingSchema } from '../validation/onboarding.schemas.js'
 import { mandatePaymentSchema } from '../validation/payment.schemas.js'
@@ -51,6 +51,43 @@ test('une piece en revue humaine permet de payer et envoyer le dossier au backof
   assert.equal(workflow.requiresDocumentReview, true)
   assert.equal(workflow.canSubmit, true)
   assert.equal(workflow.state, 'ready_to_submit')
+})
+
+test('normalise les anciens libelles de justificatifs stockes dans les offres', () => {
+  assert.equal(normalizeDocumentType('identité'), 'identity')
+  assert.equal(normalizeDocumentType('certificat_scolarite'), 'school_certificate')
+  assert.equal(normalizeDocumentType('piece-identite'), 'identity')
+})
+
+test('un brouillon avec les anciens libelles autorise le depot des pieces canoniques', () => {
+  const workflow = buildSubscriptionWorkflow({
+    status: 'draft',
+    submittedAt: null,
+    requiredDocuments: ['identité', 'certificat_scolarite'],
+    documents: [],
+    payments: [],
+    now: new Date('2026-06-19T12:00:00Z'),
+  })
+
+  assert.deepEqual(workflow.requiredDocumentTypes, ['identity', 'school_certificate'])
+  assert.deepEqual(workflow.replaceableDocumentTypes, ['identity', 'school_certificate'])
+  assert.equal(workflow.canUpload, true)
+})
+
+test("un document depose reste en attente d'analyse jusqu'a l'envoi final", () => {
+  const workflow = buildSubscriptionWorkflow({
+    ...baseWorkflow,
+    documents: [
+      { type: 'identity', status: 'pending' },
+      { type: 'school_certificate', status: 'pending' },
+    ],
+  })
+
+  assert.equal(workflow.documentsUploaded, true)
+  assert.equal(workflow.requiresDocumentAnalysis, true)
+  assert.equal(workflow.requiresDocumentReview, false)
+  assert.deepEqual(workflow.pendingAnalysisDocumentTypes, ['identity', 'school_certificate'])
+  assert.equal(workflow.canSubmit, true)
 })
 
 test('echeancier ajuste les centimes sur la derniere mensualite', () => {
