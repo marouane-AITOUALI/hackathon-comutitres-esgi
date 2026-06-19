@@ -1,12 +1,15 @@
 import { Box, Checkbox, FormControlLabel, InputAdornment, Stack, TextField, Typography } from '@mui/material'
-import { Building2, Hash, User } from 'lucide-react'
+import { Building2, Landmark, User } from 'lucide-react'
 import { colors } from '../../theme/colors'
+import { formatBic, formatIban } from './sepaPaymentUtils'
 
 type MandatePaymentFieldsProps = {
   holderName: string
   onHolderNameChange: (value: string) => void
-  ibanLast4: string
-  onIbanLast4Change: (value: string) => void
+  iban: string
+  onIbanChange: (value: string) => void
+  bic: string
+  onBicChange: (value: string) => void
   mandateAccepted: boolean
   onMandateAcceptedChange: (value: boolean) => void
 }
@@ -21,8 +24,10 @@ const fieldSx = {
 export function MandatePaymentFields({
   holderName,
   onHolderNameChange,
-  ibanLast4,
-  onIbanLast4Change,
+  iban,
+  onIbanChange,
+  bic,
+  onBicChange,
   mandateAccepted,
   onMandateAcceptedChange,
 }: MandatePaymentFieldsProps) {
@@ -30,51 +35,38 @@ export function MandatePaymentFields({
     <Stack spacing={2.5}>
       <Box
         sx={{
-          borderRadius: 3,
-          p: { xs: 2.5, sm: 3 },
-          bgcolor: colors.greyLight40,
-          border: `1px solid ${colors.greyMedium}`,
+          display: 'grid',
+          gap: 2.5,
+          gridTemplateColumns: { xs: '1fr', md: 'minmax(260px, 340px) 1fr' },
+          alignItems: 'start',
         }}
       >
-        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', mb: 2 }}>
-          <Box
-            sx={{
-              width: 44,
-              height: 44,
-              borderRadius: 1.5,
-              display: 'grid',
-              placeItems: 'center',
-              bgcolor: colors.blueInteraction,
-              color: colors.white,
-            }}
-          >
-            <Building2 size={22} />
-          </Box>
-          <Box>
-            <Typography sx={{ fontWeight: 800, color: colors.anthracite }}>
-              Mandat SEPA (prototype)
-            </Typography>
-            <Typography color="text.secondary" variant="body2">
-              Autorisez le prélèvement sur votre compte bancaire.
-            </Typography>
-          </Box>
-        </Stack>
-
         <Box
           sx={{
-            px: 2,
-            py: 1.5,
-            borderRadius: 2,
-            bgcolor: colors.white,
-            border: `1px dashed ${colors.greyMedium}`,
-            fontFamily: 'monospace',
-            fontSize: 15,
-            letterSpacing: 2,
-            color: colors.greyDark,
-            mb: 2,
+            borderRadius: 3,
+            minHeight: 190,
+            p: { xs: 2.5, sm: 3 },
+            color: colors.white,
+            background: `linear-gradient(135deg, ${colors.blueFocus} 0%, ${colors.blueInteraction} 58%, ${colors.purpleDark} 100%)`,
+            boxShadow: '0 12px 32px rgba(0, 80, 170, 0.24)',
           }}
         >
-          FR •• •••• •••• •••• •••• {ibanLast4.padEnd(4, '•')}
+          <Stack sx={{ height: '100%', justifyContent: 'space-between' }} spacing={3}>
+            <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between' }}>
+              <Box sx={{ bgcolor: 'rgba(255,255,255,0.16)', borderRadius: 1.5, display: 'grid', height: 44, placeItems: 'center', width: 44 }}>
+                <Building2 size={23} />
+              </Box>
+              <Typography sx={{ fontSize: 13, fontWeight: 800, letterSpacing: 1.4 }}>MANDAT SEPA</Typography>
+            </Stack>
+            <Typography sx={{ fontFamily: 'monospace', fontSize: 18, fontWeight: 650, letterSpacing: 1.4, wordBreak: 'break-word' }}>
+              {iban || 'FR76 •••• •••• •••• •••• •••• •••'}
+            </Typography>
+            <Box>
+              <Typography sx={{ fontSize: 10, opacity: 0.75, letterSpacing: 1 }}>TITULAIRE DU COMPTE</Typography>
+              <Typography sx={{ fontWeight: 750, textTransform: 'uppercase' }}>{holderName.trim() || 'NOM PRÉNOM'}</Typography>
+              <Typography sx={{ fontFamily: 'monospace', fontSize: 12, mt: 0.5, opacity: 0.85 }}>{bic || 'BIC'}</Typography>
+            </Box>
+          </Stack>
         </Box>
 
         <Stack spacing={2}>
@@ -84,48 +76,35 @@ export function MandatePaymentFields({
             onChange={(event) => onHolderNameChange(event.target.value)}
             fullWidth
             sx={fieldSx}
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <User size={18} color={colors.greyDark} />
-                  </InputAdornment>
-                ),
-              },
-            }}
+            slotProps={{ input: { startAdornment: <InputAdornment position="start"><User size={18} color={colors.greyDark} /></InputAdornment> } }}
           />
           <TextField
-            label="4 derniers chiffres IBAN"
-            value={ibanLast4}
-            onChange={(event) => onIbanLast4Change(event.target.value.replace(/\D/g, '').slice(0, 4))}
+            label="IBAN"
+            value={iban}
+            onChange={(event) => onIbanChange(formatIban(event.target.value))}
+            placeholder="FR76 3000 6000 0112 3456 7890 189"
             fullWidth
             sx={fieldSx}
             slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <Hash size={18} color={colors.greyDark} />
-                  </InputAdornment>
-                ),
-              },
-              htmlInput: {
-                inputMode: 'numeric',
-                maxLength: 4,
-              },
+              input: { startAdornment: <InputAdornment position="start"><Landmark size={18} color={colors.greyDark} /></InputAdornment> },
+              htmlInput: { autoComplete: 'off', maxLength: 42 },
             }}
+          />
+          <TextField
+            label="BIC"
+            value={bic}
+            onChange={(event) => onBicChange(formatBic(event.target.value))}
+            placeholder="AGRIFRPP"
+            fullWidth
+            sx={fieldSx}
+            slotProps={{ htmlInput: { autoComplete: 'off', maxLength: 11 } }}
           />
         </Stack>
       </Box>
 
       <FormControlLabel
-        control={
-          <Checkbox
-            checked={mandateAccepted}
-            onChange={(event) => onMandateAcceptedChange(event.target.checked)}
-            sx={{ '&.Mui-checked': { color: colors.blueInteraction } }}
-          />
-        }
-        label="J’autorise le prélèvement SEPA pour ce forfait"
+        control={<Checkbox checked={mandateAccepted} onChange={(event) => onMandateAcceptedChange(event.target.checked)} />}
+        label="J’autorise les prélèvements SEPA mensuels prévus par l’échéancier."
         sx={{ alignItems: 'flex-start', mx: 0 }}
       />
     </Stack>

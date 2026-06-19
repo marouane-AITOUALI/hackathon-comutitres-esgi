@@ -432,6 +432,20 @@ Enregistre une decision humaine sur un justificatif.
 Liste les utilisateurs publics, sans `passwordHash`, avec le nombre de
 souscriptions associees.
 
+### `PATCH /admin/users/:id/archive`
+
+Archive ou reactive un compte sans supprimer son historique.
+
+```json
+{
+  "archived": true
+}
+```
+
+Un compte archive ne peut plus se connecter et ses sessions existantes sont
+refusees par l'API. Le dernier administrateur actif et le compte de
+l'administrateur courant ne peuvent pas etre archives.
+
 ### `GET /admin/offers`
 
 Liste toutes les offres, actives ou non, pour pilotage catalogue.
@@ -447,6 +461,8 @@ Cree une offre dans le catalogue.
   "description": "Offre de demonstration",
   "target": "prototype",
   "requiredDocuments": ["Piece d'identite"],
+  "priceCents": 97600,
+  "monthlyInstallmentCount": 12,
   "isActive": true
 }
 ```
@@ -459,11 +475,6 @@ Modifie une offre existante.
 
 Retourne des alertes calculees sans nouvelle table : justificatifs manquants,
 documents a revoir, dossiers bloques.
-
-### `GET /admin/audit-logs`
-
-Retourne un journal prototype derive des changements de statut souscriptions et
-documents. Une table dediee pourra etre ajoutee plus tard si le besoin augmente.
 
 ## Notifications temps reel
 

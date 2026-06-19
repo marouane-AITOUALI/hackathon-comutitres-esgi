@@ -2,7 +2,7 @@ import type { PaymentSimulation, PaymentSummary } from '../types'
 import { apiRequest } from './api'
 
 export const simulatePayment = (payload: { subscriptionId: string; paymentMode?: 'one_time' | 'monthly' | 'weekly' | 'usage' }) =>
-  apiRequest<{ simulation: PaymentSimulation; payment: PaymentSummary | null }>('/payments/simulate', {
+  apiRequest<{ simulation: PaymentSimulation; payment: null }>('/payments/simulate', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
@@ -13,7 +13,7 @@ export const createDirectPayment = (payload: { subscriptionId: string; paymentMo
     body: JSON.stringify(payload),
   })
 
-export const createMandatePayment = (payload: { subscriptionId: string; paymentMode?: 'one_time' | 'monthly'; holderName: string; ibanLast4: string; mandateAccepted: boolean }) =>
+export const createMandatePayment = (payload: { subscriptionId: string; paymentMode: 'monthly'; holderName: string; ibanLast4: string; bic: string; mandateAccepted: boolean }) =>
   apiRequest<{ payment: PaymentSummary }>('/payments/mandate', {
     method: 'POST',
     body: JSON.stringify(payload),

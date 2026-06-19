@@ -25,6 +25,7 @@ import { createDirectPayment, createMandatePayment, simulatePayment } from '../s
 import { acceptSubscriptionRenewal, cancelSubscription, cancelSubscriptionRenewal, cancelSubscriptionTermination, getSubscriptionById, getSubscriptionRenewal, getSubscriptionTermination, requestSubscriptionTermination, submitSubscription } from '../services/subscriptions.service'
 import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
+import { validateSepaFields } from '../components/payment/sepaPaymentUtils'
 import { colors } from '../theme/colors'
 import type { DocumentSummary, DocumentType, PaymentSimulation, RenewalSummary, SubscriptionStatus, SubscriptionSummary, TerminationSummary } from '../types'
 import { useSubscriptionRealtime } from '../hooks/useSubscriptionRealtime'
@@ -95,9 +96,9 @@ function formatFileSize(bytes: number) {
 
 function documentStatusMeta(document?: DocumentSummary) {
   if (!document) return { label: 'À déposer', color: colors.greyDark, icon: <Circle size={18} /> }
-  if (document.status === 'validated') return { label: 'Validé', color: colors.greenDark, icon: <CheckCircle2 size={18} /> }
+  if (document.status === 'validated') return { label: 'Vérifié automatiquement', color: colors.greenDark, icon: <CheckCircle2 size={18} /> }
   if (document.status === 'rejected') return { label: 'À remplacer', color: colors.redDark, icon: <AlertCircle size={18} /> }
-  if (document.status === 'needs_manual_review') return { label: 'À vérifier', color: colors.orangeDark, icon: <AlertCircle size={18} /> }
+  if (document.status === 'needs_manual_review') return { label: 'Revue humaine nécessaire', color: colors.orangeDark, icon: <AlertCircle size={18} /> }
   if (document.status === 'analyzing') return { label: 'Analyse en cours', color: colors.blueInteraction, icon: <RotateCcw size={18} /> }
   return { label: 'Déposé', color: colors.orangeDark, icon: <FileText size={18} /> }
 }
@@ -176,7 +177,8 @@ export function SubscriptionDetailPage() {
   const [cardholderName, setCardholderName] = useState('')
   const [simulateFailure, setSimulateFailure] = useState(false)
   const [holderName, setHolderName] = useState('')
-  const [ibanLast4, setIbanLast4] = useState('')
+  const [iban, setIban] = useState('')
+  const [bic, setBic] = useState('')
   const [mandateAccepted, setMandateAccepted] = useState(false)
   const [simulation, setSimulation] = useState<PaymentSimulation | null>(null)
   const [simulating, setSimulating] = useState(false)
@@ -237,7 +239,7 @@ export function SubscriptionDetailPage() {
   const activeDocument = activeDocumentType ? item?.documents.find((document) => document.type === activeDocumentType) : undefined
   const preparedCount = documentSteps.filter((type) => preparedFiles[type]).length
   const completedCount = documentSteps.filter((type) => item?.documents.some((document) => document.type === type) || preparedFiles[type]).length
-  const allDocumentsDeposited = item?.workflow.documentsReady ?? completedCount === documentSteps.length
+  const allDocumentsDeposited = completedCount === documentSteps.length
   const paymentStepIndex = documentSteps.length
   const finalStepIndex = documentSteps.length + 1
   const isPaymentStep = activeStep === paymentStepIndex
@@ -333,6 +335,43 @@ export function SubscriptionDetailPage() {
     }
   }
 
+  async function saveCurrentDocumentAndContinue() {
+    if (!id || !activeDocumentType) return
+    const file = preparedFiles[activeDocumentType]
+    if (!activeDocument && !file) {
+      setError(`Ajoutez ${documentTypeLabels[activeDocumentType].toLowerCase()} avant de continuer.`)
+      return
+    }
+    if (activeDocument?.status === 'rejected' && !file) {
+      setError('Ce document a été refusé. Choisissez un nouveau fichier avant de continuer.')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      if (file) {
+        if (activeDocument) await resubmitDocument(activeDocument.id, { type: activeDocumentType, file })
+        else await createDocument(id, { type: activeDocumentType, file })
+        setPreparedFiles((current) => {
+          const next = { ...current }
+          delete next[activeDocumentType]
+          return next
+        })
+      }
+      const latest = await getSubscriptionById(id)
+      setItem(latest)
+      const nextStep = activeStep === documentSteps.length - 1 ? paymentStepIndex : activeStep + 1
+      goToStep(nextStep)
+      if (file) setSuccess('Document enregistré et analysé automatiquement.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Enregistrement du document impossible.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   function goToStep(step: number) {
     setActiveStep(Math.max(0, Math.min(step, finalStepIndex)))
     if (fileInputRef.current) fileInputRef.current.value = ''
@@ -374,12 +413,29 @@ export function SubscriptionDetailPage() {
         await createDirectPayment({ subscriptionId: id, paymentMode, cardToken: simulation.totalCents === 0 ? undefined : buildCardToken(cardNumber), simulateFailure })
         setSuccess(simulateFailure ? 'Paiement refusé (simulation).' : 'Paiement accepté.')
       } else {
+        if (paymentMode !== 'monthly') {
+          setPaymentMethod('card')
+          setError('Le prélèvement SEPA est disponible uniquement avec la mensualisation.')
+          return
+        }
+        const sepaError = validateSepaFields(holderName, iban, bic)
+        if (sepaError) {
+          setError(sepaError)
+          return
+        }
         if (!mandateAccepted) {
           setError('Vous devez accepter le mandat SEPA.')
           return
         }
-        await createMandatePayment({ subscriptionId: id, paymentMode, holderName, ibanLast4, mandateAccepted: true })
-        setSuccess('Mandat SEPA enregistré.')
+        await createMandatePayment({
+          subscriptionId: id,
+          paymentMode: 'monthly',
+          holderName,
+          ibanLast4: iban.replace(/\s/g, '').slice(-4),
+          bic,
+          mandateAccepted: true,
+        })
+        setSuccess('Mandat SEPA enregistré. Les prélèvements suivront l’échéancier affiché.')
       }
       await refresh()
       setSimulation(null)
@@ -539,8 +595,10 @@ export function SubscriptionDetailPage() {
             {[
               {
                 label: 'Justificatifs',
-                value: item.workflow.documentsReady ? 'Prêts' : `${item.workflow.blockingDocumentTypes.length - item.workflow.missingBlockingDocuments.length}/${item.workflow.blockingDocumentTypes.length} reçus`,
-                complete: item.workflow.documentsReady,
+                value: item.workflow.documentsUploaded
+                  ? item.workflow.requiresDocumentReview ? 'Déposés · contrôle BO' : 'Vérifiés'
+                  : `${item.workflow.requiredDocumentTypes.length - item.workflow.missingRequiredDocuments.length}/${item.workflow.requiredDocumentTypes.length} déposés`,
+                complete: item.workflow.documentsUploaded,
                 icon: <FileText size={21} />,
               },
               {
@@ -834,7 +892,15 @@ export function SubscriptionDetailPage() {
 
                 {activeDocument && (
                   <Alert severity={activeDocument.status === 'validated' ? 'success' : activeDocument.status === 'rejected' ? 'error' : 'warning'} sx={{ mb: 2 }}>
-                    {documentStatusMeta(activeDocument).label}. Confiance : {confidence(activeDocument)}
+                    <Typography sx={{ fontWeight: 800 }}>{documentStatusMeta(activeDocument).label}</Typography>
+                    <Typography variant="body2">
+                      Confiance de l’analyse : {confidence(activeDocument)}.
+                      {activeDocument.status === 'needs_manual_review'
+                        ? ' Le document est bien enregistré et sera contrôlé par le backoffice.'
+                        : activeDocument.status === 'validated'
+                          ? ' Aucun contrôle supplémentaire n’est nécessaire avant l’étude du dossier.'
+                          : ''}
+                    </Typography>
                     {activeDocument.signedUrl && (
                       <Button component="a" href={activeDocument.signedUrl} rel="noreferrer" size="small" sx={{ ml: 1 }} target="_blank">
                         Voir
@@ -963,12 +1029,12 @@ export function SubscriptionDetailPage() {
               </Button>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                 <Button
-                  disabled={activeStep === documentSteps.length - 1 && !allDocumentsDeposited}
+                  disabled={saving || (!activeDocument && !selectedDocumentFile) || (activeDocument?.status === 'rejected' && !selectedDocumentFile)}
                   endIcon={<ArrowRight size={17} />}
-                  onClick={() => goToStep(activeStep === documentSteps.length - 1 ? paymentStepIndex : activeStep + 1)}
+                  onClick={() => void saveCurrentDocumentAndContinue()}
                   variant="outlined"
                 >
-                  Suivant
+                  {selectedDocumentFile ? 'Enregistrer et continuer' : 'Suivant'}
                 </Button>
               </Stack>
             </Stack>
@@ -1003,7 +1069,21 @@ export function SubscriptionDetailPage() {
               {allDocumentsDeposited && !hasCompletedPayment && (
                 <>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'flex-end' } }}>
-                    <TextField select label="Fréquence" value={paymentMode} onChange={(e) => { setPaymentMode(e.target.value as 'one_time' | 'monthly'); setSimulation(null) }} sx={{ minWidth: 220 }}>
+                    <TextField
+                      select
+                      label="Fréquence"
+                      value={paymentMode}
+                      onChange={(event) => {
+                        const nextMode = event.target.value as 'one_time' | 'monthly'
+                        setPaymentMode(nextMode)
+                        if (nextMode === 'one_time') {
+                          setPaymentMethod('card')
+                          setMandateAccepted(false)
+                        }
+                        setSimulation(null)
+                      }}
+                      sx={{ minWidth: 220 }}
+                    >
                       <MenuItem value="one_time">Paiement unique</MenuItem>
                       <MenuItem value="monthly">Mensualisation</MenuItem>
                     </TextField>
@@ -1034,6 +1114,7 @@ export function SubscriptionDetailPage() {
                   <PaymentMethodSection
                     method={paymentMethod}
                     onMethodChange={setPaymentMethod}
+                    allowMandate={paymentMode === 'monthly'}
                     cardNumber={cardNumber}
                     onCardNumberChange={setCardNumber}
                     expiry={cardExpiry}
@@ -1046,14 +1127,16 @@ export function SubscriptionDetailPage() {
                     onSimulateFailureChange={setSimulateFailure}
                     holderName={holderName}
                     onHolderNameChange={setHolderName}
-                    ibanLast4={ibanLast4}
-                    onIbanLast4Change={setIbanLast4}
+                    iban={iban}
+                    onIbanChange={setIban}
+                    bic={bic}
+                    onBicChange={setBic}
                     mandateAccepted={mandateAccepted}
                     onMandateAcceptedChange={setMandateAccepted}
                   />
 
                   <Button disabled={paying || !simulation} onClick={() => void submitPayment()} variant="contained" sx={{ alignSelf: { sm: 'flex-start' }, fontWeight: 700 }}>
-                    {paying ? 'Traitement...' : paymentMethod === 'card' ? 'Payer maintenant' : 'Valider le mandat'}
+                    {paying ? 'Traitement...' : paymentMode === 'one_time' || paymentMethod === 'card' ? 'Payer maintenant' : 'Valider le mandat'}
                   </Button>
                 </>
               )}

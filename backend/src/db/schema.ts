@@ -43,6 +43,7 @@ export const users = pgTable('users', {
   email: text('email').notNull(),
   passwordHash: text('password_hash').notNull(),
   role: userRole('role').default('user').notNull(),
+  archivedAt: timestamp('archived_at', { withTimezone: true }),
   phone: text('phone'),
   addressLine1: text('address_line1'),
   addressLine2: text('address_line2'),
