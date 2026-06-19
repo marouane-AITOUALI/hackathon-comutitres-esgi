@@ -32,13 +32,13 @@ npm run dev:backend
 npm run dev:backoffice
 ```
 
-## Docker
+## Docker — application seule
 
 Renseigner d'abord `backend/.env`, puis lancer tout l'environnement de
-developpement avec hot reload :
+développement avec hot reload :
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
 Les services sont disponibles sur :
@@ -47,7 +47,13 @@ Les services sont disponibles sur :
 - backend : http://localhost:3001/api/health
 - backoffice : http://localhost:5174
 
-Pour arreter et supprimer les conteneurs :
+Pour suivre les logs :
+
+```bash
+docker compose logs -f
+```
+
+Pour arrêter l'application seule :
 
 ```bash
 docker compose down
@@ -69,6 +75,68 @@ Les ports peuvent etre modifies avant le lancement :
 $env:API_PORT=4000
 docker compose up --build
 ```
+
+## Docker — application avec observabilité
+
+Une stack optionnelle ajoute Prometheus, Grafana, Umami et GlitchTip sans
+modifier la commande de l'application seule :
+
+```bash
+docker compose -f compose.yml -f compose.observability.yml --profile observability up -d --build
+```
+
+Pour suivre les logs de cette stack :
+
+```bash
+docker compose -f compose.yml -f compose.observability.yml --profile observability logs -f
+```
+
+Pour arrêter l'application et toute l'observabilité :
+
+```bash
+docker compose -f compose.yml -f compose.observability.yml --profile observability down
+```
+
+Prometheus collecte les metriques exposees par l'API et Grafana charge
+automatiquement un tableau de bord Comutitres. Umami et GlitchTip utilisent des
+bases dediees, non exposees publiquement.
+
+### Ports locaux
+
+| Service | URL | Port hôte |
+| --- | --- | --- |
+| Frontend voyageur | http://localhost:5173 | `5173` |
+| Backoffice | http://localhost:5174 | `5174` |
+| API / healthcheck | http://localhost:3001/api/health | `3001` |
+| API / métriques | http://localhost:3001/api/metrics | `3001` |
+| Grafana | http://localhost:3002 | `3002` |
+| Umami | http://localhost:3003 | `3003` |
+| GlitchTip | http://localhost:8000 | `8000` |
+| Prometheus | http://localhost:9090 | `9090` |
+
+Les bases PostgreSQL d'Umami et GlitchTip ainsi que Valkey n'exposent aucun port
+sur la machine. Elles sont accessibles uniquement entre conteneurs.
+
+### Si le backend devient `unhealthy`
+
+Après l'ajout d'une dépendance backend, l'ancien volume Docker
+`backend_node_modules` peut masquer les dépendances de la nouvelle image.
+Actualiser ce volume puis relancer la stack :
+
+```bash
+docker compose -f compose.yml -f compose.observability.yml --profile observability exec backend npm install --ignore-scripts
+docker compose -f compose.yml -f compose.observability.yml --profile observability restart backend
+docker compose -f compose.yml -f compose.observability.yml --profile observability up -d
+```
+
+Pour identifier la cause d'un conteneur défaillant :
+
+```bash
+docker compose -f compose.yml -f compose.observability.yml --profile observability ps -a
+docker compose -f compose.yml -f compose.observability.yml --profile observability logs --tail=200 backend
+```
+
+Voir `docs/observability.md` pour les URLs, variables et etapes de configuration.
 
 ## Base de donnees
 

@@ -6,7 +6,10 @@ import App from './App'
 import { AccessibilityProvider } from './accessibility/AccessibilityContext'
 import { AuthProvider } from './hooks/AuthProvider'
 import { NotificationsProvider } from './hooks/NotificationsProvider'
+import { initializeGlitchTip } from './observability/glitchtip'
 import { AppThemeProvider } from './styles/AppThemeProvider'
+
+initializeGlitchTip()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
