@@ -360,6 +360,43 @@ export function SubscriptionDetailPage() {
     }
   }
 
+  async function saveCurrentDocumentAndContinue() {
+    if (!id || !activeDocumentType) return
+    const file = preparedFiles[activeDocumentType]
+    if (!activeDocument && !file) {
+      setError(`Ajoutez ${documentTypeLabels[activeDocumentType].toLowerCase()} avant de continuer.`)
+      return
+    }
+    if (activeDocument?.status === 'rejected' && !file) {
+      setError('Ce document a été refusé. Choisissez un nouveau fichier avant de continuer.')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      if (file) {
+        if (activeDocument) await resubmitDocument(activeDocument.id, { type: activeDocumentType, file })
+        else await createDocument(id, { type: activeDocumentType, file })
+        setPreparedFiles((current) => {
+          const next = { ...current }
+          delete next[activeDocumentType]
+          return next
+        })
+      }
+      const latest = await getSubscriptionById(id)
+      setItem(latest)
+      const nextStep = activeStep === documentSteps.length - 1 ? paymentStepIndex : activeStep + 1
+      goToStep(nextStep)
+      if (file) setSuccess('Document enregistré et analysé automatiquement.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Enregistrement du document impossible.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   function goToStep(step: number) {
     setActiveStep(Math.max(0, Math.min(step, finalStepIndex)))
     if (fileInputRef.current) fileInputRef.current.value = ''
