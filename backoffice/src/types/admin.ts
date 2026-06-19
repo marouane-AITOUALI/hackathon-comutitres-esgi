@@ -32,17 +32,9 @@ export interface SupportAlert {
 export interface AdminUserListItem extends AdminUser {
   rgpdConsent?: boolean
   subscriptionCount?: number
+  archivedAt?: string | null
   createdAt?: string
   updatedAt?: string
-}
-
-export interface AuditLog {
-  id: string
-  entityType: string
-  entityId: string
-  action: string
-  summary: string
-  createdAt: string
 }
 
 export type AdminOfferListItem = AdminOffer

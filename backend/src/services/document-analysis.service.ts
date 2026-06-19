@@ -71,11 +71,9 @@ export function analyzeDocumentWithRules(document: DocumentForAnalysis): Documen
   }
 
   const boundedConfidence = Math.max(0, Math.min(100, confidence))
-  const suggestedStatus = fraudSignals.length > 0
-    ? 'rejected'
-    : boundedConfidence >= 85
-      ? 'validated'
-      : 'needs_manual_review'
+  const suggestedStatus = boundedConfidence >= 85 && fraudSignals.length === 0
+    ? 'validated'
+    : 'needs_manual_review'
 
   return {
     provider: 'rules-prototype-free',

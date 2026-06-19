@@ -5,6 +5,8 @@ import { AppError } from '../utils/app-error.js'
 import { createPrivateSignedUrl } from './storage.service.js'
 import { notifySubscriptionStatusChanged } from './notifications.service.js'
 import type { CreateSubscriptionInput, UpdateSubscriptionInput } from '../validation/subscription.schemas.js'
+import { assertNoOpenSubscription, evaluateSubscriptionWorkflow, reconcileSubscriptionWorkflow } from './subscription-workflow.service.js'
+import { analyzeSubscriptionDocumentsForSubmission } from './documents.service.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
 type SubscriptionInput = CreateSubscriptionInput | UpdateSubscriptionInput
@@ -17,6 +19,7 @@ const subscriptionSelection = {
   offerId: subscriptions.offerId,
   onboardingSessionId: subscriptions.onboardingSessionId,
   status: subscriptions.status,
+  submittedAt: subscriptions.submittedAt,
   createdAt: subscriptions.createdAt,
   updatedAt: subscriptions.updatedAt,
 }
@@ -85,21 +88,33 @@ async function findOwnOnboardingSession(userId: string, id: string) {
   return session
 }
 
-async function enrich(subscription: SubscriptionRow) {
+async function enrich(subscription: SubscriptionRow, options: { includeSignedUrls?: boolean } = {}) {
   const database = requireDb()
-  const [offer] = subscription.offerId ? await database.select().from(offers).where(eq(offers.id, subscription.offerId)).limit(1) : []
-  const [bearerProfile] = subscription.bearerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.bearerProfileId)).limit(1) : []
-  const [payerProfile] = subscription.payerProfileId ? await database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : []
-  const [onboardingSession] = subscription.onboardingSessionId ? await database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : []
-  const subscriptionDocuments = await database.select().from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt))
-  const subscriptionPayments = await database.select().from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt))
-  const documentsWithSignedUrls = await Promise.all(subscriptionDocuments.map(async (document) => ({
-    ...document,
-    signedUrl: await createPrivateSignedUrl(document.storageBucket, document.storagePath),
-  })))
+  const workflow = await reconcileSubscriptionWorkflow(subscription.id)
+  const effectiveSubscription = subscription.submittedAt && !['accepted', 'rejected', 'cancelled', 'suspended'].includes(subscription.status)
+    ? { ...subscription, status: workflow.desiredStatus }
+    : subscription
+  const [offerRows, bearerRows, payerRows, onboardingRows, subscriptionDocuments, subscriptionPayments] = await Promise.all([
+    subscription.offerId ? database.select().from(offers).where(eq(offers.id, subscription.offerId)).limit(1) : [],
+    subscription.bearerProfileId ? database.select().from(profiles).where(eq(profiles.id, subscription.bearerProfileId)).limit(1) : [],
+    subscription.payerProfileId ? database.select().from(profiles).where(eq(profiles.id, subscription.payerProfileId)).limit(1) : [],
+    subscription.onboardingSessionId ? database.select().from(onboardingSessions).where(eq(onboardingSessions.id, subscription.onboardingSessionId)).limit(1) : [],
+    database.select().from(documents).where(eq(documents.subscriptionId, subscription.id)).orderBy(desc(documents.updatedAt)),
+    database.select().from(payments).where(eq(payments.subscriptionId, subscription.id)).orderBy(desc(payments.updatedAt)),
+  ])
+  const [offer] = offerRows
+  const [bearerProfile] = bearerRows
+  const [payerProfile] = payerRows
+  const [onboardingSession] = onboardingRows
+  const documentsWithSignedUrls = options.includeSignedUrls === false
+    ? subscriptionDocuments.map((document) => ({ ...document, signedUrl: null }))
+    : await Promise.all(subscriptionDocuments.map(async (document) => ({
+      ...document,
+      signedUrl: await createPrivateSignedUrl(document.storageBucket, document.storagePath),
+    })))
 
   return {
-    subscription,
+    subscription: effectiveSubscription,
     offer: offer ?? null,
     bearerProfile: bearerProfile ?? null,
     payerProfile: payerProfile ?? null,
@@ -111,6 +126,7 @@ async function enrich(subscription: SubscriptionRow) {
     } : null,
     documents: documentsWithSignedUrls,
     payments: subscriptionPayments,
+    workflow,
   }
 }
 
@@ -133,6 +149,7 @@ async function resolveSubscriptionValues(userId: string, input: SubscriptionInpu
 }
 
 export async function createSubscription(userId: string, input: CreateSubscriptionInput) {
+  await assertNoOpenSubscription(userId)
   const values = await resolveSubscriptionValues(userId, input)
   const [created] = await requireDb()
     .insert(subscriptions)
@@ -150,7 +167,7 @@ export async function listSubscriptions(userId: string) {
     .where(eq(subscriptions.userId, userId))
     .orderBy(desc(subscriptions.updatedAt))
 
-  return Promise.all(rows.map(enrich))
+  return Promise.all(rows.map((row) => enrich(row, { includeSignedUrls: false })))
 }
 
 export async function getSubscription(userId: string, id: string) {
@@ -232,16 +249,27 @@ export async function updateSubscription(userId: string, id: string, input: Upda
 
 export async function submitSubscription(userId: string, id: string) {
   const current = await findOwnSubscription(userId, id)
-  if (current.status !== 'draft') throw new AppError(409, 'La souscription a deja ete soumise.')
+  if (current.status !== 'draft' || current.submittedAt) throw new AppError(409, 'La souscription a déjà été soumise.')
   if (!current.offerId) throw new AppError(400, 'Une offre doit etre associee avant soumission.')
 
-  const [offer] = await requireDb().select().from(offers).where(eq(offers.id, current.offerId)).limit(1)
-  if (!offer) throw new AppError(404, 'Offre introuvable.')
+  const preflightWorkflow = await evaluateSubscriptionWorkflow(id)
+  if (!preflightWorkflow.canSubmit) {
+    throw new AppError(409, "Le dossier n'est pas prêt à être envoyé.", {
+      blockingReasons: preflightWorkflow.blockingReasons,
+    })
+  }
 
-  const nextStatus = offer.requiredDocuments.length > 0 ? 'pending_documents' : 'pending_payment'
+  await analyzeSubscriptionDocumentsForSubmission(userId, id)
+  const analyzedWorkflow = await evaluateSubscriptionWorkflow(id)
+  if (!analyzedWorkflow.canSubmit) {
+    throw new AppError(409, "L'analyse des justificatifs demande une correction avant l'envoi.", {
+      blockingReasons: analyzedWorkflow.blockingReasons,
+    })
+  }
+
   const [updated] = await requireDb()
     .update(subscriptions)
-    .set({ status: nextStatus, updatedAt: new Date() })
+    .set({ status: 'pending_validation', submittedAt: new Date(), updatedAt: new Date() })
     .where(and(eq(subscriptions.id, id), eq(subscriptions.userId, userId)))
     .returning(subscriptionSelection)
 
@@ -257,6 +285,9 @@ export async function submitSubscription(userId: string, id: string) {
 
 export async function cancelSubscription(userId: string, id: string) {
   const current = await findOwnSubscription(userId, id)
+  if (!['draft', 'pending_documents', 'pending_payment', 'pending_validation'].includes(current.status)) {
+    throw new AppError(409, "Cette souscription ne peut plus être annulée depuis l'espace client.")
+  }
   const [updated] = await requireDb()
     .update(subscriptions)
     .set({ status: 'cancelled', updatedAt: new Date() })

@@ -85,6 +85,55 @@
       "when": 1781787287243,
       "tag": "0011_notification-center-communications",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1781791200000,
+      "tag": "0012_subscription-workflow",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1781794800000,
+      "tag": "0013_backfill-submitted-subscriptions",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1781802000000,
+      "tag": "0014_renewal-termination-requests",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1781866800000,
+      "tag": "0015_cleanup-payment-simulations",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1781868600000,
+      "tag": "0016_cleanup-legacy-payment-simulations",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1781872200000,
+      "tag": "0017_user-archiving",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1781875800000,
+      "tag": "0018_normalize-offer-document-types",
+      "breakpoints": true
     }
   ]
 }

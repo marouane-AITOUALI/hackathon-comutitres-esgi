@@ -77,6 +77,13 @@ export interface OnboardingAnswer {
   scholarship: boolean
   solidarity: boolean
   department?: string
+  address: {
+    addressLine1: string
+    addressLine2?: string
+    postalCode: string
+    city: string
+    country: 'FR'
+  }
 }
 
 export type OnboardingDraft = Partial<OnboardingAnswer>
@@ -88,6 +95,8 @@ export interface OfferRecommendation {
   confidencePercent: number
   reasons: string[]
   requiredDocuments: string[]
+  priceCents: number
+  monthlyInstallmentCount: number | null
   warnings: string[]
 }
 
@@ -141,6 +150,7 @@ export interface SubscriptionEntity {
   offerId: string | null
   onboardingSessionId: string | null
   status: SubscriptionStatus
+  submittedAt: string | null
   createdAt: string
   updatedAt: string
 }
@@ -220,6 +230,56 @@ export interface SubscriptionSummary {
   onboardingSession: OnboardingSessionSummary | null
   documents: DocumentSummary[]
   payments: PaymentSummary[]
+  workflow: SubscriptionWorkflow
+}
+
+export type SubscriptionWorkflowState =
+  | 'documents_required'
+  | 'payment_required'
+  | 'ready_to_submit'
+  | 'under_review'
+  | 'needs_action'
+  | 'approved'
+  | 'rejected'
+  | 'cancelled'
+  | 'suspended'
+
+export interface SubscriptionWorkflow {
+  state: SubscriptionWorkflowState
+  requiredDocumentTypes: DocumentType[]
+  blockingDocumentTypes: DocumentType[]
+  missingBlockingDocuments: DocumentType[]
+  rejectedBlockingDocuments: DocumentType[]
+  pendingBlockingDocuments: DocumentType[]
+  pendingAnalysisDocumentTypes: DocumentType[]
+  reviewDocumentTypes: DocumentType[]
+  missingRequiredDocuments: DocumentType[]
+  rejectedRequiredDocuments: DocumentType[]
+  documentsReady: boolean
+  documentsUploaded: boolean
+  requiresDocumentAnalysis: boolean
+  requiresDocumentReview: boolean
+  hasAcceptedPayment: boolean
+  canUpload: boolean
+  canPay: boolean
+  canSubmit: boolean
+  canCancel: boolean
+  replaceableDocumentTypes: DocumentType[]
+  blockingReasons: string[]
+  schoolCertificateBlocking: boolean
+}
+
+export interface PaymentSimulation {
+  amountCents: number
+  feesCents: number
+  totalCents: number
+  currency: string
+  paymentMode: 'one_time' | 'monthly' | 'weekly' | 'usage'
+  installmentCount: number
+  installmentAmountCents: number
+  lastInstallmentAmountCents: number
+  schedule: Array<{ installmentNumber: number; dueDate: string; amountCents: number }>
+  warnings: string[]
 }
 
 export interface SubscriptionNextAction {
@@ -227,6 +287,67 @@ export interface SubscriptionNextAction {
   priority: 'low' | 'medium' | 'high'
   label: string
   detail: string
+}
+
+export interface RenewalEvent {
+  id: string
+  userId: string
+  subscriptionId: string
+  action: 'accepted' | 'refused' | 'suspended' | 'requested' | 'cancelled'
+  reason?: string | null
+  effectiveAt: string
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RenewalSummary {
+  subscription: Pick<SubscriptionEntity, 'id' | 'userId' | 'offerId' | 'status' | 'createdAt' | 'updatedAt'>
+  offer: Pick<OfferSummary, 'id' | 'code' | 'name'> | null
+  renewal: {
+    annual: boolean
+    canRenew: boolean
+    canCancelRequest: boolean
+    requestStatus: 'none' | 'requested' | 'cancelled'
+    activeRequestId: string | null
+    nextRenewalDate: string
+    renewalWindowStartsAt: string
+    periodDays: number
+    recommendedAction: 'regularize_payment' | 'request_or_cancel'
+    reasons: string[]
+    warnings: string[]
+  }
+  payments: Array<Pick<PaymentSummary, 'id' | 'type' | 'status' | 'amountCents' | 'currency' | 'createdAt' | 'updatedAt'>>
+  events: RenewalEvent[]
+}
+
+export interface TerminationRequest {
+  id: string
+  userId: string
+  subscriptionId: string
+  status: 'requested' | 'cancelled' | 'processed' | 'rejected'
+  reason?: string | null
+  effectiveAt: string
+  processedAt?: string | null
+  metadata?: Record<string, unknown>
+  createdAt: string
+  updatedAt: string
+}
+
+export interface TerminationSummary {
+  subscriptionId: string
+  offer: { code: string; name: string } | null
+  termination: {
+    canRequest: boolean
+    canCancelRequest: boolean
+    requestStatus: TerminationRequest['status'] | 'none'
+    effectiveAt: string | null
+    currentMonthDue: boolean
+    refundReviewRequired: boolean
+    requiresManualReview: boolean
+    message: string
+  }
+  request: TerminationRequest | null
 }
 
 export interface OffersResponse {

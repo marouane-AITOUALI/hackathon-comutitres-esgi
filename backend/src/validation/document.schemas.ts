@@ -11,7 +11,7 @@ export const subscriptionDocumentsParamsSchema = z.object({
 })
 
 export const documentIdParamsSchema = z.object({
-  id: z.uuid(),
+  id: z.union([z.uuid(), z.string().regex(/^storage_[A-Za-z0-9_-]+$/)]),
 })
 
 export const createDocumentSchema = z.object({
@@ -37,11 +37,11 @@ export const updateDocumentStatusSchema = z.object({
 })
 
 export const manualReviewSchema = z.object({
-  accepted: z.boolean(),
+  decision: z.enum(['validate', 'reject', 'manual_review']),
   rejectionReason: z.string().trim().min(3).max(500).optional(),
   note: z.string().trim().max(500).optional(),
 }).superRefine((value, context) => {
-  if (!value.accepted && !value.rejectionReason) {
+  if (value.decision === 'reject' && !value.rejectionReason) {
     context.addIssue({ code: 'custom', path: ['rejectionReason'], message: 'Un motif est requis en cas de refus.' })
   }
 })

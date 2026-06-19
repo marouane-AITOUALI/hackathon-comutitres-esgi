@@ -8,6 +8,7 @@ export interface PublicUser {
   lastName: string
   email: string
   role: UserRole
+  archivedAt: Date | null
   phone: string | null
   addressLine1: string | null
   addressLine2: string | null
@@ -22,8 +23,8 @@ export interface PublicUser {
   rgpdConsentedAt: Date | null
   profileUpdatedAt: Date | null
   updatedAt: Date
+  avatarUrl?: string | null
 }
-export interface PublicUser { id: string; firstName: string; lastName: string; email: string; role: UserRole; avatarUrl?: string | null }
 export type SubscriptionStatus = 'draft' | 'pending_documents' | 'pending_payment' | 'pending_validation' | 'accepted' | 'rejected' | 'cancelled' | 'suspended'
-export interface SubscriptionSummary { id: string; status: SubscriptionStatus; offerId: string | null; onboardingSessionId: string | null }
+export interface SubscriptionSummary { id: string; status: SubscriptionStatus; offerId: string | null; onboardingSessionId: string | null; submittedAt: Date | null }
 export interface AuthSession { user: PublicUser; token: string; subscription: SubscriptionSummary | null }

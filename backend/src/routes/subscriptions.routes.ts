@@ -1,6 +1,7 @@
 import { Router } from 'express'
-import { acceptRenewal, refuseRenewal, showRenewal, suspendRenewal } from '../controllers/renewal.controller.js'
+import { acceptRenewal, cancelRenewal, refuseRenewal, showRenewal, suspendRenewal } from '../controllers/renewal.controller.js'
 import { cancel, create, getById, list, nextActions, submit, suspend, update } from '../controllers/subscriptions.controller.js'
+import { cancelTermination, requestTermination, showTermination } from '../controllers/termination.controller.js'
 import { authMiddleware } from '../middleware/auth.middleware.js'
 
 export const subscriptionsRouter = Router()
@@ -11,8 +12,12 @@ subscriptionsRouter.post('/', create)
 subscriptionsRouter.get('/:id/next-actions', nextActions)
 subscriptionsRouter.get('/:id/renewal', showRenewal)
 subscriptionsRouter.post('/:id/renewal/accept', acceptRenewal)
+subscriptionsRouter.post('/:id/renewal/cancel', cancelRenewal)
 subscriptionsRouter.post('/:id/renewal/refuse', refuseRenewal)
 subscriptionsRouter.post('/:id/renewal/suspend', suspendRenewal)
+subscriptionsRouter.get('/:id/termination', showTermination)
+subscriptionsRouter.post('/:id/termination', requestTermination)
+subscriptionsRouter.post('/:id/termination/cancel', cancelTermination)
 subscriptionsRouter.get('/:id', getById)
 subscriptionsRouter.patch('/:id', update)
 subscriptionsRouter.post('/:id/submit', submit)

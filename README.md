@@ -1,138 +1,159 @@
-# Hackathon Comutitres ESGI
+# Comutitres — parcours de souscription unifié
 
-Monorepo TypeScript pour la refonte du parcours utilisateur Comutitres.
+Prototype réalisé pour le hackathon ESGI 2026. La solution aide les voyageurs à
+choisir le titre adapté, constituer leur dossier et suivre leur souscription.
+Elle fournit également à Comutitres un backoffice de pilotage des dossiers,
+justificatifs, paiements et alertes support.
 
-## Workflow Git
+## Fonctionnalités livrées
 
-Les developpements sont realises et pousses sur `develop`. La branche `main`
-reste reservee a la mise en production finale lorsque l'ensemble est valide.
+### Parcours voyageur
 
-## Stack
+- orientation guidée parmi les offres Navigo, Imagine R, TST et Améthyste ;
+- recommandation expliquée selon le profil, l'âge et les déplacements ;
+- gestion distincte du porteur et du payeur ;
+- dépôt, analyse et suivi des justificatifs ;
+- paiement direct ou mandat SEPA simulé ;
+- suivi des souscriptions, renouvellements et actions prioritaires ;
+- interface responsive, français/anglais et options d'accessibilité.
 
-- `frontend` : React, Vite, TypeScript, MUI, React Router et Tailwind CSS
-- `backend` : Node.js, Express, TypeScript, Drizzle ORM et Supabase
-- `backoffice` : React, Vite, TypeScript, MUI, React Router et Tailwind CSS
+### Backoffice Comutitres
 
-## Installation
+- tableau de bord des dossiers et blocages prioritaires ;
+- contrôle et décision sur les justificatifs ;
+- validation, refus ou suspension d'une souscription ;
+- détection des paiements à régulariser et alertes support ;
+- gestion des offres, communications, utilisateurs et journal d'activité ;
+- accès administrateur protégé par rôle.
 
-```bash
-npm install
-```
+### Qualité et exploitation
 
-Copier ensuite les fichiers `.env.example` en `.env` dans chaque application.
-Pour Drizzle, recuperer l'URL PostgreSQL Supabase et renseigner
-`backend/.env` avec `DATABASE_URL`. Generer egalement une valeur longue et
-aleatoire pour `JWT_SECRET`.
+- maquettes réalisées sur Figma et suivi des tâches avec Trello ;
+- monorepo TypeScript : React pour les interfaces, Express pour l'API ;
+- PostgreSQL/Supabase avec Drizzle ORM ;
+- validation des données, mots de passe hachés et secrets hors du dépôt ;
+- Docker pour l'application et ses services ;
+- configurations de déploiement Vercel et Render ;
+- tests automatisés sur les règles métier ;
+- Prometheus, Grafana, Umami et GlitchTip en option.
 
-## Developpement
+## Prérequis
 
-```bash
-npm run dev:frontend
-npm run dev:backend
-npm run dev:backoffice
-```
+- Docker et Docker Compose ;
+- un projet PostgreSQL/Supabase ;
+- Git.
 
-## Docker
+## Lancement étape par étape
 
-La stack Docker démarre le frontend, le backoffice, le backend, PostgreSQL et
-un reverse proxy Nginx :
-
-```bash
-docker compose up --build
-```
-
-Les services sont disponibles sur :
-
-- frontend : http://localhost:8080
-- backoffice : http://admin.localhost:8080
-- API : http://localhost:8080/api/health
-
-La base PostgreSQL locale n'expose pas son port sur la machine.
-Le bootstrap `docker/postgres/init-storage.sql` crée uniquement la table
-`storage.buckets` attendue par les migrations Supabase, sans modifier ces
-migrations.
-
-Pour utiliser personnellement la base Supabase Production renseignée dans
-`backend/.env` au lieu de la base locale, lancer :
+### 1. Configurer le backend
 
 ```bash
-npm run docker:up:supabase
+cp backend/.env.example backend/.env
 ```
 
-`RUN_MIGRATIONS=false` protège la base de production contre l'exécution
-automatique des migrations depuis la machine locale. Le conteneur PostgreSQL
-local reste présent dans la stack mais n'est alors pas utilisé par le backend.
+Renseigner au minimum dans `backend/.env` :
 
-Pour arreter et supprimer les conteneurs :
+```env
+DATABASE_URL=postgresql://...
+SUPABASE_URL=https://...
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+JWT_SECRET=une-valeur-longue-et-aleatoire
+```
+
+### 2. Lancer l'application
+
+```bash
+docker compose up -d --build
+```
+
+Le backend applique automatiquement les migrations au démarrage.
+
+### 3. Préparer les données de démonstration
+
+```bash
+docker compose exec backend npm run db:seed:admin
+docker compose exec backend npm run db:seed:demo
+```
+
+### 4. Ouvrir les applications
+
+| Service | URL |
+| --- | --- |
+| Espace voyageur | http://localhost:5173 |
+| Backoffice | http://localhost:5174 |
+| État de l'API | http://localhost:3001/api/health |
+
+Comptes de démonstration :
+
+| Espace | Identifiant | Mot de passe |
+| --- | --- | --- |
+| Voyageur | `parent.demo@example.com` | `Demo123!` |
+| Backoffice | `admin@comutitres.fr` | `Admin123!` |
+
+### 5. Arrêter l'application
 
 ```bash
 docker compose down
 ```
 
-Le fichier `deploy.yaml` constitue l'ébauche Docker Swarm. Les Docker Secrets
-déclarés dans ce fichier sont utilisés uniquement par Swarm.
+## Lancement avec observabilité
 
-Exemple de simulation des secrets avant `docker stack deploy` :
-
-```bash
-printf '%s' 'mot-de-passe-postgres' | docker secret create postgres_password -
-printf '%s' 'secret-jwt' | docker secret create jwt_secret -
-printf '%s' 'https://projet.supabase.co' | docker secret create supabase_url -
-printf '%s' 'cle-anon' | docker secret create supabase_anon_key -
-printf '%s' 'cle-service-role' | docker secret create supabase_service_role_key -
-```
-
-## Base de donnees
+Créer le fichier local de configuration :
 
 ```bash
-cd backend
-npm run db:generate
-npm run db:migrate
-npm run db:seed
-npm run db:seed:admin
-npm run db:seed:demo
+cp .env.observability.example .env.observability
 ```
 
-Le modele conceptuel est documente dans `docs/database-model.md`.
+Renseigner si disponibles :
 
-Le backend lance aussi les migrations automatiquement au demarrage via
-`db:migrate:auto` avant `dev` et `start`. `db:migrate` et `db:seed` restent
-disponibles pour une execution manuelle et ecrivent dans la base configuree.
-Ne lancer ces commandes sur Supabase qu'apres validation de la migration locale.
+- `UMAMI_WEBSITE_ID` pour mesurer l'usage ;
+- `GLITCHTIP_DSN` pour remonter les erreurs ;
+- des mots de passe locaux différents des valeurs d'exemple.
 
-Les seeds de demo sont idempotents :
+Lancer l'application et toute la supervision :
 
-- `db:seed:admin` prepare `admin@comutitres.fr / Admin123!` ou les valeurs
-  `ADMIN_*` definies dans `backend/.env`.
-- `db:seed:demo` prepare les offres, un parent demo, un enfant porteur, une
-  souscription Imagine R Scolaire, des justificatifs et des paiements simules.
-
-## Parcours utilisateur
-
-Le frontend propose :
-
-- inscription et connexion email/mot de passe ;
-- session prototype par JWT ;
-- distinction porteur/payeur ;
-- questions guidees sur le profil et les trajets ;
-- recommandation explicable avec justificatifs potentiels.
-
-Le bouton Ile-de-France Mobilites Connect est visible mais volontairement non
-implemente dans cette version.
-
-## Backoffice demo
-
-Apres seed admin/demo, ouvrir le backoffice sur `/login` et se connecter avec :
-
-```txt
-admin@comutitres.fr
-Admin123!
+```bash
+docker compose \
+  --env-file .env.observability \
+  -f compose.yml \
+  -f compose.observability.yml \
+  --profile observability \
+  up -d --build
 ```
 
-La session backoffice utilise un cookie `HttpOnly`. Le frontend utilisateur
-conserve son stockage JWT prototype pour le parcours client.
+| Outil | URL |
+| --- | --- |
+| Grafana | http://localhost:3002 |
+| Umami | http://localhost:3003 |
+| GlitchTip local | http://localhost:8000 |
+| Prometheus | http://localhost:9090 |
 
-Voir aussi :
+Arrêter toute la stack :
 
-- `docs/backoffice.md`
-- `docs/demo-scenario.md`
+```bash
+docker compose \
+  --env-file .env.observability \
+  -f compose.yml \
+  -f compose.observability.yml \
+  --profile observability \
+  down
+```
+
+## Vérifications
+
+```bash
+npm install
+npm run typecheck
+npm run lint
+npm test
+```
+
+## Documentation
+
+- [Scénario de démonstration](docs/demo-scenario.md)
+- [Architecture](docs/architecture.md)
+- [Backoffice](docs/backoffice.md)
+- [Modèle de données](docs/database-model.md)
+- [Principes RGPD](docs/rgpd.md)
+- [Observabilité](docs/observability.md)

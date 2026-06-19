@@ -8,7 +8,7 @@
     "dev": "npm run db:migrate:auto && tsx watch src/server.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/services/recommendation.service.test.ts src/services/document-analysis.service.test.ts src/services/eligibility.service.test.ts",
+    "test": "tsx --test src/services/recommendation.service.test.ts src/services/document-analysis.service.test.ts src/services/eligibility.service.test.ts src/services/subscription-workflow.service.test.ts src/services/renewal.service.test.ts src/validation/admin.schemas.test.ts",
     "start": "node dist/db/migrate.js && node dist/server.js",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
@@ -23,6 +23,7 @@
   "license": "MIT",
   "description": "API Comutitres",
   "dependencies": {
+    "@sentry/node": "^10.58.0",
     "@supabase/supabase-js": "^2.108.2",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
@@ -35,6 +36,7 @@
     "morgan": "^1.11.0",
     "multer": "^2.2.0",
     "postgres": "^3.4.9",
+    "prom-client": "^15.1.3",
     "ws": "^8.18.3",
     "zod": "^4.4.3"
   },

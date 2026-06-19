@@ -1,8 +1,8 @@
 # Backoffice Comutitres
 
 Le backoffice permet au personnel Comutitres de piloter les dossiers issus du
-parcours client : souscriptions, porteur/payeur, documents, paiements simules,
-alertes support et audit logs.
+parcours client : souscriptions, porteur/payeur, documents, paiements simules
+et alertes support.
 
 ## Acces admin
 
@@ -39,10 +39,9 @@ backoffice n'ecrit pas le JWT admin dans `localStorage`.
 - `/subscriptions/:id` : porteur, payeur, documents, paiements et next actions.
 - `/documents` : analyse documentaire par regles, validation et refus.
 - `/support-alerts` : signaux qui anticipent les appels support.
-- `/users` : utilisateurs publics sans `passwordHash`.
+- `/users` : utilisateurs publics sans `passwordHash`, avec archivage et reactivation.
 - `/offers` : catalogue des offres et documents requis.
 - `/communications` : annonces generales et rappels cibles, diffuses en temps reel.
-- `/audit-logs` : journal prototype derive des statuts existants.
 
 ## Endpoints utilises
 
@@ -60,6 +59,7 @@ backoffice n'ecrit pas le JWT admin dans `localStorage`.
 - `GET /api/documents/:id/analysis`
 - `POST /api/payments/:id/regularize`
 - `GET /api/admin/users`
+- `PATCH /api/admin/users/:id/archive`
 - `GET /api/admin/offers`
 - `POST /api/admin/offers`
 - `PATCH /api/admin/offers/:id`
@@ -70,7 +70,6 @@ backoffice n'ecrit pas le JWT admin dans `localStorage`.
 - `DELETE /api/notifications/:id`
 - `GET /api/admin/communications`
 - `POST /api/admin/communications`
-- `GET /api/admin/audit-logs`
 
 ## Innovation demo
 
@@ -82,7 +81,6 @@ signaux metier en actions :
 - une cloche temps reel remonte les dossiers, documents, paiements et renouvellements a traiter ;
 - une communication generale peut cibler les clients, le backoffice ou les deux ;
 - les next actions indiquent quoi faire pour debloquer le dossier ;
-- les audit logs aident a expliquer ce qui s'est passe.
 
 Cette logique montre comment reduire les appels support : l'equipe voit les
 blocages avant que l'usager ne se perde dans le parcours.

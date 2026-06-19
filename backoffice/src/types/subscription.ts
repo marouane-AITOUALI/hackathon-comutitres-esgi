@@ -18,11 +18,14 @@ export interface AdminProfile {
   id: string
   userId?: string
   type: 'bearer' | 'payer'
+  status?: string
   firstName: string
   lastName: string
   email?: string | null
   birthDate?: string | null
   relationshipToBearer?: string | null
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface AdminSubscription {
@@ -33,13 +36,23 @@ export interface AdminSubscription {
   offerId: string | null
   onboardingSessionId: string | null
   status: SubscriptionStatus
+  submittedAt: string | null
   createdAt: string
   updatedAt: string
 }
 
 export interface AdminSubscriptionItem {
   subscription: AdminSubscription
-  user: { firstName: string; lastName: string; email: string } | null
+  user: {
+    id?: string
+    firstName: string
+    lastName: string
+    email: string
+    role?: string
+    rgpdConsent?: boolean
+    createdAt?: string
+    updatedAt?: string
+  } | null
   offer: AdminOffer | null
   bearerProfile: AdminProfile | null
   payerProfile: AdminProfile | null
@@ -51,6 +64,29 @@ export interface AdminSubscriptionItem {
   } | null
   documents: AdminDocument[]
   payments: AdminPayment[]
+  terminationRequests: Array<{
+    id: string
+    status: 'requested' | 'cancelled' | 'processed' | 'rejected'
+    reason: string | null
+    effectiveAt: string
+    processedAt: string | null
+    metadata: Record<string, unknown>
+    createdAt: string
+    updatedAt: string
+  }>
+  workflow?: {
+    state: 'documents_required' | 'payment_required' | 'ready_to_submit' | 'under_review' | 'needs_action' | 'approved' | 'rejected' | 'cancelled' | 'suspended'
+    blockingReasons: string[]
+    documentsReady: boolean
+    documentsUploaded: boolean
+    requiresDocumentAnalysis: boolean
+    requiresDocumentReview: boolean
+    pendingAnalysisDocumentTypes: string[]
+    reviewDocumentTypes: string[]
+    hasAcceptedPayment: boolean
+    canSubmit: boolean
+    canCancel: boolean
+  }
 }
 
 export interface SubscriptionNextAction {

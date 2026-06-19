@@ -16,8 +16,10 @@ import { createDirectPayment, createMandatePayment, simulatePayment } from '../s
 import { listSubscriptions } from '../services/subscriptions.service'
 import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
+import { validateSepaFields } from '../components/payment/sepaPaymentUtils'
 import { colors } from '../theme/colors'
-import type { SubscriptionSummary } from '../types'
+import type { PaymentSimulation, SubscriptionSummary } from '../types'
+import { subscriptionStatusLabels } from '../utils/statusLabels'
 
 type PaymentMode = 'one_time' | 'monthly'
 type PaymentMethod = 'card' | 'mandate'
@@ -47,16 +49,11 @@ export function PaymentFormPage() {
   const [cardholderName, setCardholderName] = useState('')
   const [simulateFailure, setSimulateFailure] = useState(false)
   const [holderName, setHolderName] = useState('')
-  const [ibanLast4, setIbanLast4] = useState('')
+  const [iban, setIban] = useState('')
+  const [bic, setBic] = useState('')
   const [mandateAccepted, setMandateAccepted] = useState(false)
 
-  const [simulation, setSimulation] = useState<{
-    amountCents: number
-    feesCents: number
-    totalCents: number
-    currency: string
-    warnings: string[]
-  } | null>(null)
+  const [simulation, setSimulation] = useState<PaymentSimulation | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [simulating, setSimulating] = useState(false)
@@ -65,9 +62,7 @@ export function PaymentFormPage() {
   const [success, setSuccess] = useState('')
 
   const payableSubscriptions = useMemo(
-    () => subscriptions.filter((item) =>
-      ['draft', 'pending_documents', 'pending_payment', 'pending_validation'].includes(item.subscription.status),
-    ),
+    () => subscriptions.filter((item) => item.workflow.canPay),
     [subscriptions],
   )
 
@@ -146,20 +141,37 @@ export function PaymentFormPage() {
 
     try {
       if (method === 'card') {
-        const cardError = validateCardFields(cardNumber, cardExpiry, cardCvv, cardholderName)
+        const cardError = simulation.totalCents === 0 ? null : validateCardFields(cardNumber, cardExpiry, cardCvv, cardholderName)
         if (cardError) {
           setError(cardError)
           return
         }
-        await createDirectPayment({ subscriptionId, cardToken: buildCardToken(cardNumber), simulateFailure })
-        setSuccess(simulateFailure ? 'Paiement refusé (simulation). Vous pourrez le régulariser depuis l’historique.' : 'Paiement accepté. Votre dossier passe en validation.')
+        await createDirectPayment({ subscriptionId, paymentMode, cardToken: simulation.totalCents === 0 ? undefined : buildCardToken(cardNumber), simulateFailure })
+        setSuccess(simulateFailure ? 'Paiement refusé (simulation).' : 'Paiement enregistré. Vous pouvez finaliser l’envoi du dossier.')
       } else {
+        if (paymentMode !== 'monthly') {
+          setMethod('card')
+          setError('Le prélèvement SEPA est disponible uniquement avec la mensualisation.')
+          return
+        }
+        const sepaError = validateSepaFields(holderName, iban, bic)
+        if (sepaError) {
+          setError(sepaError)
+          return
+        }
         if (!mandateAccepted) {
           setError('Vous devez accepter le mandat SEPA.')
           return
         }
-        await createMandatePayment({ subscriptionId, holderName, ibanLast4, mandateAccepted: true })
-        setSuccess('Mandat SEPA enregistré. Le paiement est en cours de traitement.')
+        await createMandatePayment({
+          subscriptionId,
+          paymentMode: 'monthly',
+          holderName,
+          ibanLast4: iban.replace(/\s/g, '').slice(-4),
+          bic,
+          mandateAccepted: true,
+        })
+        setSuccess('Mandat SEPA enregistré. Les prélèvements suivront l’échéancier affiché.')
       }
       setTimeout(() => navigate('/paiements'), 1800)
     } catch (caught) {
@@ -177,7 +189,7 @@ export function PaymentFormPage() {
         </Button>
         <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>Effectuer un paiement</Typography>
         <Typography color="text.secondary">
-          Simulez le montant, puis payez par carte ou prélèvement SEPA (prototype).
+          En paiement unique, réglez par carte. En mensualisation, choisissez la carte ou le prélèvement SEPA.
         </Typography>
       </Box>
 
@@ -202,7 +214,7 @@ export function PaymentFormPage() {
             >
               {payableSubscriptions.map((item) => (
                 <MenuItem key={item.subscription.id} value={item.subscription.id}>
-                  {profileLabel(item)} ({item.subscription.status})
+                  {profileLabel(item)} ({subscriptionStatusLabels[item.subscription.status]})
                 </MenuItem>
               ))}
             </TextField>
@@ -223,7 +235,12 @@ export function PaymentFormPage() {
                 label="Fréquence"
                 value={paymentMode}
                 onChange={(event) => {
-                  setPaymentMode(event.target.value as PaymentMode)
+                  const nextMode = event.target.value as PaymentMode
+                  setPaymentMode(nextMode)
+                  if (nextMode === 'one_time') {
+                    setMethod('card')
+                    setMandateAccepted(false)
+                  }
                   setSimulation(null)
                 }}
                 sx={{ minWidth: 220 }}
@@ -249,9 +266,24 @@ export function PaymentFormPage() {
                   {simulation.feesCents > 0 && (
                     <Typography>Frais : {formatEuros(simulation.feesCents, simulation.currency)}</Typography>
                   )}
-                  <Typography sx={{ fontWeight: 800, fontSize: 18, color: colors.blueInteraction }}>
-                    Total : {formatEuros(simulation.totalCents, simulation.currency)}
-                  </Typography>
+                  {paymentMode === 'monthly' ? (
+                    <>
+                      <Typography sx={{ fontWeight: 800, fontSize: 18, color: colors.blueInteraction }}>
+                        {formatEuros(simulation.installmentAmountCents, simulation.currency)} par mois pendant {simulation.installmentCount} mois
+                      </Typography>
+                      <Stack spacing={0.25} sx={{ mt: 1 }}>
+                        {simulation.schedule.map((installment) => (
+                          <Typography key={installment.installmentNumber} variant="body2">
+                            Échéance {installment.installmentNumber} · {new Intl.DateTimeFormat('fr-FR').format(new Date(installment.dueDate))} · {formatEuros(installment.amountCents, simulation.currency)}
+                          </Typography>
+                        ))}
+                      </Stack>
+                    </>
+                  ) : (
+                    <Typography sx={{ fontWeight: 800, fontSize: 18, color: colors.blueInteraction }}>
+                      Total à régler : {formatEuros(simulation.totalCents, simulation.currency)}
+                    </Typography>
+                  )}
                   {simulation.warnings.map((warning) => (
                     <Typography key={warning} color="text.secondary" variant="body2">• {warning}</Typography>
                   ))}
@@ -267,6 +299,7 @@ export function PaymentFormPage() {
             <PaymentMethodSection
               method={method}
               onMethodChange={setMethod}
+              allowMandate={paymentMode === 'monthly'}
               cardNumber={cardNumber}
               onCardNumberChange={setCardNumber}
               expiry={cardExpiry}
@@ -279,8 +312,10 @@ export function PaymentFormPage() {
               onSimulateFailureChange={setSimulateFailure}
               holderName={holderName}
               onHolderNameChange={setHolderName}
-              ibanLast4={ibanLast4}
-              onIbanLast4Change={setIbanLast4}
+              iban={iban}
+              onIbanChange={setIban}
+              bic={bic}
+              onBicChange={setBic}
               mandateAccepted={mandateAccepted}
               onMandateAcceptedChange={setMandateAccepted}
             />

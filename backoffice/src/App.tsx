@@ -1,20 +1,26 @@
+import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
+import { CircularProgress, Stack } from '@mui/material'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { AdminLayout } from './components/layout/AdminLayout'
-import { AuditLogsPage } from './pages/AuditLogsPage'
-import { CommunicationsPage } from './pages/CommunicationsPage'
-import { DashboardPage } from './pages/DashboardPage'
-import { DocumentsPage } from './pages/DocumentsPage'
-import { LoginPage } from './pages/LoginPage'
-import { OffersPage } from './pages/OffersPage'
-import { SubscriptionDetailPage } from './pages/SubscriptionDetailPage'
-import { SubscriptionsPage } from './pages/SubscriptionsPage'
-import { SupportAlertsPage } from './pages/SupportAlertsPage'
-import { UsersPage } from './pages/UsersPage'
+const CommunicationsPage = lazy(() => import('./pages/CommunicationsPage').then((module) => ({ default: module.CommunicationsPage })))
+const DashboardPage = lazy(() => import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })))
+const DocumentsPage = lazy(() => import('./pages/DocumentsPage').then((module) => ({ default: module.DocumentsPage })))
+const LoginPage = lazy(() => import('./pages/LoginPage').then((module) => ({ default: module.LoginPage })))
+const OffersPage = lazy(() => import('./pages/OffersPage').then((module) => ({ default: module.OffersPage })))
+const SubscriptionDetailPage = lazy(() => import('./pages/SubscriptionDetailPage').then((module) => ({ default: module.SubscriptionDetailPage })))
+const SubscriptionsPage = lazy(() => import('./pages/SubscriptionsPage').then((module) => ({ default: module.SubscriptionsPage })))
+const SupportAlertsPage = lazy(() => import('./pages/SupportAlertsPage').then((module) => ({ default: module.SupportAlertsPage })))
+const UsersPage = lazy(() => import('./pages/UsersPage').then((module) => ({ default: module.UsersPage })))
+
+function PageLoader() {
+  return <Stack sx={{ minHeight: 240, placeItems: 'center' }}><CircularProgress aria-label="Chargement de la page" /></Stack>
+}
 
 function App() {
   return (
-    <Routes>
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<AdminLayout />}>
@@ -26,12 +32,12 @@ function App() {
           <Route path="/support-alerts" element={<SupportAlertsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/offers" element={<OffersPage />} />
-          <Route path="/audit-logs" element={<AuditLogsPage />} />
           <Route path="/communications" element={<CommunicationsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate replace to="/dashboard" />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   )
 }
 

@@ -15,6 +15,7 @@ const selection = {
   lastName: users.lastName,
   email: users.email,
   role: users.role,
+  archivedAt: users.archivedAt,
   phone: users.phone,
   addressLine1: users.addressLine1,
   addressLine2: users.addressLine2,
@@ -30,11 +31,11 @@ const selection = {
   profileUpdatedAt: users.profileUpdatedAt,
   updatedAt: users.updatedAt,
 }
-type DatabaseExecutor = Pick<ReturnType<typeof requireDb>, 'select' | 'insert'>
+type DatabaseExecutor = Pick<ReturnType<typeof requireDb>, 'select' | 'insert' | 'update'>
 
 async function getLatestSubscription(database: DatabaseExecutor, userId: string): Promise<SubscriptionSummary | null> {
   const [subscription] = await database
-    .select({ id: subscriptions.id, status: subscriptions.status, offerId: subscriptions.offerId, onboardingSessionId: subscriptions.onboardingSessionId })
+    .select({ id: subscriptions.id, status: subscriptions.status, offerId: subscriptions.offerId, onboardingSessionId: subscriptions.onboardingSessionId, submittedAt: subscriptions.submittedAt })
     .from(subscriptions)
     .where(eq(subscriptions.userId, userId))
     .orderBy(desc(subscriptions.createdAt))
@@ -130,7 +131,14 @@ export async function registerUser(input: RegisterInput) {
 
 export async function registerUserWithOnboarding(input: RegisterWithOnboardingInput) {
   const result = await requireDb().transaction(async (tx) => {
-    const user = await createUser(tx, input)
+    const createdUser = await createUser(tx, input)
+    const [user] = await tx.update(users).set({
+      ...input.onboarding.address,
+      addressLine2: input.onboarding.address.addressLine2 ?? null,
+      profileUpdatedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(users.id, createdUser.id)).returning(selection)
+    if (!user) throw new AppError(500, "L'adresse du compte n'a pas pu être enregistrée.")
     const bundle = await createOnboardingBundle(tx, user.id, input.onboarding)
     const offerConditions = [
       input.recommendedOffer.offerId ? eq(offers.id, input.recommendedOffer.offerId) : undefined,
@@ -172,6 +180,7 @@ export async function loginUser(input: LoginInput) {
   const database = requireDb()
   const [user] = await database.select({ ...selection, passwordHash: users.passwordHash }).from(users).where(eq(users.email, input.email)).limit(1)
   if (!user || !(await bcrypt.compare(input.password, user.passwordHash))) throw new AppError(401, 'Email ou mot de passe incorrect.')
+  if (user.archivedAt) throw new AppError(403, 'Ce compte est archivé. Contactez un administrateur pour le réactiver.')
   const { passwordHash: _passwordHash, ...publicUser } = user
   return session(database, publicUser)
 }
@@ -180,6 +189,7 @@ export async function getUserById(id: string) {
   const database = requireDb()
   const [user] = await database.select(selection).from(users).where(eq(users.id, id)).limit(1)
   if (!user) throw new AppError(404, 'Utilisateur introuvable.')
+  if (user.archivedAt) throw new AppError(403, 'Ce compte est archivé.')
   return { user: await withAvatar(database, user), subscription: await getLatestSubscription(database, id) }
 }
 
