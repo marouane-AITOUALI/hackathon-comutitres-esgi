@@ -1,0 +1,137 @@
+services:
+  frontend:
+    environment:
+      VITE_GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+      VITE_UMAMI_SCRIPT_URL: ${UMAMI_SCRIPT_URL:-http://localhost:3003/script.js}
+      VITE_UMAMI_WEBSITE_ID: ${UMAMI_WEBSITE_ID:-}
+
+  backend:
+    environment:
+      GLITCHTIP_DSN: ${GLITCHTIP_DSN:-}
+
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: [observability]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    profiles: [observability]
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+    ports:
+      - "${GRAFANA_PORT:-3002}:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  umami-db:
+    image: postgres:15-alpine
+    profiles: [observability]
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${UMAMI_DB_PASSWORD:-umami}
+    volumes:
+      - umami_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  umami:
+    image: ghcr.io/umami-software/umami:latest
+    profiles: [observability]
+    environment:
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:-umami}@umami-db:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:-change-me-for-local-development}
+    ports:
+      - "${UMAMI_PORT:-3003}:3000"
+    depends_on:
+      umami-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/heartbeat || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    init: true
+    restart: unless-stopped
+
+  glitchtip-db:
+    image: postgres:18
+    profiles: [observability]
+    environment:
+      POSTGRES_DB: glitchtip
+      POSTGRES_USER: glitchtip
+      POSTGRES_PASSWORD: ${GLITCHTIP_DB_PASSWORD:-glitchtip}
+    volumes:
+      - glitchtip_db_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U glitchtip -d glitchtip"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  glitchtip-valkey:
+    image: valkey/valkey:9
+    profiles: [observability]
+    restart: unless-stopped
+
+  glitchtip:
+    image: glitchtip/glitchtip:6
+    profiles: [observability]
+    environment:
+      DATABASE_URL: postgresql://glitchtip:${GLITCHTIP_DB_PASSWORD:-glitchtip}@glitchtip-db:5432/glitchtip
+      VALKEY_URL: redis://glitchtip-valkey:6379
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY:-change-me-for-local-development}
+      EMAIL_URL: consolemail://
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_DEFAULT_FROM_EMAIL:-admin@comutitres.local}
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-http://localhost:8000}
+      SERVER_ROLE: all_in_one
+      ENABLE_USER_REGISTRATION: "true"
+      ENABLE_OPENAPI: "false"
+      GLITCHTIP_ENABLE_MCP: "false"
+      GLITCHTIP_ENABLE_DUCKDB: "false"
+    ports:
+      - "${GLITCHTIP_PORT:-8000}:8000"
+    volumes:
+      - glitchtip_uploads:/code/uploads
+    depends_on:
+      glitchtip-db:
+        condition: service_healthy
+      glitchtip-valkey:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  umami_db_data:
+  glitchtip_db_data:
+  glitchtip_uploads:
