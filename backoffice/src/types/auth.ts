@@ -6,6 +6,7 @@ export interface AdminUser {
   lastName: string
   email: string
   role: UserRole
+  archivedAt?: string | null
   avatarUrl?: string | null
 }
 

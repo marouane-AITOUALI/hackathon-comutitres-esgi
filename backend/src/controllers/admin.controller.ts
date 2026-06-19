@@ -1,8 +1,8 @@
 import type { RequestHandler } from 'express'
-import { createAdminOffer, getAdminStats, getAdminSubscription, getAuditLogs, getSupportAlerts, listAdminOffers, listAdminSubscriptions, listAdminUsers, listPendingDocuments, reviewAdminDocument, updateAdminOffer, updateAdminSubscriptionStatus, updateAdminUserRole } from '../services/admin.service.js'
+import { createAdminOffer, getAdminStats, getAdminSubscription, getSupportAlerts, listAdminOffers, listAdminSubscriptions, listAdminUsers, listPendingDocuments, reviewAdminDocument, updateAdminOffer, updateAdminSubscriptionStatus, updateAdminUserArchive, updateAdminUserRole } from '../services/admin.service.js'
 import { createCommunication, listCommunications } from '../services/notifications.service.js'
 import { AppError } from '../utils/app-error.js'
-import { adminCreateOfferSchema, adminIdParamsSchema, adminListSubscriptionsQuerySchema, adminReviewDocumentSchema, adminUpdateOfferSchema, adminUpdateSubscriptionStatusSchema, adminUpdateUserRoleSchema } from '../validation/admin.schemas.js'
+import { adminCreateOfferSchema, adminIdParamsSchema, adminListSubscriptionsQuerySchema, adminReviewDocumentSchema, adminUpdateOfferSchema, adminUpdateSubscriptionStatusSchema, adminUpdateUserArchiveSchema, adminUpdateUserRoleSchema } from '../validation/admin.schemas.js'
 import { createCommunicationSchema } from '../validation/notification.schemas.js'
 
 export const stats: RequestHandler = async (_req, res) => {
@@ -46,6 +46,13 @@ export const patchUserRole: RequestHandler = async (req, res) => {
   res.json({ user: await updateAdminUserRole(id, body, req.auth.sub) })
 }
 
+export const patchUserArchive: RequestHandler = async (req, res) => {
+  if (!req.auth) throw new AppError(401, 'Authentification requise.')
+  const { id } = adminIdParamsSchema.parse(req.params)
+  const body = adminUpdateUserArchiveSchema.parse(req.body)
+  res.json({ user: await updateAdminUserArchive(id, body, req.auth.sub) })
+}
+
 export const offers: RequestHandler = async (_req, res) => {
   res.json({ offers: await listAdminOffers() })
 }
@@ -63,10 +70,6 @@ export const patchOffer: RequestHandler = async (req, res) => {
 
 export const supportAlerts: RequestHandler = async (_req, res) => {
   res.json({ alerts: await getSupportAlerts() })
-}
-
-export const auditLogs: RequestHandler = async (_req, res) => {
-  res.json({ logs: await getAuditLogs() })
 }
 
 export const communications: RequestHandler = async (_req, res) => {

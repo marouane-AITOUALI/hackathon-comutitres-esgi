@@ -120,6 +120,13 @@
       "when": 1781868600000,
       "tag": "0016_cleanup-legacy-payment-simulations",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1781872200000,
+      "tag": "0017_user-archiving",
+      "breakpoints": true
     }
   ]
 }

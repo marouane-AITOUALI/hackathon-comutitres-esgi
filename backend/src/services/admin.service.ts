@@ -1,10 +1,10 @@
-import { asc, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions, terminationRequests, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
 import { notifyDocumentStatusChanged, notifySubscriptionStatusChanged } from './notifications.service.js'
 import { createPrivateSignedUrl, encodeStorageDocumentId, listSubscriptionDocumentObjects } from './storage.service.js'
-import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput, AdminUpdateUserRoleInput } from '../validation/admin.schemas.js'
+import type { AdminCreateOfferInput, AdminListSubscriptionsQuery, AdminReviewDocumentInput, AdminUpdateOfferInput, AdminUpdateSubscriptionStatusInput, AdminUpdateUserArchiveInput, AdminUpdateUserRoleInput } from '../validation/admin.schemas.js'
 import { evaluateSubscriptionWorkflow, reconcileSubscriptionWorkflow } from './subscription-workflow.service.js'
 
 type SubscriptionRow = typeof subscriptions.$inferSelect
@@ -22,6 +22,7 @@ const publicUserSelection = {
   lastName: users.lastName,
   email: users.email,
   role: users.role,
+  archivedAt: users.archivedAt,
   rgpdConsent: users.rgpdConsent,
   createdAt: users.createdAt,
   updatedAt: users.updatedAt,
@@ -508,8 +509,8 @@ export async function updateAdminUserRole(id: string, input: AdminUpdateUserRole
   const [current] = await database.select(publicUserSelection).from(users).where(eq(users.id, id)).limit(1)
   if (!current) throw new AppError(404, 'Utilisateur introuvable.')
 
-  if (current.role === 'admin' && input.role !== 'admin') {
-    const admins = await database.select({ id: users.id }).from(users).where(eq(users.role, 'admin'))
+  if (current.role === 'admin' && input.role !== 'admin' && !current.archivedAt) {
+    const admins = await database.select({ id: users.id }).from(users).where(and(eq(users.role, 'admin'), isNull(users.archivedAt)))
     if (admins.length <= 1) throw new AppError(400, 'Au moins un administrateur doit rester actif.')
   }
 
@@ -521,6 +522,37 @@ export async function updateAdminUserRole(id: string, input: AdminUpdateUserRole
 
   if (!updated) throw new AppError(500, "Le role de l'utilisateur n'a pas pu etre mis a jour.")
   const subscriptionRows = await database.select({ userId: subscriptions.userId }).from(subscriptions).where(eq(subscriptions.userId, id))
+  return { ...updated, subscriptionCount: subscriptionRows.length }
+}
+
+export async function updateAdminUserArchive(id: string, input: AdminUpdateUserArchiveInput, actorId: string) {
+  if (id === actorId && input.archived) {
+    throw new AppError(400, 'Vous ne pouvez pas archiver votre propre compte administrateur.')
+  }
+
+  const database = requireDb()
+  const [current] = await database.select(publicUserSelection).from(users).where(eq(users.id, id)).limit(1)
+  if (!current) throw new AppError(404, 'Utilisateur introuvable.')
+
+  if (input.archived && current.role === 'admin' && !current.archivedAt) {
+    const activeAdmins = await database
+      .select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.role, 'admin'), isNull(users.archivedAt)))
+    if (activeAdmins.length <= 1) throw new AppError(400, 'Au moins un administrateur actif doit être conservé.')
+  }
+
+  const [updated] = await database
+    .update(users)
+    .set({ archivedAt: input.archived ? new Date() : null, updatedAt: new Date() })
+    .where(eq(users.id, id))
+    .returning(publicUserSelection)
+  if (!updated) throw new AppError(500, "Le statut d'archivage n'a pas pu être mis à jour.")
+
+  const subscriptionRows = await database
+    .select({ userId: subscriptions.userId })
+    .from(subscriptions)
+    .where(eq(subscriptions.userId, id))
   return { ...updated, subscriptionCount: subscriptionRows.length }
 }
 
@@ -560,38 +592,4 @@ export async function updateAdminOffer(id: string, input: AdminUpdateOfferInput)
 
 export async function getSupportAlerts() {
   return loadSupportAlerts()
-}
-
-export async function getAuditLogs() {
-  const database = requireDb()
-  const subscriptionRows = await database.select(subscriptionSelection).from(subscriptions).orderBy(desc(subscriptions.updatedAt))
-  const documentRows = await database.select(documentSelection).from(documents).orderBy(desc(documents.updatedAt))
-  const paymentRows = await database.select().from(payments).orderBy(desc(payments.updatedAt))
-
-  return [
-    ...subscriptionRows.map((subscription) => ({
-      id: `subscription-${subscription.id}-${subscription.status}`,
-      entityType: 'subscription',
-      entityId: subscription.id,
-      action: `status:${subscription.status}`,
-      summary: `Souscription ${subscription.status}`,
-      createdAt: subscription.updatedAt,
-    })),
-    ...documentRows.map((document) => ({
-      id: `document-${document.id}-${document.status}`,
-      entityType: 'document',
-      entityId: document.id,
-      action: `status:${document.status}`,
-      summary: `Document ${document.type} ${document.status}`,
-      createdAt: document.updatedAt,
-    })),
-    ...paymentRows.map((payment) => ({
-      id: `payment-${payment.id}-${payment.status}`,
-      entityType: 'payment',
-      entityId: payment.id,
-      action: `status:${payment.status}`,
-      summary: `Paiement ${payment.type} ${payment.status}`,
-      createdAt: payment.updatedAt,
-    })),
-  ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()).slice(0, 50)
 }

@@ -1,4 +1,4 @@
-import { Alert, Button, Checkbox, FormControlLabel, Grid, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material'
+import { Alert, Button, Checkbox, Chip, FormControlLabel, Grid, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material'
 import { useEffect, useState, type FormEvent } from 'react'
 import { EmptyState } from '../components/common/EmptyState'
 import { LoadingState } from '../components/common/LoadingState'
@@ -15,6 +15,13 @@ const emptyPayload: OfferPayload = {
   priceCents: 0,
   monthlyInstallmentCount: null,
   isActive: true,
+}
+
+const euroFormatter = new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' })
+
+function eurosToCents(value: string) {
+  const amount = Number(value.replace(',', '.'))
+  return Number.isFinite(amount) ? Math.max(0, Math.round(amount * 100)) : 0
 }
 
 export function OffersPage() {
@@ -107,13 +114,24 @@ export function OffersPage() {
 
   if (loading) return <LoadingState label="Chargement des offres..." />
 
+  const activeOffersCount = offers.filter((offer) => offer.isActive !== false).length
+
   return (
     <Stack spacing={3}>
       {error && <Alert severity="error">{error}</Alert>}
       {success && <Alert severity="success">{success}</Alert>}
 
       <Paper component="form" onSubmit={submitOffer} sx={{ borderRadius: 4, p: 3 }}>
-        <Typography sx={{ fontWeight: 900, mb: 2 }} variant="h6">Ajouter une offre</Typography>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ alignItems: { sm: 'center' }, justifyContent: 'space-between', mb: 2 }}>
+          <div>
+            <Typography sx={{ fontWeight: 900 }} variant="h6">Ajouter une offre</Typography>
+            <Typography color="text.secondary" variant="body2">Les prix sont saisis en euros et conservés précisément en centimes par l'API.</Typography>
+          </div>
+          <Stack direction="row" spacing={1}>
+            <Chip color="success" label={`${activeOffersCount} active(s)`} size="small" />
+            <Chip label={`${offers.length} au total`} size="small" />
+          </Stack>
+        </Stack>
         <Grid container spacing={2}>
           <Grid size={{ xs: 12, md: 3 }}>
             <TextField fullWidth label="Code" onChange={(event) => setPayload((current) => ({ ...current, code: event.target.value }))} required value={payload.code} />
@@ -125,13 +143,34 @@ export function OffersPage() {
             <TextField fullWidth label="Cible" onChange={(event) => setPayload((current) => ({ ...current, target: event.target.value }))} required value={payload.target} />
           </Grid>
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField fullWidth label="Documents requis, separes par virgule" onChange={(event) => setDocumentsText(event.target.value)} value={documentsText} />
+            <TextField
+              fullWidth
+              helperText="Ex. identity, proof_of_address, school_certificate"
+              label="Documents requis"
+              onChange={(event) => setDocumentsText(event.target.value)}
+              value={documentsText}
+            />
           </Grid>
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField fullWidth label="Prix total (centimes)" onChange={(event) => setPayload((current) => ({ ...current, priceCents: Number(event.target.value) }))} type="number" value={payload.priceCents} />
+            <TextField
+              fullWidth
+              label="Prix total (€)"
+              onChange={(event) => setPayload((current) => ({ ...current, priceCents: eurosToCents(event.target.value) }))}
+              slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
+              type="number"
+              value={payload.priceCents / 100}
+            />
           </Grid>
           <Grid size={{ xs: 12, md: 3 }}>
-            <TextField fullWidth label="Nombre de mensualités" onChange={(event) => setPayload((current) => ({ ...current, monthlyInstallmentCount: event.target.value ? Number(event.target.value) : null }))} type="number" value={payload.monthlyInstallmentCount ?? ''} />
+            <TextField
+              fullWidth
+              helperText="Laisser vide si l'offre ne peut pas être mensualisée"
+              label="Nombre de mensualités"
+              onChange={(event) => setPayload((current) => ({ ...current, monthlyInstallmentCount: event.target.value ? Number(event.target.value) : null }))}
+              slotProps={{ htmlInput: { min: 2, max: 24, step: 1 } }}
+              type="number"
+              value={payload.monthlyInstallmentCount ?? ''}
+            />
           </Grid>
           <Grid size={{ xs: 12 }}>
             <TextField fullWidth label="Description" multiline onChange={(event) => setPayload((current) => ({ ...current, description: event.target.value }))} rows={2} value={payload.description} />
@@ -144,10 +183,11 @@ export function OffersPage() {
       </Paper>
 
       <Paper sx={{ borderRadius: 4, p: 3 }}>
+        <Typography sx={{ fontWeight: 900, mb: 2 }} variant="h6">Catalogue des offres</Typography>
         <TableContainer>
-          <Table aria-label="Offres">
+          <Table aria-label="Offres" sx={{ minWidth: 1100 }}>
             <TableHead>
-              <TableRow><TableCell>Code</TableCell><TableCell>Nom</TableCell><TableCell>Cible</TableCell><TableCell>Documents</TableCell><TableCell>Statut</TableCell><TableCell align="right">Action</TableCell></TableRow>
+              <TableRow><TableCell>Code</TableCell><TableCell>Nom</TableCell><TableCell>Cible</TableCell><TableCell>Prix</TableCell><TableCell>Paiement</TableCell><TableCell>Documents</TableCell><TableCell>Statut</TableCell><TableCell align="right">Actions</TableCell></TableRow>
             </TableHead>
             <TableBody>
               {offers.map((offer) => {
@@ -167,6 +207,31 @@ export function OffersPage() {
                     </TableCell>
                     <TableCell>
                       {editing ? <TextField label="Cible" onChange={(event) => setEditPayload((current) => ({ ...current, target: event.target.value }))} size="small" value={editPayload.target} /> : offer.target}
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 130 }}>
+                      {editing ? (
+                        <TextField
+                          label="Prix (€)"
+                          onChange={(event) => setEditPayload((current) => ({ ...current, priceCents: eurosToCents(event.target.value) }))}
+                          size="small"
+                          slotProps={{ htmlInput: { min: 0, step: '0.01' } }}
+                          type="number"
+                          value={editPayload.priceCents / 100}
+                        />
+                      ) : euroFormatter.format(offer.priceCents / 100)}
+                    </TableCell>
+                    <TableCell sx={{ minWidth: 155 }}>
+                      {editing ? (
+                        <TextField
+                          helperText="Vide = paiement unique"
+                          label="Mensualités"
+                          onChange={(event) => setEditPayload((current) => ({ ...current, monthlyInstallmentCount: event.target.value ? Number(event.target.value) : null }))}
+                          size="small"
+                          slotProps={{ htmlInput: { min: 2, max: 24, step: 1 } }}
+                          type="number"
+                          value={editPayload.monthlyInstallmentCount ?? ''}
+                        />
+                      ) : offer.monthlyInstallmentCount ? `${offer.monthlyInstallmentCount} échéances` : 'Paiement unique'}
                     </TableCell>
                     <TableCell>
                       {editing ? <TextField label="Documents" onChange={(event) => setEditDocumentsText(event.target.value)} size="small" value={editDocumentsText} /> : offer.requiredDocuments.length > 0 ? offer.requiredDocuments.join(', ') : 'Aucun'}

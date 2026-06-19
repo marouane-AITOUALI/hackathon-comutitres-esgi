@@ -3,7 +3,6 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import { CircularProgress, Stack } from '@mui/material'
 import { ProtectedRoute } from './components/auth/ProtectedRoute'
 import { AdminLayout } from './components/layout/AdminLayout'
-const AuditLogsPage = lazy(() => import('./pages/AuditLogsPage').then((module) => ({ default: module.AuditLogsPage })))
 const CommunicationsPage = lazy(() => import('./pages/CommunicationsPage').then((module) => ({ default: module.CommunicationsPage })))
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })))
 const DocumentsPage = lazy(() => import('./pages/DocumentsPage').then((module) => ({ default: module.DocumentsPage })))
@@ -33,7 +32,6 @@ function App() {
           <Route path="/support-alerts" element={<SupportAlertsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/offers" element={<OffersPage />} />
-          <Route path="/audit-logs" element={<AuditLogsPage />} />
           <Route path="/communications" element={<CommunicationsPage />} />
         </Route>
       </Route>
