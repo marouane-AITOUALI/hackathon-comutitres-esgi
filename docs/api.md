@@ -172,8 +172,9 @@ onboarding, porteur ou payeur.
 
 ### `POST /subscriptions/:id/submit`
 
-Soumet le brouillon. Le statut devient `pending_documents` si l'offre attend des
-justificatifs, sinon `pending_payment` afin de passer par le paiement prototype.
+Lance l'analyse simulee des justificatifs encore en attente, puis soumet le
+brouillon si les pieces obligatoires sont deposees et le paiement accepte. Le
+statut devient `pending_validation` et le dossier entre dans la file backoffice.
 
 ### `POST /subscriptions/:id/cancel`
 
@@ -192,8 +193,8 @@ Un admin peut appeler cette route pour alimenter le detail backoffice.
 ## Documents et verification IA prototype
 
 Les routes liees a une souscription ou a un document existant sont protegees
-par JWT. Le prototype ne stocke pas encore les fichiers : `fileUrl` represente
-l'emplacement ou le nom du justificatif.
+par JWT. Les fichiers sont stockes dans le bucket prive Supabase et les URLs
+signees sont produites exclusivement par le backend.
 
 ### `POST /documents/analyze/demo`
 
@@ -213,14 +214,8 @@ signaux de fraude et `needs_manual_review`.
 
 ### `POST /subscriptions/:subscriptionId/documents`
 
-Ajoute une piece justificative a une souscription de l'utilisateur connecte.
-
-```json
-{
-  "type": "school_certificate",
-  "fileUrl": "certificat-scolarite-2026.pdf"
-}
-```
+Ajoute une piece justificative en `multipart/form-data` a une souscription de
+l'utilisateur connecte. La piece reste `pending` jusqu'a l'envoi final.
 
 ### `GET /subscriptions/:subscriptionId/documents`
 
@@ -246,8 +241,9 @@ Remplace le fichier d'un justificatif refuse ou incomplet et le repasse en
 
 ### `POST /documents/:id/analyze`
 
-Lance une verification gratuite basee sur des regles. Elle ne remplace pas une
-vraie IA documentaire, mais fournit :
+Route reservee au backoffice pour relancer une verification basee sur des
+regles. L'analyse initiale du parcours client est declenchee automatiquement
+par `POST /subscriptions/:id/submit`. Elle fournit :
 
 - un type detecte ;
 - un score de confiance ;
@@ -412,8 +408,8 @@ documents, paiements et renouvellements.
 
 ### `GET /admin/documents/pending`
 
-Retourne les justificatifs en attente d'analyse, en analyse ou necessitant une
-revue manuelle.
+Retourne uniquement les justificatifs de dossiers deja soumis qui sont en
+attente d'analyse, en analyse ou necessitent une revue manuelle.
 
 ### `PATCH /admin/documents/:id/review`
 

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, isNotNull, isNull } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { documents, offers, onboardingSessions, payments, profiles, subscriptions, terminationRequests, users } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
@@ -433,7 +433,11 @@ export async function listPendingDocuments() {
   const rows = await database
     .select(documentSelection)
     .from(documents)
-    .where(inArray(documents.status, ['pending', 'analyzing', 'needs_manual_review']))
+    .innerJoin(subscriptions, eq(documents.subscriptionId, subscriptions.id))
+    .where(and(
+      inArray(documents.status, ['pending', 'analyzing', 'needs_manual_review']),
+      isNotNull(subscriptions.submittedAt),
+    ))
     .orderBy(asc(documents.createdAt))
     .limit(50)
 

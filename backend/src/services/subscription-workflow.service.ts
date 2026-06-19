@@ -34,6 +34,7 @@ export type SubscriptionWorkflowState =
 
 const DOCUMENT_TYPE_ALIASES: Record<string, string> = {
   identity: 'identity',
+  identite: 'identity',
   "piece d'identite": 'identity',
   'piece identite': 'identity',
   "photo d'identite": 'identity',
@@ -43,7 +44,9 @@ const DOCUMENT_TYPE_ALIASES: Record<string, string> = {
   'justificatif de situation sociale': 'eligibility',
   'notification de bourse': 'eligibility',
   school_certificate: 'school_certificate',
+  'certificat scolarite': 'school_certificate',
   'certificat de scolarite': 'school_certificate',
+  'justificatif scolarite': 'school_certificate',
   'justificatif de scolarite': 'school_certificate',
   tax_notice: 'tax_notice',
   "avis d'imposition": 'tax_notice',
@@ -56,6 +59,8 @@ function normalizedKey(value: string) {
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[’]/g, "'")
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase()
 }
@@ -96,16 +101,18 @@ export function buildSubscriptionWorkflow(input: {
     const status = latestByType.get(type)?.status
     return status === 'pending' || status === 'analyzing' || status === 'needs_manual_review'
   })
-  const reviewDocumentTypes = requiredDocumentTypes.filter((type) => {
+  const pendingAnalysisDocumentTypes = requiredDocumentTypes.filter((type) => {
     const status = latestByType.get(type)?.status
-    return status === 'pending' || status === 'analyzing' || status === 'needs_manual_review'
+    return status === 'pending' || status === 'analyzing'
   })
+  const reviewDocumentTypes = requiredDocumentTypes.filter((type) => latestByType.get(type)?.status === 'needs_manual_review')
   const invalidBlockingDocuments = blockingDocumentTypes.filter((type) => {
     const status = latestByType.get(type)?.status
     return status !== undefined && status !== 'validated'
   })
   const documentsReady = missingBlockingDocuments.length === 0 && invalidBlockingDocuments.length === 0
   const documentsUploaded = missingRequiredDocuments.length === 0
+  const requiresDocumentAnalysis = pendingAnalysisDocumentTypes.length > 0
   const requiresDocumentReview = reviewDocumentTypes.length > 0
   const hasAcceptedPayment = input.payments.some((payment) => payment.status === 'accepted' || payment.status === 'regularized')
 
@@ -157,11 +164,13 @@ export function buildSubscriptionWorkflow(input: {
     missingBlockingDocuments,
     rejectedBlockingDocuments,
     pendingBlockingDocuments,
+    pendingAnalysisDocumentTypes,
     reviewDocumentTypes,
     missingRequiredDocuments,
     rejectedRequiredDocuments,
     documentsReady,
     documentsUploaded,
+    requiresDocumentAnalysis,
     requiresDocumentReview,
     hasAcceptedPayment,
     canUpload,
