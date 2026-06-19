@@ -126,7 +126,6 @@ export async function createDocument(
   if (existing) throw new AppError(409, 'Ce type de document existe déjà. Utilisez le remplacement.')
 
   const uploaded = await uploadSubscriptionDocumentFile(subscription.userId, subscriptionId, input.type, file)
-  const analysis = analyzeDocumentWithRules({ type: input.type, fileUrl: file.originalname })
   let created: DocumentRow
 
   try {
@@ -142,10 +141,13 @@ export async function createDocument(
         originalFilename: uploaded.originalFilename,
         mimeType: uploaded.mimeType,
         sizeBytes: uploaded.sizeBytes,
-        status: analysis.suggestedStatus,
-        analysisResult: analysis,
-        analyzedAt: new Date(analysis.analyzedAt),
-        rejectionReason: analysis.suggestedStatus === 'rejected' ? 'Document refusé par les règles automatiques.' : null,
+        status: 'pending',
+        analysisResult: {
+          provider: 'pending-final-submission',
+          message: "L'analyse sera lancée lors de l'envoi final du dossier.",
+        },
+        analyzedAt: null,
+        rejectionReason: null,
       })
       .returning(documentSelection)
 
@@ -256,7 +258,6 @@ export async function resubmitDocument(
   }
   const ownerId = current.ownerId ?? userId
   const uploaded = await uploadSubscriptionDocumentFile(ownerId, current.subscriptionId, nextType, file)
-  const analysis = analyzeDocumentWithRules({ type: nextType, fileUrl: file.originalname })
   let updated: DocumentRow
 
   try {
@@ -271,10 +272,13 @@ export async function resubmitDocument(
         originalFilename: uploaded.originalFilename,
         mimeType: uploaded.mimeType,
         sizeBytes: uploaded.sizeBytes,
-        status: analysis.suggestedStatus,
-        analysisResult: analysis,
-        analyzedAt: new Date(analysis.analyzedAt),
-        rejectionReason: analysis.suggestedStatus === 'rejected' ? 'Document refusé par les règles automatiques.' : null,
+        status: 'pending',
+        analysisResult: {
+          provider: 'pending-final-submission',
+          message: "L'analyse sera lancée lors de l'envoi final du dossier.",
+        },
+        analyzedAt: null,
+        rejectionReason: null,
         updatedAt: new Date(),
       })
       .where(eq(documents.id, id))
@@ -299,8 +303,7 @@ export async function resubmitDocument(
   return publicDocument(updated)
 }
 
-export async function analyzeDocument(userId: string, role: string, id: string) {
-  const document = await findDocumentForAccess(userId, role, id)
+async function applyRuleAnalysis(document: DocumentRow) {
   const analysis = analyzeDocumentWithRules({ type: document.type, fileUrl: document.originalFilename ?? document.fileUrl })
   const [updated] = await requireDb()
     .update(documents)
@@ -311,7 +314,7 @@ export async function analyzeDocument(userId: string, role: string, id: string) 
       rejectionReason: analysis.suggestedStatus === 'rejected' ? 'Suspicion de fraude detectee par le prototype.' : null,
       updatedAt: new Date(),
     })
-    .where(eq(documents.id, id))
+    .where(eq(documents.id, document.id))
     .returning(documentSelection)
 
   if (!updated) throw new AppError(500, "Le document n'a pas pu etre analyse.")
@@ -325,7 +328,31 @@ export async function analyzeDocument(userId: string, role: string, id: string) 
     rejectionReason: updated.rejectionReason,
   })
   await reconcileSubscriptionWorkflow(updated.subscriptionId)
-  return { ...(await publicDocument(updated)), analysis }
+  return { document: updated, analysis }
+}
+
+export async function analyzeDocument(userId: string, role: string, id: string) {
+  if (role !== 'admin') {
+    throw new AppError(403, "L'analyse est lancée automatiquement lors de l'envoi final du dossier.")
+  }
+  const document = await findDocumentForAccess(userId, role, id)
+  const result = await applyRuleAnalysis(document)
+  return { ...(await publicDocument(result.document)), analysis: result.analysis }
+}
+
+export async function analyzeSubscriptionDocumentsForSubmission(userId: string, subscriptionId: string) {
+  await findSubscriptionForAccess(userId, 'user', subscriptionId)
+  const pendingDocuments = await requireDb()
+    .select(documentSelection)
+    .from(documents)
+    .where(and(eq(documents.subscriptionId, subscriptionId), eq(documents.status, 'pending')))
+    .orderBy(desc(documents.updatedAt))
+
+  for (const document of pendingDocuments) {
+    await applyRuleAnalysis(document)
+  }
+
+  return { analyzedCount: pendingDocuments.length }
 }
 
 export async function getDocumentAnalysis(userId: string, role: string, id: string) {
