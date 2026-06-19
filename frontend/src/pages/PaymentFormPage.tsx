@@ -16,6 +16,7 @@ import { createDirectPayment, createMandatePayment, simulatePayment } from '../s
 import { listSubscriptions } from '../services/subscriptions.service'
 import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
+import { validateSepaFields } from '../components/payment/sepaPaymentUtils'
 import { colors } from '../theme/colors'
 import type { PaymentSimulation, SubscriptionSummary } from '../types'
 import { subscriptionStatusLabels } from '../utils/statusLabels'
@@ -48,7 +49,8 @@ export function PaymentFormPage() {
   const [cardholderName, setCardholderName] = useState('')
   const [simulateFailure, setSimulateFailure] = useState(false)
   const [holderName, setHolderName] = useState('')
-  const [ibanLast4, setIbanLast4] = useState('')
+  const [iban, setIban] = useState('')
+  const [bic, setBic] = useState('')
   const [mandateAccepted, setMandateAccepted] = useState(false)
 
   const [simulation, setSimulation] = useState<PaymentSimulation | null>(null)
@@ -147,12 +149,29 @@ export function PaymentFormPage() {
         await createDirectPayment({ subscriptionId, paymentMode, cardToken: simulation.totalCents === 0 ? undefined : buildCardToken(cardNumber), simulateFailure })
         setSuccess(simulateFailure ? 'Paiement refusé (simulation).' : 'Paiement enregistré. Vous pouvez finaliser l’envoi du dossier.')
       } else {
+        if (paymentMode !== 'monthly') {
+          setMethod('card')
+          setError('Le prélèvement SEPA est disponible uniquement avec la mensualisation.')
+          return
+        }
+        const sepaError = validateSepaFields(holderName, iban, bic)
+        if (sepaError) {
+          setError(sepaError)
+          return
+        }
         if (!mandateAccepted) {
           setError('Vous devez accepter le mandat SEPA.')
           return
         }
-        await createMandatePayment({ subscriptionId, paymentMode, holderName, ibanLast4, mandateAccepted: true })
-        setSuccess('Mandat SEPA enregistré. Le paiement est en cours de traitement.')
+        await createMandatePayment({
+          subscriptionId,
+          paymentMode: 'monthly',
+          holderName,
+          ibanLast4: iban.replace(/\s/g, '').slice(-4),
+          bic,
+          mandateAccepted: true,
+        })
+        setSuccess('Mandat SEPA enregistré. Les prélèvements suivront l’échéancier affiché.')
       }
       setTimeout(() => navigate('/paiements'), 1800)
     } catch (caught) {
@@ -170,7 +189,7 @@ export function PaymentFormPage() {
         </Button>
         <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>Effectuer un paiement</Typography>
         <Typography color="text.secondary">
-          Simulez le montant, puis payez par carte ou prélèvement SEPA (prototype).
+          En paiement unique, réglez par carte. En mensualisation, choisissez la carte ou le prélèvement SEPA.
         </Typography>
       </Box>
 
@@ -216,7 +235,12 @@ export function PaymentFormPage() {
                 label="Fréquence"
                 value={paymentMode}
                 onChange={(event) => {
-                  setPaymentMode(event.target.value as PaymentMode)
+                  const nextMode = event.target.value as PaymentMode
+                  setPaymentMode(nextMode)
+                  if (nextMode === 'one_time') {
+                    setMethod('card')
+                    setMandateAccepted(false)
+                  }
                   setSimulation(null)
                 }}
                 sx={{ minWidth: 220 }}
@@ -275,6 +299,7 @@ export function PaymentFormPage() {
             <PaymentMethodSection
               method={method}
               onMethodChange={setMethod}
+              allowMandate={paymentMode === 'monthly'}
               cardNumber={cardNumber}
               onCardNumberChange={setCardNumber}
               expiry={cardExpiry}
@@ -287,8 +312,10 @@ export function PaymentFormPage() {
               onSimulateFailureChange={setSimulateFailure}
               holderName={holderName}
               onHolderNameChange={setHolderName}
-              ibanLast4={ibanLast4}
-              onIbanLast4Change={setIbanLast4}
+              iban={iban}
+              onIbanChange={setIban}
+              bic={bic}
+              onBicChange={setBic}
               mandateAccepted={mandateAccepted}
               onMandateAcceptedChange={setMandateAccepted}
             />

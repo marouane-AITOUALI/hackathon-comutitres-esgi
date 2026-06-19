@@ -3,6 +3,7 @@ import test from 'node:test'
 import { buildSubscriptionWorkflow, isSchoolCertificateBlocking } from './subscription-workflow.service.js'
 import { createInstallmentSchedule } from './payments.service.js'
 import { onboardingSchema } from '../validation/onboarding.schemas.js'
+import { mandatePaymentSchema } from '../validation/payment.schemas.js'
 
 const baseWorkflow = {
   status: 'draft' as const,
@@ -69,4 +70,16 @@ test('onboarding refuse une date future et accepte une adresse francaise complet
     answers: {},
   })
   assert.equal(result.success, false)
+})
+
+test('le mandat SEPA est reserve a la mensualisation', () => {
+  const base = {
+    subscriptionId: '11111111-1111-4111-8111-111111111111',
+    holderName: 'Ada Lovelace',
+    ibanLast4: '0189',
+    bic: 'AGRIFRPP',
+    mandateAccepted: true,
+  }
+  assert.equal(mandatePaymentSchema.safeParse({ ...base, paymentMode: 'one_time' }).success, false)
+  assert.equal(mandatePaymentSchema.safeParse({ ...base, paymentMode: 'monthly' }).success, true)
 })

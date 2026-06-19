@@ -189,6 +189,7 @@ export async function createMandatePayment(userId: string, input: MandatePayment
         method: 'sepa_mandate',
         holderName: input.holderName,
         ibanLast4: input.ibanLast4,
+        bic: input.bic,
         mandateAccepted: input.mandateAccepted,
         prototype: true,
         ...plan,

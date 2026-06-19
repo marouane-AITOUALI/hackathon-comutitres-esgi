@@ -25,6 +25,7 @@ import { createDirectPayment, createMandatePayment, simulatePayment } from '../s
 import { acceptSubscriptionRenewal, cancelSubscription, cancelSubscriptionRenewal, cancelSubscriptionTermination, getSubscriptionById, getSubscriptionRenewal, getSubscriptionTermination, requestSubscriptionTermination, submitSubscription } from '../services/subscriptions.service'
 import { PaymentMethodSection } from '../components/payment/PaymentMethodSection'
 import { buildCardToken, validateCardFields } from '../components/payment/cardPaymentUtils'
+import { validateSepaFields } from '../components/payment/sepaPaymentUtils'
 import { colors } from '../theme/colors'
 import type { DocumentSummary, DocumentType, PaymentSimulation, RenewalSummary, SubscriptionStatus, SubscriptionSummary, TerminationSummary } from '../types'
 import { useSubscriptionRealtime } from '../hooks/useSubscriptionRealtime'
@@ -176,7 +177,8 @@ export function SubscriptionDetailPage() {
   const [cardholderName, setCardholderName] = useState('')
   const [simulateFailure, setSimulateFailure] = useState(false)
   const [holderName, setHolderName] = useState('')
-  const [ibanLast4, setIbanLast4] = useState('')
+  const [iban, setIban] = useState('')
+  const [bic, setBic] = useState('')
   const [mandateAccepted, setMandateAccepted] = useState(false)
   const [simulation, setSimulation] = useState<PaymentSimulation | null>(null)
   const [simulating, setSimulating] = useState(false)
@@ -411,12 +413,29 @@ export function SubscriptionDetailPage() {
         await createDirectPayment({ subscriptionId: id, paymentMode, cardToken: simulation.totalCents === 0 ? undefined : buildCardToken(cardNumber), simulateFailure })
         setSuccess(simulateFailure ? 'Paiement refusé (simulation).' : 'Paiement accepté.')
       } else {
+        if (paymentMode !== 'monthly') {
+          setPaymentMethod('card')
+          setError('Le prélèvement SEPA est disponible uniquement avec la mensualisation.')
+          return
+        }
+        const sepaError = validateSepaFields(holderName, iban, bic)
+        if (sepaError) {
+          setError(sepaError)
+          return
+        }
         if (!mandateAccepted) {
           setError('Vous devez accepter le mandat SEPA.')
           return
         }
-        await createMandatePayment({ subscriptionId: id, paymentMode, holderName, ibanLast4, mandateAccepted: true })
-        setSuccess('Mandat SEPA enregistré.')
+        await createMandatePayment({
+          subscriptionId: id,
+          paymentMode: 'monthly',
+          holderName,
+          ibanLast4: iban.replace(/\s/g, '').slice(-4),
+          bic,
+          mandateAccepted: true,
+        })
+        setSuccess('Mandat SEPA enregistré. Les prélèvements suivront l’échéancier affiché.')
       }
       await refresh()
       setSimulation(null)
@@ -1050,7 +1069,21 @@ export function SubscriptionDetailPage() {
               {allDocumentsDeposited && !hasCompletedPayment && (
                 <>
                   <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} sx={{ alignItems: { sm: 'flex-end' } }}>
-                    <TextField select label="Fréquence" value={paymentMode} onChange={(e) => { setPaymentMode(e.target.value as 'one_time' | 'monthly'); setSimulation(null) }} sx={{ minWidth: 220 }}>
+                    <TextField
+                      select
+                      label="Fréquence"
+                      value={paymentMode}
+                      onChange={(event) => {
+                        const nextMode = event.target.value as 'one_time' | 'monthly'
+                        setPaymentMode(nextMode)
+                        if (nextMode === 'one_time') {
+                          setPaymentMethod('card')
+                          setMandateAccepted(false)
+                        }
+                        setSimulation(null)
+                      }}
+                      sx={{ minWidth: 220 }}
+                    >
                       <MenuItem value="one_time">Paiement unique</MenuItem>
                       <MenuItem value="monthly">Mensualisation</MenuItem>
                     </TextField>
@@ -1081,6 +1114,7 @@ export function SubscriptionDetailPage() {
                   <PaymentMethodSection
                     method={paymentMethod}
                     onMethodChange={setPaymentMethod}
+                    allowMandate={paymentMode === 'monthly'}
                     cardNumber={cardNumber}
                     onCardNumberChange={setCardNumber}
                     expiry={cardExpiry}
@@ -1093,14 +1127,16 @@ export function SubscriptionDetailPage() {
                     onSimulateFailureChange={setSimulateFailure}
                     holderName={holderName}
                     onHolderNameChange={setHolderName}
-                    ibanLast4={ibanLast4}
-                    onIbanLast4Change={setIbanLast4}
+                    iban={iban}
+                    onIbanChange={setIban}
+                    bic={bic}
+                    onBicChange={setBic}
                     mandateAccepted={mandateAccepted}
                     onMandateAcceptedChange={setMandateAccepted}
                   />
 
                   <Button disabled={paying || !simulation} onClick={() => void submitPayment()} variant="contained" sx={{ alignSelf: { sm: 'flex-start' }, fontWeight: 700 }}>
-                    {paying ? 'Traitement...' : paymentMethod === 'card' ? 'Payer maintenant' : 'Valider le mandat'}
+                    {paying ? 'Traitement...' : paymentMode === 'one_time' || paymentMethod === 'card' ? 'Payer maintenant' : 'Valider le mandat'}
                   </Button>
                 </>
               )}
