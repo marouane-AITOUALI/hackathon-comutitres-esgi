@@ -6,6 +6,7 @@ import { DocumentTranslationBridge } from './i18n/DocumentTranslationBridge'
 import { AppLayout } from './components/AppLayout'
 import { ClientLayout } from './components/ClientLayout'
 import { ProtectedRoute } from './components/ProtectedRoute'
+import { UmamiAnalytics } from './observability/UmamiAnalytics'
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((module) => ({ default: module.DashboardPage })))
 const DocumentsPage = lazy(() => import('./pages/DocumentsPage').then((module) => ({ default: module.DocumentsPage })))
 const FooterInfoPage = lazy(() => import('./pages/FooterInfoPage').then((module) => ({ default: module.FooterInfoPage })))
@@ -32,6 +33,7 @@ function App() {
 
   return (
     <>
+      <UmamiAnalytics />
       <DocumentTranslationBridge />
       <a className="skip-link" href="#main-content">
         {language === 'fr' ? 'Aller au contenu principal' : 'Skip to main content'}

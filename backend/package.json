@@ -23,6 +23,7 @@
   "license": "MIT",
   "description": "API Comutitres",
   "dependencies": {
+    "@sentry/node": "^10.58.0",
     "@supabase/supabase-js": "^2.108.2",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",

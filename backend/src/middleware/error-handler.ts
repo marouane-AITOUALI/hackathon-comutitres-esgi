@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler } from 'express'
 import { ZodError } from 'zod'
+import { captureUnexpectedError } from '../observability/glitchtip.js'
 import { AppError } from '../utils/app-error.js'
 
 export const errorHandler: ErrorRequestHandler = (
@@ -16,6 +17,7 @@ export const errorHandler: ErrorRequestHandler = (
     response.status(400).json({ message: 'Les donnees envoyees sont invalides.', details: error.flatten() })
     return
   }
+  captureUnexpectedError(error)
   console.error(error)
   response.status(500).json({ message: 'Une erreur interne est survenue.' })
 }
