@@ -1,194 +1,159 @@
-# Hackathon Comutitres ESGI
+# Comutitres — parcours de souscription unifié
 
-Monorepo TypeScript pour la refonte du parcours utilisateur Comutitres.
+Prototype réalisé pour le hackathon ESGI 2026. La solution aide les voyageurs à
+choisir le titre adapté, constituer leur dossier et suivre leur souscription.
+Elle fournit également à Comutitres un backoffice de pilotage des dossiers,
+justificatifs, paiements et alertes support.
 
-## Workflow Git
+## Fonctionnalités livrées
 
-Les developpements sont realises et pousses sur `develop`. La branche `main`
-reste reservee a la mise en production finale lorsque l'ensemble est valide.
+### Parcours voyageur
 
-## Stack
+- orientation guidée parmi les offres Navigo, Imagine R, TST et Améthyste ;
+- recommandation expliquée selon le profil, l'âge et les déplacements ;
+- gestion distincte du porteur et du payeur ;
+- dépôt, analyse et suivi des justificatifs ;
+- paiement direct ou mandat SEPA simulé ;
+- suivi des souscriptions, renouvellements et actions prioritaires ;
+- interface responsive, français/anglais et options d'accessibilité.
 
-- `frontend` : React, Vite, TypeScript, MUI, React Router et Tailwind CSS
-- `backend` : Node.js, Express, TypeScript, Drizzle ORM et Supabase
-- `backoffice` : React, Vite, TypeScript, MUI, React Router et Tailwind CSS
+### Backoffice Comutitres
 
-## Installation
+- tableau de bord des dossiers et blocages prioritaires ;
+- contrôle et décision sur les justificatifs ;
+- validation, refus ou suspension d'une souscription ;
+- détection des paiements à régulariser et alertes support ;
+- gestion des offres, communications, utilisateurs et journal d'activité ;
+- accès administrateur protégé par rôle.
+
+### Qualité et exploitation
+
+- maquettes réalisées sur Figma et suivi des tâches avec Trello ;
+- monorepo TypeScript : React pour les interfaces, Express pour l'API ;
+- PostgreSQL/Supabase avec Drizzle ORM ;
+- validation des données, mots de passe hachés et secrets hors du dépôt ;
+- Docker pour l'application et ses services ;
+- configurations de déploiement Vercel et Render ;
+- tests automatisés sur les règles métier ;
+- Prometheus, Grafana, Umami et GlitchTip en option.
+
+## Prérequis
+
+- Docker et Docker Compose ;
+- un projet PostgreSQL/Supabase ;
+- Git.
+
+## Lancement étape par étape
+
+### 1. Configurer le backend
 
 ```bash
-npm install
+cp backend/.env.example backend/.env
 ```
 
-Copier ensuite les fichiers `.env.example` en `.env` dans chaque application.
-Pour Drizzle, recuperer l'URL PostgreSQL Supabase et renseigner
-`backend/.env` avec `DATABASE_URL`. Generer egalement une valeur longue et
-aleatoire pour `JWT_SECRET`.
+Renseigner au minimum dans `backend/.env` :
 
-## Developpement
-
-```bash
-npm run dev:frontend
-npm run dev:backend
-npm run dev:backoffice
+```env
+DATABASE_URL=postgresql://...
+SUPABASE_URL=https://...
+SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+JWT_SECRET=une-valeur-longue-et-aleatoire
 ```
 
-## Docker — application seule
-
-Renseigner d'abord `backend/.env`, puis lancer tout l'environnement de
-développement avec hot reload :
+### 2. Lancer l'application
 
 ```bash
 docker compose up -d --build
 ```
 
-Les services sont disponibles sur :
+Le backend applique automatiquement les migrations au démarrage.
 
-- frontend : http://localhost:5173
-- backend : http://localhost:3001/api/health
-- backoffice : http://localhost:5174
-
-Pour suivre les logs :
+### 3. Préparer les données de démonstration
 
 ```bash
-docker compose logs -f
+docker compose exec backend npm run db:seed:admin
+docker compose exec backend npm run db:seed:demo
 ```
 
-Pour arrêter l'application seule :
+### 4. Ouvrir les applications
+
+| Service | URL |
+| --- | --- |
+| Espace voyageur | http://localhost:5173 |
+| Backoffice | http://localhost:5174 |
+| État de l'API | http://localhost:3001/api/health |
+
+Comptes de démonstration :
+
+| Espace | Identifiant | Mot de passe |
+| --- | --- | --- |
+| Voyageur | `parent.demo@example.com` | `Demo123!` |
+| Backoffice | `admin@comutitres.fr` | `Admin123!` |
+
+### 5. Arrêter l'application
 
 ```bash
 docker compose down
 ```
 
-Pour tester les images de production :
+## Lancement avec observabilité
+
+Créer le fichier local de configuration :
 
 ```bash
-docker compose -f compose.prod.yml up --build
+cp .env.observability.example .env.observability
 ```
 
-Le frontend est alors disponible sur http://localhost:8080 et le backoffice
-sur http://localhost:8081. L'API Docker utilise le port hote `3001` pour
-eviter les conflits avec un backend lance localement sur `3000`.
+Renseigner si disponibles :
 
-Les ports peuvent etre modifies avant le lancement :
+- `UMAMI_WEBSITE_ID` pour mesurer l'usage ;
+- `GLITCHTIP_DSN` pour remonter les erreurs ;
+- des mots de passe locaux différents des valeurs d'exemple.
 
-```powershell
-$env:API_PORT=4000
-docker compose up --build
-```
-
-## Docker — application avec observabilité
-
-Une stack optionnelle ajoute Prometheus, Grafana, Umami et GlitchTip sans
-modifier la commande de l'application seule :
+Lancer l'application et toute la supervision :
 
 ```bash
-docker compose -f compose.yml -f compose.observability.yml --profile observability up -d --build
+docker compose \
+  --env-file .env.observability \
+  -f compose.yml \
+  -f compose.observability.yml \
+  --profile observability \
+  up -d --build
 ```
 
-Pour suivre les logs de cette stack :
+| Outil | URL |
+| --- | --- |
+| Grafana | http://localhost:3002 |
+| Umami | http://localhost:3003 |
+| GlitchTip local | http://localhost:8000 |
+| Prometheus | http://localhost:9090 |
+
+Arrêter toute la stack :
 
 ```bash
-docker compose -f compose.yml -f compose.observability.yml --profile observability logs -f
+docker compose \
+  --env-file .env.observability \
+  -f compose.yml \
+  -f compose.observability.yml \
+  --profile observability \
+  down
 ```
 
-Pour arrêter l'application et toute l'observabilité :
+## Vérifications
 
 ```bash
-docker compose -f compose.yml -f compose.observability.yml --profile observability down
+npm install
+npm run typecheck
+npm run lint
+npm test
 ```
 
-Prometheus collecte les metriques exposees par l'API et Grafana charge
-automatiquement un tableau de bord Comutitres. Umami et GlitchTip utilisent des
-bases dediees, non exposees publiquement.
+## Documentation
 
-### Ports locaux
-
-| Service | URL | Port hôte |
-| --- | --- | --- |
-| Frontend voyageur | http://localhost:5173 | `5173` |
-| Backoffice | http://localhost:5174 | `5174` |
-| API / healthcheck | http://localhost:3001/api/health | `3001` |
-| API / métriques | http://localhost:3001/api/metrics | `3001` |
-| Grafana | http://localhost:3002 | `3002` |
-| Umami | http://localhost:3003 | `3003` |
-| GlitchTip | http://localhost:8000 | `8000` |
-| Prometheus | http://localhost:9090 | `9090` |
-
-Les bases PostgreSQL d'Umami et GlitchTip ainsi que Valkey n'exposent aucun port
-sur la machine. Elles sont accessibles uniquement entre conteneurs.
-
-### Si le backend devient `unhealthy`
-
-Après l'ajout d'une dépendance backend, l'ancien volume Docker
-`backend_node_modules` peut masquer les dépendances de la nouvelle image.
-Actualiser ce volume puis relancer la stack :
-
-```bash
-docker compose -f compose.yml -f compose.observability.yml --profile observability exec backend npm install --ignore-scripts
-docker compose -f compose.yml -f compose.observability.yml --profile observability restart backend
-docker compose -f compose.yml -f compose.observability.yml --profile observability up -d
-```
-
-Pour identifier la cause d'un conteneur défaillant :
-
-```bash
-docker compose -f compose.yml -f compose.observability.yml --profile observability ps -a
-docker compose -f compose.yml -f compose.observability.yml --profile observability logs --tail=200 backend
-```
-
-Voir `docs/observability.md` pour les URLs, variables et etapes de configuration.
-
-## Base de donnees
-
-```bash
-cd backend
-npm run db:generate
-npm run db:migrate
-npm run db:seed
-npm run db:seed:admin
-npm run db:seed:demo
-```
-
-Le modele conceptuel est documente dans `docs/database-model.md`.
-
-Le backend lance aussi les migrations automatiquement au demarrage via
-`db:migrate:auto` avant `dev` et `start`. `db:migrate` et `db:seed` restent
-disponibles pour une execution manuelle et ecrivent dans la base configuree.
-Ne lancer ces commandes sur Supabase qu'apres validation de la migration locale.
-
-Les seeds de demo sont idempotents :
-
-- `db:seed:admin` prepare `admin@comutitres.fr / Admin123!` ou les valeurs
-  `ADMIN_*` definies dans `backend/.env`.
-- `db:seed:demo` prepare les offres, un parent demo, un enfant porteur, une
-  souscription Imagine R Scolaire, des justificatifs et des paiements simules.
-
-## Parcours utilisateur
-
-Le frontend propose :
-
-- inscription et connexion email/mot de passe ;
-- session prototype par JWT ;
-- distinction porteur/payeur ;
-- questions guidees sur le profil et les trajets ;
-- recommandation explicable avec justificatifs potentiels.
-
-Le bouton Ile-de-France Mobilites Connect est visible mais volontairement non
-implemente dans cette version.
-
-## Backoffice demo
-
-Apres seed admin/demo, ouvrir le backoffice sur `/login` et se connecter avec :
-
-```txt
-admin@comutitres.fr
-Admin123!
-```
-
-La session backoffice utilise un cookie `HttpOnly`. Le frontend utilisateur
-conserve son stockage JWT prototype pour le parcours client.
-
-Voir aussi :
-
-- `docs/backoffice.md`
-- `docs/demo-scenario.md`
+- [Scénario de démonstration](docs/demo-scenario.md)
+- [Architecture](docs/architecture.md)
+- [Backoffice](docs/backoffice.md)
+- [Modèle de données](docs/database-model.md)
+- [Principes RGPD](docs/rgpd.md)
+- [Observabilité](docs/observability.md)
