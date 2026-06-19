@@ -1,4 +1,4 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray } from 'drizzle-orm'
 import { requireDb } from '../db/client.js'
 import { offers, payments, subscriptions } from '../db/schema.js'
 import { AppError } from '../utils/app-error.js'
@@ -117,29 +117,23 @@ function paymentResponse(payment: PaymentRow) {
 export async function simulatePayment(userId: string, input: PaymentSimulationInput) {
   const subscription = input.subscriptionId ? await findOwnSubscription(userId, input.subscriptionId) : null
   const simulation = await resolvePaymentPlan(input, subscription)
+  return { simulation, payment: null }
+}
 
-  if (!subscription) return { simulation, payment: null }
-
-  const [created] = await requireDb()
-    .insert(payments)
-    .values({
-      userId,
-      subscriptionId: subscription.id,
-      type: 'simulation',
-      status: 'simulated',
-      amountCents: simulation.totalCents,
-      metadata: simulation,
-      processedAt: new Date(),
-      externalReference: reference('SIM'),
-    })
-    .returning(paymentSelection)
-
-  if (!created) throw new AppError(500, "La simulation de paiement n'a pas pu etre enregistree.")
-  return { simulation, payment: created }
+async function findAcceptedPayment(subscriptionId: string) {
+  const [payment] = await requireDb()
+    .select(paymentSelection)
+    .from(payments)
+    .where(and(eq(payments.subscriptionId, subscriptionId), inArray(payments.status, ['accepted', 'regularized'])))
+    .orderBy(desc(payments.createdAt))
+    .limit(1)
+  return payment ?? null
 }
 
 export async function createDirectPayment(userId: string, input: DirectPaymentInput) {
   const subscription = await findOwnSubscription(userId, input.subscriptionId)
+  const existingPayment = await findAcceptedPayment(subscription.id)
+  if (existingPayment) return paymentResponse(existingPayment)
   const plan = await resolvePaymentPlan(input, subscription)
   const accepted = !input.simulateFailure
 
@@ -177,6 +171,8 @@ export async function createDirectPayment(userId: string, input: DirectPaymentIn
 
 export async function createMandatePayment(userId: string, input: MandatePaymentInput) {
   const subscription = await findOwnSubscription(userId, input.subscriptionId)
+  const existingPayment = await findAcceptedPayment(subscription.id)
+  if (existingPayment) return paymentResponse(existingPayment)
   const plan = await resolvePaymentPlan(input, subscription)
   const accepted = input.mandateAccepted
 

@@ -95,9 +95,9 @@ function formatFileSize(bytes: number) {
 
 function documentStatusMeta(document?: DocumentSummary) {
   if (!document) return { label: 'À déposer', color: colors.greyDark, icon: <Circle size={18} /> }
-  if (document.status === 'validated') return { label: 'Validé', color: colors.greenDark, icon: <CheckCircle2 size={18} /> }
+  if (document.status === 'validated') return { label: 'Vérifié automatiquement', color: colors.greenDark, icon: <CheckCircle2 size={18} /> }
   if (document.status === 'rejected') return { label: 'À remplacer', color: colors.redDark, icon: <AlertCircle size={18} /> }
-  if (document.status === 'needs_manual_review') return { label: 'À vérifier', color: colors.orangeDark, icon: <AlertCircle size={18} /> }
+  if (document.status === 'needs_manual_review') return { label: 'Revue humaine nécessaire', color: colors.orangeDark, icon: <AlertCircle size={18} /> }
   if (document.status === 'analyzing') return { label: 'Analyse en cours', color: colors.blueInteraction, icon: <RotateCcw size={18} /> }
   return { label: 'Déposé', color: colors.orangeDark, icon: <FileText size={18} /> }
 }
@@ -237,7 +237,7 @@ export function SubscriptionDetailPage() {
   const activeDocument = activeDocumentType ? item?.documents.find((document) => document.type === activeDocumentType) : undefined
   const preparedCount = documentSteps.filter((type) => preparedFiles[type]).length
   const completedCount = documentSteps.filter((type) => item?.documents.some((document) => document.type === type) || preparedFiles[type]).length
-  const allDocumentsDeposited = item?.workflow.documentsReady ?? completedCount === documentSteps.length
+  const allDocumentsDeposited = completedCount === documentSteps.length
   const paymentStepIndex = documentSteps.length
   const finalStepIndex = documentSteps.length + 1
   const isPaymentStep = activeStep === paymentStepIndex
@@ -328,6 +328,43 @@ export function SubscriptionDetailPage() {
       setSuccess('Analyse documentaire relancée.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Analyse impossible.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function saveCurrentDocumentAndContinue() {
+    if (!id || !activeDocumentType) return
+    const file = preparedFiles[activeDocumentType]
+    if (!activeDocument && !file) {
+      setError(`Ajoutez ${documentTypeLabels[activeDocumentType].toLowerCase()} avant de continuer.`)
+      return
+    }
+    if (activeDocument?.status === 'rejected' && !file) {
+      setError('Ce document a été refusé. Choisissez un nouveau fichier avant de continuer.')
+      return
+    }
+
+    setSaving(true)
+    setError('')
+    setSuccess('')
+    try {
+      if (file) {
+        if (activeDocument) await resubmitDocument(activeDocument.id, { type: activeDocumentType, file })
+        else await createDocument(id, { type: activeDocumentType, file })
+        setPreparedFiles((current) => {
+          const next = { ...current }
+          delete next[activeDocumentType]
+          return next
+        })
+      }
+      const latest = await getSubscriptionById(id)
+      setItem(latest)
+      const nextStep = activeStep === documentSteps.length - 1 ? paymentStepIndex : activeStep + 1
+      goToStep(nextStep)
+      if (file) setSuccess('Document enregistré et analysé automatiquement.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Enregistrement du document impossible.')
     } finally {
       setSaving(false)
     }
@@ -539,8 +576,10 @@ export function SubscriptionDetailPage() {
             {[
               {
                 label: 'Justificatifs',
-                value: item.workflow.documentsReady ? 'Prêts' : `${item.workflow.blockingDocumentTypes.length - item.workflow.missingBlockingDocuments.length}/${item.workflow.blockingDocumentTypes.length} reçus`,
-                complete: item.workflow.documentsReady,
+                value: item.workflow.documentsUploaded
+                  ? item.workflow.requiresDocumentReview ? 'Déposés · contrôle BO' : 'Vérifiés'
+                  : `${item.workflow.requiredDocumentTypes.length - item.workflow.missingRequiredDocuments.length}/${item.workflow.requiredDocumentTypes.length} déposés`,
+                complete: item.workflow.documentsUploaded,
                 icon: <FileText size={21} />,
               },
               {
@@ -834,7 +873,15 @@ export function SubscriptionDetailPage() {
 
                 {activeDocument && (
                   <Alert severity={activeDocument.status === 'validated' ? 'success' : activeDocument.status === 'rejected' ? 'error' : 'warning'} sx={{ mb: 2 }}>
-                    {documentStatusMeta(activeDocument).label}. Confiance : {confidence(activeDocument)}
+                    <Typography sx={{ fontWeight: 800 }}>{documentStatusMeta(activeDocument).label}</Typography>
+                    <Typography variant="body2">
+                      Confiance de l’analyse : {confidence(activeDocument)}.
+                      {activeDocument.status === 'needs_manual_review'
+                        ? ' Le document est bien enregistré et sera contrôlé par le backoffice.'
+                        : activeDocument.status === 'validated'
+                          ? ' Aucun contrôle supplémentaire n’est nécessaire avant l’étude du dossier.'
+                          : ''}
+                    </Typography>
                     {activeDocument.signedUrl && (
                       <Button component="a" href={activeDocument.signedUrl} rel="noreferrer" size="small" sx={{ ml: 1 }} target="_blank">
                         Voir
@@ -963,12 +1010,12 @@ export function SubscriptionDetailPage() {
               </Button>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
                 <Button
-                  disabled={activeStep === documentSteps.length - 1 && !allDocumentsDeposited}
+                  disabled={saving || (!activeDocument && !selectedDocumentFile) || (activeDocument?.status === 'rejected' && !selectedDocumentFile)}
                   endIcon={<ArrowRight size={17} />}
-                  onClick={() => goToStep(activeStep === documentSteps.length - 1 ? paymentStepIndex : activeStep + 1)}
+                  onClick={() => void saveCurrentDocumentAndContinue()}
                   variant="outlined"
                 >
-                  Suivant
+                  {selectedDocumentFile ? 'Enregistrer et continuer' : 'Suivant'}
                 </Button>
               </Stack>
             </Stack>

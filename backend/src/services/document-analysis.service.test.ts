@@ -10,7 +10,9 @@ test('validates a matching school certificate filename', () => {
 })
 
 test('flags risky document filenames', () => {
+  const analysis = analyzeDocumentWithRules({ type: 'identity', fileUrl: 'fake-identite-modified.exe' })
   const fraudCheck = checkDocumentFraud({ type: 'identity', fileUrl: 'fake-identite-modified.exe' })
+  assert.equal(analysis.suggestedStatus, 'needs_manual_review')
   assert.equal(fraudCheck.needsManualReview, true)
   assert.ok(fraudCheck.fraudSignals.length >= 1)
 })

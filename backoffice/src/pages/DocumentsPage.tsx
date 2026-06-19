@@ -245,7 +245,10 @@ export function DocumentsPage() {
                     <Box sx={{ width: { xs: '100%', lg: 300 }, flexShrink: 0 }}>
                       <Paper variant="outlined" sx={{ p: 1.75, borderRadius: 2, bgcolor: 'background.default' }}>
                         <Typography color="text.secondary" variant="caption">Analyse automatique</Typography>
-                        <Typography sx={{ fontWeight: 850 }}>Confiance : {confidence(item)}</Typography>
+                        <Typography sx={{ fontWeight: 850 }}>
+                          {item.document.status === 'validated' ? 'Vérifié automatiquement' : 'Revue humaine nécessaire'}
+                        </Typography>
+                        <Typography variant="body2">Confiance : {confidence(item)}</Typography>
                         <Typography color={documentWarnings ? 'warning.main' : 'text.secondary'} variant="body2" sx={{ mt: 0.5 }}>
                           {documentWarnings || 'Aucun avertissement détecté.'}
                         </Typography>

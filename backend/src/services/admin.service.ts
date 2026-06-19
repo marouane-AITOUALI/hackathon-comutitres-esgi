@@ -302,7 +302,7 @@ async function loadSupportAlerts() {
         severity: 'info',
         subscriptionId: subscription.id,
         title: 'Paiement attendu',
-        message: 'Le dossier attend une simulation, un paiement direct ou un mandat SEPA prototype.',
+        message: 'Le dossier attend un paiement par carte ou la validation d’un mandat SEPA.',
         createdAt: subscription.updatedAt,
       })
     }

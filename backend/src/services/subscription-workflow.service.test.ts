@@ -36,6 +36,22 @@ test('un dossier soumis avec une piece refusee demande une action utilisateur', 
   assert.deepEqual(workflow.replaceableDocumentTypes, ['identity'])
 })
 
+test('une piece en revue humaine permet de payer et envoyer le dossier au backoffice', () => {
+  const workflow = buildSubscriptionWorkflow({
+    ...baseWorkflow,
+    documents: [
+      { type: 'identity', status: 'validated' },
+      { type: 'school_certificate', status: 'needs_manual_review' },
+    ],
+    now: new Date('2026-12-02T12:00:00Z'),
+  })
+  assert.equal(workflow.documentsUploaded, true)
+  assert.equal(workflow.documentsReady, false)
+  assert.equal(workflow.requiresDocumentReview, true)
+  assert.equal(workflow.canSubmit, true)
+  assert.equal(workflow.state, 'ready_to_submit')
+})
+
 test('echeancier ajuste les centimes sur la derniere mensualite', () => {
   const schedule = createInstallmentSchedule(38_622, 10, new Date('2026-06-18T00:00:00Z'))
   assert.equal(schedule.installmentAmountCents, 3_862)

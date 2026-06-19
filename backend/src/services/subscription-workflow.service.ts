@@ -89,8 +89,14 @@ export function buildSubscriptionWorkflow(input: {
   }
 
   const missingBlockingDocuments = blockingDocumentTypes.filter((type) => !latestByType.has(type))
+  const missingRequiredDocuments = requiredDocumentTypes.filter((type) => !latestByType.has(type))
   const rejectedBlockingDocuments = blockingDocumentTypes.filter((type) => latestByType.get(type)?.status === 'rejected')
+  const rejectedRequiredDocuments = requiredDocumentTypes.filter((type) => latestByType.get(type)?.status === 'rejected')
   const pendingBlockingDocuments = blockingDocumentTypes.filter((type) => {
+    const status = latestByType.get(type)?.status
+    return status === 'pending' || status === 'analyzing' || status === 'needs_manual_review'
+  })
+  const reviewDocumentTypes = requiredDocumentTypes.filter((type) => {
     const status = latestByType.get(type)?.status
     return status === 'pending' || status === 'analyzing' || status === 'needs_manual_review'
   })
@@ -99,6 +105,8 @@ export function buildSubscriptionWorkflow(input: {
     return status !== undefined && status !== 'validated'
   })
   const documentsReady = missingBlockingDocuments.length === 0 && invalidBlockingDocuments.length === 0
+  const documentsUploaded = missingRequiredDocuments.length === 0
+  const requiresDocumentReview = reviewDocumentTypes.length > 0
   const hasAcceptedPayment = input.payments.some((payment) => payment.status === 'accepted' || payment.status === 'regularized')
 
   let state: SubscriptionWorkflowState
@@ -107,11 +115,11 @@ export function buildSubscriptionWorkflow(input: {
   else if (input.status === 'cancelled') state = 'cancelled'
   else if (input.status === 'suspended') state = 'suspended'
   else if (input.submittedAt && rejectedBlockingDocuments.length > 0) state = 'needs_action'
-  else if (input.submittedAt && !documentsReady) state = 'documents_required'
+  else if (input.submittedAt && missingBlockingDocuments.length > 0) state = 'documents_required'
   else if (input.submittedAt && !hasAcceptedPayment) state = 'payment_required'
   else if (input.submittedAt) state = 'under_review'
   else if (rejectedBlockingDocuments.length > 0) state = 'needs_action'
-  else if (!documentsReady) state = 'documents_required'
+  else if (missingBlockingDocuments.length > 0) state = 'documents_required'
   else if (!hasAcceptedPayment) state = 'payment_required'
   else state = 'ready_to_submit'
 
@@ -121,19 +129,22 @@ export function buildSubscriptionWorkflow(input: {
   const replaceableDocumentTypes = editableBeforeSubmission ? requiredDocumentTypes : correctionTypes
   const canUpload = replaceableDocumentTypes.length > 0 && state !== 'under_review' && !terminal
   const canPay = !hasAcceptedPayment && !terminal && state !== 'under_review'
-  const canSubmit = !input.submittedAt && documentsReady && hasAcceptedPayment && input.status === 'draft'
+  const canSubmit = !input.submittedAt
+    && missingBlockingDocuments.length === 0
+    && rejectedBlockingDocuments.length === 0
+    && hasAcceptedPayment
+    && input.status === 'draft'
   const canCancel = ['draft', 'pending_documents', 'pending_payment', 'pending_validation'].includes(input.status)
 
   const blockingReasons = [
     ...missingBlockingDocuments.map((type) => `Document obligatoire manquant : ${type}`),
     ...rejectedBlockingDocuments.map((type) => `Document refusé à remplacer : ${type}`),
-    ...pendingBlockingDocuments.map((type) => `Document en attente de validation : ${type}`),
     ...(!hasAcceptedPayment ? ['Paiement requis'] : []),
   ]
 
   const desiredStatus: SubscriptionStatus = !input.submittedAt
     ? 'draft'
-    : !documentsReady
+    : missingBlockingDocuments.length > 0 || rejectedBlockingDocuments.length > 0
       ? 'pending_documents'
       : !hasAcceptedPayment
         ? 'pending_payment'
@@ -146,7 +157,12 @@ export function buildSubscriptionWorkflow(input: {
     missingBlockingDocuments,
     rejectedBlockingDocuments,
     pendingBlockingDocuments,
+    reviewDocumentTypes,
+    missingRequiredDocuments,
+    rejectedRequiredDocuments,
     documentsReady,
+    documentsUploaded,
+    requiresDocumentReview,
     hasAcceptedPayment,
     canUpload,
     canPay,

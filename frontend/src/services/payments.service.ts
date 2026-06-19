@@ -2,7 +2,7 @@ import type { PaymentSimulation, PaymentSummary } from '../types'
 import { apiRequest } from './api'
 
 export const simulatePayment = (payload: { subscriptionId: string; paymentMode?: 'one_time' | 'monthly' | 'weekly' | 'usage' }) =>
-  apiRequest<{ simulation: PaymentSimulation; payment: PaymentSummary | null }>('/payments/simulate', {
+  apiRequest<{ simulation: PaymentSimulation; payment: null }>('/payments/simulate', {
     method: 'POST',
     body: JSON.stringify(payload),
   })
