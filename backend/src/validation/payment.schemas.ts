@@ -27,10 +27,14 @@ export const directPaymentSchema = z.object({
 export const mandatePaymentSchema = z.object({
   subscriptionId: z.uuid(),
   amountCents: z.number().int().positive().max(500000).optional(),
-  paymentMode: z.enum(paymentModes).default('monthly'),
+  paymentMode: z.literal('monthly').default('monthly'),
   holderName: z.string().trim().min(2).max(160),
   ibanLast4: z.string().trim().regex(/^\d{4}$/, 'Conserver uniquement les 4 derniers chiffres IBAN.'),
+  bic: z.string().trim().toUpperCase().regex(/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/, 'BIC invalide.'),
   mandateAccepted: z.boolean(),
+}).refine((value) => value.mandateAccepted, {
+  message: 'Le mandat SEPA doit être accepté.',
+  path: ['mandateAccepted'],
 })
 
 export const regularizePaymentSchema = z.object({

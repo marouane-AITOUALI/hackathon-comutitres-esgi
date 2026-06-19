@@ -32,6 +32,10 @@ export const adminUpdateUserRoleSchema = z.object({
   role: z.enum(userRoles),
 })
 
+export const adminUpdateUserArchiveSchema = z.object({
+  archived: z.boolean(),
+})
+
 export const adminCreateOfferSchema = z.object({
   code: offerCode,
   name: z.string().trim().min(2).max(160),
@@ -52,5 +56,6 @@ export type AdminListSubscriptionsQuery = z.infer<typeof adminListSubscriptionsQ
 export type AdminUpdateSubscriptionStatusInput = z.infer<typeof adminUpdateSubscriptionStatusSchema>
 export type AdminReviewDocumentInput = z.infer<typeof adminReviewDocumentSchema>
 export type AdminUpdateUserRoleInput = z.infer<typeof adminUpdateUserRoleSchema>
+export type AdminUpdateUserArchiveInput = z.infer<typeof adminUpdateUserArchiveSchema>
 export type AdminCreateOfferInput = z.infer<typeof adminCreateOfferSchema>
 export type AdminUpdateOfferInput = z.infer<typeof adminUpdateOfferSchema>

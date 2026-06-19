@@ -263,6 +263,10 @@ export function SubscriptionDetailPage() {
             <Stack spacing={1.2}>
               {line('Statut actuel', <StatusBadge status={item.subscription.status} />)}
               {line('Offre', item.offer ? `${item.offer.name} (${item.offer.code})` : 'Non renseignee')}
+              {item.workflow && line(
+                'Contrôle documentaire',
+                item.workflow.requiresDocumentReview ? 'Revue humaine nécessaire' : item.workflow.documentsReady ? 'Vérifié automatiquement' : 'Documents à compléter',
+              )}
               {line('Creation', formatDate(item.subscription.createdAt))}
               {line('Derniere mise a jour', formatDate(item.subscription.updatedAt))}
             </Stack>

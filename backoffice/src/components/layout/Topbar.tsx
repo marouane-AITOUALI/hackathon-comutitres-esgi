@@ -34,7 +34,6 @@ const pageTitles: Record<string, string> = {
   '/users': 'Utilisateurs',
   '/offers': 'Offres',
   '/communications': 'Communications',
-  '/audit-logs': "Journal d'activite",
 }
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {

@@ -1,9 +1,9 @@
-import { Alert, Box, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material'
-import { ShieldCheck, Users } from 'lucide-react'
+import { Alert, Box, Button, Chip, MenuItem, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Typography } from '@mui/material'
+import { Archive, RotateCcw, ShieldCheck, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { EmptyState } from '../components/common/EmptyState'
 import { LoadingState } from '../components/common/LoadingState'
-import { getAdminUsers, updateAdminUserRole } from '../services/admin.service'
+import { getAdminUsers, updateAdminUserArchive, updateAdminUserRole } from '../services/admin.service'
 import { useAuth } from '../hooks/useAuth'
 import type { AdminUserListItem } from '../types/admin'
 import type { UserRole } from '../types/auth'
@@ -14,6 +14,7 @@ export function UsersPage() {
   const [users, setUsers] = useState<AdminUserListItem[]>([])
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState<UserRole | ''>('')
+  const [statusFilter, setStatusFilter] = useState<'active' | 'archived' | ''>('')
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -30,10 +31,12 @@ export function UsersPage() {
 
   const filtered = useMemo(() => users.filter((user) => {
     const text = `${user.firstName} ${user.lastName} ${user.email} ${user.role}`.toLowerCase()
-    return (!search || text.includes(search.toLowerCase())) && (!roleFilter || user.role === roleFilter)
-  }), [roleFilter, search, users])
+    const statusMatches = !statusFilter || (statusFilter === 'archived' ? Boolean(user.archivedAt) : !user.archivedAt)
+    return (!search || text.includes(search.toLowerCase())) && (!roleFilter || user.role === roleFilter) && statusMatches
+  }), [roleFilter, search, statusFilter, users])
 
-  const adminCount = users.filter((user) => user.role === 'admin').length
+  const adminCount = users.filter((user) => user.role === 'admin' && !user.archivedAt).length
+  const archivedCount = users.filter((user) => user.archivedAt).length
 
   async function changeRole(id: string, role: UserRole) {
     setSavingId(id)
@@ -46,6 +49,23 @@ export function UsersPage() {
       setSuccess('Role utilisateur mis a jour.')
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Mise a jour du role impossible.')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  async function changeArchive(user: AdminUserListItem) {
+    const archived = !user.archivedAt
+    if (archived && !window.confirm(`Archiver le compte de ${user.firstName} ${user.lastName} ? Il ne pourra plus se connecter.`)) return
+    setSavingId(user.id)
+    setError('')
+    setSuccess('')
+    try {
+      const response = await updateAdminUserArchive(user.id, archived)
+      setUsers((current) => current.map((item) => item.id === user.id ? response.user : item))
+      setSuccess(archived ? 'Compte archivé.' : 'Compte réactivé.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Mise à jour de l'archivage impossible.")
     } finally {
       setSavingId(null)
     }
@@ -69,6 +89,7 @@ export function UsersPage() {
           <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
             <Chip color="primary" icon={<ShieldCheck size={16} />} label={`${adminCount} administrateur(s)`} />
             <Chip icon={<Users size={16} />} label={`${users.length} utilisateur(s)`} />
+            <Chip color={archivedCount > 0 ? 'warning' : 'default'} icon={<Archive size={16} />} label={`${archivedCount} archivé(s)`} />
           </Stack>
         </Stack>
 
@@ -79,6 +100,11 @@ export function UsersPage() {
             <MenuItem value="admin">Administrateurs</MenuItem>
             <MenuItem value="user">Utilisateurs</MenuItem>
           </TextField>
+          <TextField label="Statut" onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)} select sx={{ minWidth: 190 }} value={statusFilter}>
+            <MenuItem value="">Tous les statuts</MenuItem>
+            <MenuItem value="active">Actifs</MenuItem>
+            <MenuItem value="archived">Archivés</MenuItem>
+          </TextField>
         </Stack>
       </Paper>
 
@@ -86,16 +112,16 @@ export function UsersPage() {
         <TableContainer>
           <Table aria-label="Utilisateurs" size="small">
             <TableHead>
-              <TableRow><TableCell>Nom</TableCell><TableCell>Email</TableCell><TableCell>Role</TableCell><TableCell>RGPD</TableCell><TableCell>Dossiers</TableCell><TableCell>Date</TableCell></TableRow>
+              <TableRow><TableCell>Nom</TableCell><TableCell>Email</TableCell><TableCell>Role</TableCell><TableCell>Statut</TableCell><TableCell>RGPD</TableCell><TableCell>Dossiers</TableCell><TableCell>Date</TableCell><TableCell align="right">Action</TableCell></TableRow>
             </TableHead>
             <TableBody>
               {filtered.map((user) => (
-                <TableRow key={user.id} hover>
+                <TableRow key={user.id} hover sx={{ opacity: user.archivedAt ? 0.65 : 1 }}>
                   <TableCell sx={{ fontWeight: 750 }}>{user.firstName} {user.lastName}</TableCell>
                   <TableCell>{user.email}</TableCell>
                   <TableCell sx={{ minWidth: 190 }}>
                     <TextField
-                      disabled={savingId === user.id}
+                      disabled={savingId === user.id || Boolean(user.archivedAt)}
                       onChange={(event) => void changeRole(user.id, event.target.value as UserRole)}
                       select
                       size="small"
@@ -105,9 +131,22 @@ export function UsersPage() {
                       <MenuItem value="user">{roleLabels.user}</MenuItem>
                     </TextField>
                   </TableCell>
+                  <TableCell>{user.archivedAt ? <Chip color="warning" label="Archivé" size="small" /> : <Chip color="success" label="Actif" size="small" />}</TableCell>
                   <TableCell>{user.rgpdConsent ? <Chip color="success" label="Oui" size="small" /> : <Chip label="Non" size="small" />}</TableCell>
                   <TableCell>{user.subscriptionCount ?? 0}</TableCell>
                   <TableCell>{user.createdAt ? new Date(user.createdAt).toLocaleDateString('fr-FR') : 'Non renseigne'}</TableCell>
+                  <TableCell align="right">
+                    <Button
+                      color={user.archivedAt ? 'success' : 'warning'}
+                      disabled={savingId === user.id || currentUser?.id === user.id}
+                      onClick={() => void changeArchive(user)}
+                      size="small"
+                      startIcon={user.archivedAt ? <RotateCcw size={15} /> : <Archive size={15} />}
+                      variant="outlined"
+                    >
+                      {user.archivedAt ? 'Réactiver' : 'Archiver'}
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

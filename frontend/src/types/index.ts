@@ -251,7 +251,12 @@ export interface SubscriptionWorkflow {
   missingBlockingDocuments: DocumentType[]
   rejectedBlockingDocuments: DocumentType[]
   pendingBlockingDocuments: DocumentType[]
+  reviewDocumentTypes: DocumentType[]
+  missingRequiredDocuments: DocumentType[]
+  rejectedRequiredDocuments: DocumentType[]
   documentsReady: boolean
+  documentsUploaded: boolean
+  requiresDocumentReview: boolean
   hasAcceptedPayment: boolean
   canUpload: boolean
   canPay: boolean

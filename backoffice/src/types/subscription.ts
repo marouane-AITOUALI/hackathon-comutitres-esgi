@@ -78,6 +78,9 @@ export interface AdminSubscriptionItem {
     state: 'documents_required' | 'payment_required' | 'ready_to_submit' | 'under_review' | 'needs_action' | 'approved' | 'rejected' | 'cancelled' | 'suspended'
     blockingReasons: string[]
     documentsReady: boolean
+    documentsUploaded: boolean
+    requiresDocumentReview: boolean
+    reviewDocumentTypes: string[]
     hasAcceptedPayment: boolean
     canSubmit: boolean
     canCancel: boolean
