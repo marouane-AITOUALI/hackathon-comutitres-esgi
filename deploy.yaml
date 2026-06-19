@@ -1,0 +1,118 @@
+version: "3.9"
+
+services:
+  proxy:
+    image: nginx:1.29-alpine
+    ports:
+      - "80:80"
+    configs:
+      - source: nginx_config
+        target: /etc/nginx/conf.d/default.conf
+    networks:
+      - web
+      - api
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  frontend:
+    image: ${FRONTEND_IMAGE:-comutitres/frontend:latest}
+    networks:
+      - web
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+
+  backoffice:
+    image: ${BACKOFFICE_IMAGE:-comutitres/backoffice:latest}
+    networks:
+      - web
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  backend:
+    image: ${BACKEND_IMAGE:-comutitres/backend:latest}
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      CORS_ORIGIN: http://localhost,http://admin.localhost
+    secrets:
+      - postgres_password
+      - jwt_secret
+      - supabase_url
+      - supabase_anon_key
+      - supabase_service_role_key
+    configs:
+      - source: backend_entrypoint
+        target: /usr/local/bin/swarm-backend-entrypoint.sh
+        mode: 0555
+    command: ["sh", "/usr/local/bin/swarm-backend-entrypoint.sh"]
+    networks:
+      - api
+      - data
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        order: start-first
+
+  database:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: comutitres
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      POSTGRES_DB: comutitres
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    configs:
+      - source: postgres_storage_schema
+        target: /docker-entrypoint-initdb.d/10-storage-schema.sql
+    networks:
+      - data
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      placement:
+        constraints:
+          - node.role == manager
+
+networks:
+  web:
+    driver: overlay
+  api:
+    driver: overlay
+  data:
+    driver: overlay
+    internal: true
+
+volumes:
+  postgres_data:
+
+configs:
+  nginx_config:
+    file: ./docker/nginx.conf
+  backend_entrypoint:
+    file: ./docker/swarm-backend-entrypoint.sh
+  postgres_storage_schema:
+    file: ./docker/postgres/init-storage.sql
+
+secrets:
+  postgres_password:
+    external: true
+  jwt_secret:
+    external: true
+  supabase_url:
+    external: true
+  supabase_anon_key:
+    external: true
+  supabase_service_role_key:
+    external: true
