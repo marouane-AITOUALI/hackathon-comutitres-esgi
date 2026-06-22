@@ -13,8 +13,6 @@ import { searchFrenchAddresses, type AddressSuggestion } from '../services/addre
 import { useAuth } from '../hooks/useAuth'
 import type { OfferRecommendation, OnboardingAnswer, OnboardingDraft } from '../types'
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
 type StepType = 'text' | 'email' | 'date' | 'choice' | 'yesno' | 'address'
 
 interface StepOption { value: string; label: string; description?: string }
@@ -38,10 +36,7 @@ const SECTION_LABELS: Record<1 | 2 | 3 | 4, string> = {
   4: 'Vos besoins',
 }
 
-// ─── Steps ───────────────────────────────────────────────────────────────────
-
 const STEPS: ChatStep[] = [
-  // Section 1
   {
     section: 1, field: 'subscriptionFor', label: 'Pour qui souscrivez-vous ?', type: 'choice',
     botMessage: () =>
@@ -57,7 +52,6 @@ const STEPS: ChatStep[] = [
     ],
   },
 
-  // Section 2
   {
     section: 2, field: 'bearer.firstName', label: 'Prénom du porteur', type: 'text',
     skip: (d) => d.subscriptionFor === 'self' && !!getField(d, 'bearer.firstName'),
@@ -99,7 +93,6 @@ const STEPS: ChatStep[] = [
     ],
   },
 
-  // Section 3
   {
     section: 3, field: 'isBearerPayer', label: 'Porteur = Payeur ?', type: 'yesno',
     skip: (d) => d.subscriptionFor === 'self',
@@ -145,7 +138,6 @@ const STEPS: ChatStep[] = [
     ],
   },
 
-  // Section 4
   {
     section: 4, field: 'address', label: 'Adresse du compte', type: 'address',
     botMessage: () => 'Recherchez puis sélectionnez votre adresse. Elle sera enregistrée sur votre compte.',
@@ -229,8 +221,6 @@ const STEPS: ChatStep[] = [
   },
 ]
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
 function setField(draft: OnboardingDraft, path: string, value: unknown): OnboardingDraft {
   const [head, ...rest] = path.split('.')
   if (rest.length === 0) return { ...draft, [head]: value }
@@ -254,8 +244,6 @@ function advance(fromIdx: number, draft: OnboardingDraft): { nextIdx: number; dr
   }
   return { nextIdx: idx, draft: d }
 }
-
-// ─── Component ───────────────────────────────────────────────────────────────
 
 export function OnboardingChatPage() {
   const location  = useLocation()
@@ -296,15 +284,11 @@ export function OnboardingChatPage() {
     }).catch(() => undefined)
   }, [navigate])
 
-  // ── Reset ─────────────────────────────────────────────────────────────────
-
   function reset() {
     setDraft({}); setStepIdx(0); setInputValue(''); setError('')
     setLoading(false); setIsDone(false); setRecommendation(null)
     setOnboardingSessionId(null); setSubscribeError('')
   }
-
-  // ── Submit : recommandation + persistance session ─────────────────────────
 
   async function handleSubmit(finalDraft: OnboardingDraft) {
     setLoading(true)
@@ -338,8 +322,6 @@ export function OnboardingChatPage() {
       setSubscribing(false)
     }
   }
-
-  // ── Navigation helpers ─────────────────────────────────────────────────────
 
   function applyAnswer(field: string, value: unknown, extraDraft?: Partial<OnboardingDraft>) {
     let newDraft = setField(draft, field, value)
@@ -432,8 +414,6 @@ export function OnboardingChatPage() {
   const selectedValue = step ? getField(draft, step.field) : undefined
   const canGoBack     = stepIdx > 0
 
-  // ─── Render ──────────────────────────────────────────────────────────────
-
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: '#f5f7ff' }}>
       <Header />
@@ -446,7 +426,6 @@ export function OnboardingChatPage() {
         gap: 3,
       }}>
 
-        {/* LandmarkStepper */}
         <Box sx={{
           width: '100%', maxWidth: 860,
           bgcolor: '#fff', borderRadius: 3,
@@ -457,7 +436,6 @@ export function OnboardingChatPage() {
           <LandmarkStepper section={currentSection} />
         </Box>
 
-        {/* Loading */}
         {loading && (
           <Paper sx={{ width: '100%', maxWidth: 680, borderRadius: 4, p: { xs: 4, md: 6 }, textAlign: 'center', boxShadow: '0 8px 48px rgba(26,86,219,0.13)' }}>
             <CircularProgress sx={{ color: '#1a56db' }} />
@@ -470,7 +448,6 @@ export function OnboardingChatPage() {
           </Paper>
         )}
 
-        {/* ── Form wizard ── */}
         {!loading && !isDone && step && !chatMode && (
           <Paper sx={{
             width: '100%', maxWidth: 680,
@@ -494,7 +471,6 @@ export function OnboardingChatPage() {
                 {step.label}
               </Typography>
 
-              {/* Text / email / date */}
               {(step.type === 'text' || step.type === 'email' || step.type === 'date') && (
                 <TextField
                   type={step.type}
@@ -545,7 +521,6 @@ export function OnboardingChatPage() {
                 </Box>
               )}
 
-              {/* Choice */}
               {step.type === 'choice' && (
                 <Stack spacing={1} sx={{ mb: 2 }}>
                   {step.options?.map(opt => (
@@ -583,7 +558,6 @@ export function OnboardingChatPage() {
                 </Stack>
               )}
 
-              {/* Yes / No */}
               {step.type === 'yesno' && (
                 <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
                   <Button
@@ -609,7 +583,6 @@ export function OnboardingChatPage() {
 
               {error && <Alert severity="error" sx={{ mb: 2, fontSize: 13 }}>{error}</Alert>}
 
-              {/* Navigation */}
               <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 1 }}>
                 <Button
                   onClick={handleBack} disabled={!canGoBack} variant="text"
@@ -659,7 +632,6 @@ export function OnboardingChatPage() {
           </Paper>
         )}
 
-        {/* ── Chat mode ── */}
         {!loading && !isDone && step && chatMode && (
           <Box sx={{
             width: '100%', maxWidth: 680,
@@ -667,7 +639,6 @@ export function OnboardingChatPage() {
             boxShadow: '0 8px 48px rgba(26,86,219,0.13)',
             border: '1px solid rgba(26,86,219,0.08)',
           }}>
-            {/* Header */}
             <Box sx={{
               px: 2.5, py: 1.75,
               background: 'linear-gradient(135deg, #1a56db 0%, #2563eb 60%)',
@@ -700,7 +671,6 @@ export function OnboardingChatPage() {
               </Button>
             </Box>
 
-            {/* Body */}
             <Box sx={{ background: 'linear-gradient(180deg, #f7f9ff 0%, #f0f4ff 100%)', p: 3 }}>
               <Box sx={{ display: 'flex', gap: 1.5, mb: 3 }}>
                 <Box sx={{
@@ -725,7 +695,6 @@ export function OnboardingChatPage() {
                 </Box>
               </Box>
 
-              {/* Text / email / date */}
               {(step.type === 'text' || step.type === 'email' || step.type === 'date') && (
                 <Box sx={{ ml: 4.5, mb: 2 }}>
                   <TextField
@@ -777,7 +746,6 @@ export function OnboardingChatPage() {
                 </Box>
               )}
 
-              {/* Choice */}
               {step.type === 'choice' && (
                 <Stack spacing={1} sx={{ mb: 2, ml: 4.5 }}>
                   {step.options?.map(opt => (
@@ -804,7 +772,6 @@ export function OnboardingChatPage() {
                 </Stack>
               )}
 
-              {/* Yes / No */}
               {step.type === 'yesno' && (
                 <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
                   <Button variant="outlined" onClick={() => handleYesNo(false)} fullWidth
@@ -854,7 +821,6 @@ export function OnboardingChatPage() {
           </Box>
         )}
 
-        {/* ── Result ── */}
         {!loading && isDone && recommendation && (
           <Stack spacing={3} sx={{ width: '100%', maxWidth: 680 }}>
             <Paper sx={{ borderRadius: 4, overflow: 'hidden', boxShadow: '0 8px 48px rgba(26,86,219,0.13)' }}>
@@ -905,7 +871,6 @@ export function OnboardingChatPage() {
               </Box>
             </Paper>
 
-            {/* Subscribe now or later */}
             <Paper sx={{ borderRadius: 4, overflow: 'hidden', boxShadow: '0 8px 48px rgba(26,86,219,0.13)' }}>
               <Box sx={{ px: 3, py: 2, bgcolor: '#f0fdf4', borderBottom: '1px solid #bbf7d0' }}>
                 <Typography sx={{ fontWeight: 800, color: '#166534', fontSize: 14 }}>

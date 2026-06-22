@@ -36,7 +36,6 @@ export function LoginMapPanel() {
         backgroundPosition: 'center top',
       }}
     >
-      {/* Gradient overlay */}
       <Box
         sx={{
           position: 'absolute',
@@ -45,7 +44,6 @@ export function LoginMapPanel() {
         }}
       />
 
-      {/* Feature cards at the bottom */}
       <Box
         sx={{
           position: 'absolute',

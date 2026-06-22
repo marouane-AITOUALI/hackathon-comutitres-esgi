@@ -92,7 +92,6 @@ export function Header({
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('') || 'AD'
 
-  // Close profile dropdown when clicking outside
   const handleProfileMenuKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Escape') setProfileOpen(false)
   }
@@ -124,7 +123,6 @@ export function Header({
           justifyContent: 'space-between',
         }}
       >
-        {/* Left: hamburger (mobile) + greeting */}
         <Box
           sx={{
             display: 'flex',
@@ -150,7 +148,6 @@ export function Header({
           </Typography>
         </Box>
 
-        {/* Right: search + bell + profile */}
         <Box
           sx={{
             display: 'flex',
@@ -181,7 +178,6 @@ export function Header({
             </IconButton>
           )}
 
-          {/* Search */}
           <Box
             sx={{
               display: 'flex',
@@ -249,7 +245,6 @@ export function Header({
             </Collapse>
           </Box>
 
-          {/* Bell */}
           <Badge badgeContent={unreadCount} color="error" max={99}>
             <IconButton
               aria-label={`${labels.notifications} : ${unreadCount} non lue(s)`}
@@ -403,7 +398,6 @@ export function Header({
 
           <AccessibilityMenu />
 
-          {/* Profile dropdown */}
           <Box
             ref={profileRef}
             sx={{
@@ -498,7 +492,6 @@ export function Header({
               </Box>
             </Box>
 
-            {/* Dropdown */}
             {profileOpen && (
               <Paper
                 elevation={4}

@@ -84,7 +84,6 @@ export function SimpleRegisterForm({ onRegister }: Props) {
       onSubmit={handleSubmit}
       sx={{ width: '100%', maxWidth: 540, bgcolor: 'background.paper', borderRadius: 4, boxShadow: '0 24px 80px rgba(99,102,241,0.18)', overflow: 'hidden' }}
     >
-      {/* Header */}
       <Box sx={{ px: 3.5, py: 2.5, background: 'linear-gradient(135deg, #6366f1 0%, #3b82f6 100%)' }}>
         <Typography variant="h6" sx={{ fontWeight: 800, color: '#fff', mb: 0.25 }}>
           Créer un compte
@@ -94,7 +93,6 @@ export function SimpleRegisterForm({ onRegister }: Props) {
         </Typography>
       </Box>
 
-      {/* Form body */}
       <Box sx={{ p: { xs: 3, md: 3.5 } }}>
         {error && (
           <Alert severity="error" sx={{ mb: 2, fontSize: 13, py: 0.5 }}>

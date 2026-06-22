@@ -1,4 +1,4 @@
-# Comutitres — parcours de souscription unifié
+# Comutitres - parcours de souscription unifié
 
 Prototype réalisé pour le hackathon ESGI 2026. La solution aide les voyageurs à
 choisir le titre adapté, constituer leur dossier et suivre leur souscription.
@@ -151,6 +151,7 @@ npm test
 
 ## Documentation
 
+- [Maquettes Figma](https://www.figma.com/design/cBd3sh1OZO03TAXyUreRBl/comutitres?node-id=90-16&t=UuhQFTNTu57vzvuk-1)
 - [Scénario de démonstration](docs/demo-scenario.md)
 - [Architecture](docs/architecture.md)
 - [Backoffice](docs/backoffice.md)

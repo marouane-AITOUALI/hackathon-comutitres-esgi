@@ -2,7 +2,7 @@ import { Box, Typography } from '@mui/material'
 import CheckIcon from '@mui/icons-material/Check'
 
 interface Props {
-  section: number // 1-5
+  section: 1 | 2 | 3 | 4 | 5
 }
 
 const NODES = [
@@ -32,14 +32,12 @@ export function LandmarkStepper({ section }: Props) {
     }}>
       <Box sx={{ position: 'relative', height: containerH }}>
 
-        {/* Track base */}
         <Box sx={{
           position: 'absolute', left: 0, right: 0, top: TRACK_TOP,
           height: 4, borderRadius: 99,
           bgcolor: 'rgba(26,86,219,0.1)',
         }} />
 
-        {/* Progress fill — gradient */}
         <Box sx={{
           position: 'absolute', left: 0, top: TRACK_TOP, height: 4,
           width: s === 5 ? '100%' : `${metroX}%`,
@@ -49,7 +47,6 @@ export function LandmarkStepper({ section }: Props) {
           transition: 'width 0.7s cubic-bezier(0.4,0,0.2,1)',
         }} />
 
-        {/* Metro */}
         <Box
           component="img"
           src="/images/metro.png"
@@ -68,7 +65,6 @@ export function LandmarkStepper({ section }: Props) {
           }}
         />
 
-        {/* Nodes */}
         {NODES.map((node, i) => {
           const isStart = node.x === 0
           const isEnd   = node.x === 100

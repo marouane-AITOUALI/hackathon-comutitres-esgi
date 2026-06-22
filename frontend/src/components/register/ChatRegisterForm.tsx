@@ -150,7 +150,6 @@ export function ChatRegisterForm({ onRegister }: Props) {
         boxShadow: '0 24px 80px rgba(99,102,241,0.18)',
       }}
     >
-      {/* Header gradient */}
       <Box
         sx={{
           px: 2.5,
@@ -207,7 +206,6 @@ export function ChatRegisterForm({ onRegister }: Props) {
         </Stack>
       </Box>
 
-      {/* Progress bar */}
       <Box sx={{ height: 4, bgcolor: 'rgba(99,102,241,0.12)', flexShrink: 0 }}>
         <Box
           sx={{
@@ -219,7 +217,6 @@ export function ChatRegisterForm({ onRegister }: Props) {
         />
       </Box>
 
-      {/* Messages */}
       <Box
         sx={{
           flex: 1,
@@ -288,7 +285,6 @@ export function ChatRegisterForm({ onRegister }: Props) {
           </Box>
         ))}
 
-        {/* Typing */}
         {isTyping && (
           <Box sx={{ display: 'flex', alignItems: 'flex-end', gap: 1 }}>
             <Box sx={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg, #6366f1, #3b82f6)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -302,7 +298,6 @@ export function ChatRegisterForm({ onRegister }: Props) {
           </Box>
         )}
 
-        {/* Consent */}
         {showConsent && !isTyping && (
           <Stack direction="row" spacing={1} sx={{ justifyContent: 'flex-end', mt: 0.5 }}>
             <Button
@@ -328,14 +323,12 @@ export function ChatRegisterForm({ onRegister }: Props) {
         <div ref={messagesEnd} />
       </Box>
 
-      {/* Error */}
       {error && (
         <Box sx={{ px: 2.5, py: 0.75, bgcolor: '#fee2e2', flexShrink: 0 }}>
           <Typography sx={{ fontSize: 12, color: 'error.main' }}>{error}</Typography>
         </Box>
       )}
 
-      {/* Input */}
       {showInput && (
         <Box
           sx={{

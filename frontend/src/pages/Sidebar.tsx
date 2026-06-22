@@ -55,7 +55,6 @@ function SidebarContent({ activeKey = 'dashboard', onNavigate }: Pick<SidebarPro
         px: { xs: 2, md: '21px' },
       }}
     >
-      {/* Logo */}
       <Box sx={{ pl: { xs: 1, md: 54 / 8 }, mb: { xs: 2, md: 2.5 } }}>
         <Box
           component="img"
@@ -65,7 +64,6 @@ function SidebarContent({ activeKey = 'dashboard', onNavigate }: Pick<SidebarPro
         />
       </Box>
 
-      {/* Nav */}
       <List disablePadding sx={{ flex: 1, mt: 0 }}>
         {navItems.map((item) => {
           const active = item.key === activeKey
@@ -112,7 +110,6 @@ function SidebarContent({ activeKey = 'dashboard', onNavigate }: Pick<SidebarPro
         })}
       </List>
 
-      {/* Mobile app CTA */}
       <Box
         sx={{
           mt: 'auto',

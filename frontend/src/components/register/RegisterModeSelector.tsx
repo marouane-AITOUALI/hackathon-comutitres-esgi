@@ -43,7 +43,6 @@ export function RegisterModeSelector({ onSelect }: Props) {
       </Box>
 
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2.5}>
-        {/* Option assistant — recommandée */}
         <Box
           onClick={() => onSelect('chat')}
           sx={{
@@ -113,7 +112,6 @@ export function RegisterModeSelector({ onSelect }: Props) {
           </Button>
         </Box>
 
-        {/* Option formulaire classique */}
         <Box
           onClick={() => onSelect('form')}
           sx={{

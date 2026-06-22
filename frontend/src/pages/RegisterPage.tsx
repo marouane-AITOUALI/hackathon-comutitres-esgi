@@ -33,7 +33,6 @@ export function RegisterPage() {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'linear-gradient(135deg, #EEF4FF 0%, #F3EEFF 60%, #FFFFFF 100%)', position: 'relative', overflow: 'hidden' }}>
-      {/* Cercles décoratifs */}
       <Box sx={{ position: 'absolute', top: -80, left: -80, width: 320, height: 320, borderRadius: '50%', bgcolor: 'rgba(100,181,246,0.18)', pointerEvents: 'none' }} />
       <Box sx={{ position: 'absolute', top: 60, left: 20, width: 160, height: 160, borderRadius: '50%', bgcolor: 'rgba(100,181,246,0.12)', pointerEvents: 'none' }} />
 
